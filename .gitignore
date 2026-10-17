@@ -40,7 +40,9 @@ mobile/dist/
 *.tsbuildinfo
 
 # Editor and OS
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 .idea/
 .vscode/
 .DS_Store
