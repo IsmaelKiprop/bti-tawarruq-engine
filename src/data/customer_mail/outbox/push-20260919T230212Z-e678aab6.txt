@@ -1,5 +1,0 @@
-ACCOUNT: e678aab6-7846-4f13-89af-9fb66944fb0d
-TOKEN: none
-TITLE: Documents ready
-
-View Murabaha statements and trade evidence from My loan → Documents.

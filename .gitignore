@@ -30,6 +30,7 @@ coverage.xml
 *.sqlite3
 data/*
 !data/.gitkeep
+src/data/
 
 # Node
 node_modules/
@@ -39,6 +40,7 @@ mobile/dist/
 *.tsbuildinfo
 
 # Editor and OS
+.cursor/
 .idea/
 .vscode/
 .DS_Store
