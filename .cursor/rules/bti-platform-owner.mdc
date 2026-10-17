@@ -1,0 +1,13 @@
+---
+description: Buruuj Fintech owns the platform and is not a client institution
+alwaysApply: true
+---
+
+# Buruuj Fintech is the platform owner
+
+Buruuj Fintech Ltd owns and operates this Tawarruq engine. It is the operator, not a bank or SACCO tenant.
+
+- Do not add Buruuj Fintech as an institution in the Institutions list, Integrations dropdown, or seed data.
+- Institutions are client banks that Buruuj serves (for example Default Institution, Demo Islamic Bank, FlowOps Africa).
+- Integrations, users, and deals belong to those client institutions. Buruuj executes as agent and issues certificates.
+- In copy and process diagrams, Buruuj is the engine / wakeel. The bank owns the customer relationship.

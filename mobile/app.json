@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Buruuj Tawarruq Kenya",
+    "slug": "bti-tawarruq-kenya",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/buruuj-logo.jpg",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B1F3A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.btifintech.tawarruq.kenya"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/buruuj-logo.jpg",
+        "backgroundColor": "#0B1F3A"
+      },
+      "package": "com.btifintech.tawarruq.kenya"
+    },
+    "icon": "./assets/buruuj-logo.jpg",
+    "extra": {
+      "apiBaseUrl": "http://localhost:8000/api/v1"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ]
+  }
+}

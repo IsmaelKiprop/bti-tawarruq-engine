@@ -1,0 +1,355 @@
+import { FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { api, Institution } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { HowItWorks, PageExplain } from "../components/PageExplain";
+import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
+import { BSAS_MODE_ORDER, getBsasMode } from "../config/institutions";
+import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
+import "../components/ui.css";
+
+function BsasModeField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (mode: string) => void;
+}) {
+  const mode = getBsasMode(value);
+  return (
+    <label>
+      Malaysia desk mode
+      <select className="select-input" value={value} onChange={(event) => onChange(event.target.value)}>
+        {BSAS_MODE_ORDER.map((id) => (
+          <option key={id} value={id}>
+            {getBsasMode(id).label}
+          </option>
+        ))}
+      </select>
+      <p className="muted">{mode.when}</p>
+    </label>
+  );
+}
+
+export function InstitutionsPage() {
+  const { user } = useAuth();
+  const canManage = user?.role === "platform_admin" || Boolean(user?.permissions.includes("manage_institutions"));
+
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [createdId, setCreatedId] = useState("");
+
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [bsasMode, setBsasMode] = useState("manual_bridge");
+  const [busy, setBusy] = useState(false);
+
+  const [editing, setEditing] = useState<Institution | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editMode, setEditMode] = useState("manual_bridge");
+  const [confirmDeleteId, setConfirmDeleteId] = useState("");
+  const [busyId, setBusyId] = useState("");
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      setInstitutions(await api.listInstitutions());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load institutions");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  function isProtected(item: Institution) {
+    return item.code.toUpperCase() === "DEFAULT";
+  }
+
+  function startEdit(item: Institution) {
+    setEditing(item);
+    setEditName(item.name);
+    setEditMode(item.bsas_mode);
+    setConfirmDeleteId("");
+    setCreatedId("");
+    setError("");
+    setMessage("");
+  }
+
+  async function onCreate(event: FormEvent) {
+    event.preventDefault();
+    if (!canManage) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    setCreatedId("");
+    try {
+      const created = await api.createInstitution({
+        name: name.trim(),
+        code: code.trim().toUpperCase(),
+        bsas_mode: bsasMode,
+      });
+      setCreatedId(created.id);
+      setMessage(`${created.name} (${created.code}) registered. Next: configure integrations and create ops users.`);
+      setName("");
+      setCode("");
+      setInstitutions(await api.listInstitutions());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create institution");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onUpdate(event: FormEvent) {
+    event.preventDefault();
+    if (!canManage || !editing) return;
+    setBusyId(editing.id);
+    setError("");
+    setMessage("");
+    try {
+      const updated = await api.updateInstitution(editing.id, {
+        name: editName.trim(),
+        bsas_mode: editMode,
+      });
+      setEditing(updated);
+      setMessage(`Updated ${updated.name} (${updated.code}).`);
+      setInstitutions(await api.listInstitutions());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update institution");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function onDelete(item: Institution) {
+    if (!canManage || isProtected(item)) return;
+    if (confirmDeleteId !== item.id) {
+      setConfirmDeleteId(item.id);
+      return;
+    }
+    setBusyId(item.id);
+    setError("");
+    setMessage("");
+    try {
+      await api.deleteInstitution(item.id);
+      if (editing?.id === item.id) setEditing(null);
+      if (createdId === item.id) setCreatedId("");
+      setConfirmDeleteId("");
+      setMessage(`${item.name} was deleted.`);
+      setInstitutions(await api.listInstitutions());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete institution");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  return (
+    <PageShell wide>
+      <div className="page-grid">
+        <div className="span-2">
+          <PageExplain content={PAGE_EXPLAINS["/institutions"]} />
+        </div>
+        <HowItWorks content={HOW_IT_WORKS["/institutions"]} />
+        <section className="panel">
+          {editing ? (
+            <>
+              <h2>Update {editing.name}</h2>
+              <p className="muted">
+                Change how this bank appears, or its default Malaysia desk. The code{" "}
+                <code>{editing.code}</code> stays the same because deals and users already point to it.
+              </p>
+              <form className="stack-form" onSubmit={onUpdate}>
+                <label>
+                  Display name
+                  <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+                  <span className="meta">Shown on dashboards, journeys, and certificates.</span>
+                </label>
+                <BsasModeField value={editMode} onChange={setEditMode} />
+                <div className="actions">
+                  <button className="btn btn-primary btn-sm" type="submit" disabled={busyId === editing.id}>
+                    Save changes
+                  </button>
+                  <button className="btn btn-secondary btn-sm" type="button" onClick={() => setEditing(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <>
+              <h2>Register institution</h2>
+              <p className="muted">
+                Add a client bank or SACCO. Buruuj Fintech is the operator and is not registered here.
+                After create, set Integrations, then issue that institution's admin on Users.
+              </p>
+              {!canManage ? (
+                <Alert tone="error">Only platform admins can register institutions.</Alert>
+              ) : (
+                <form className="stack-form" onSubmit={onCreate}>
+                  <label>
+                    Display name
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Mwalimu National SACCO"
+                      required
+                    />
+                    <span className="meta">How the bank appears on dashboards and certificates.</span>
+                  </label>
+                  <label>
+                    Institution code
+                    <input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      placeholder="MWALIMU"
+                      required
+                    />
+                    <span className="meta">
+                      Short unique ID for APIs and audit. Letters and numbers only, for example MWALIMU or DIB001.
+                    </span>
+                  </label>
+                  <BsasModeField value={bsasMode} onChange={setBsasMode} />
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
+                    {busy ? "Creating…" : "Create institution"}
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+        </section>
+
+        <section className="panel">
+          <h2>What this page is for</h2>
+          <p className="muted">
+            An institution is one client book: its customers, users, Kenya float deals, and Malaysia
+            commodity deals. Switch it on the dashboard to see only that bank.
+          </p>
+          <ol className="flow-list numbered">
+            <li>Register the bank here with a name, code, and Malaysia desk mode.</li>
+            <li>Open Integrations for M-Pesa, MNO, or Bursa credentials for that bank only.</li>
+            <li>Create an Institution admin on Users so their staff stay inside this book.</li>
+            <li>Send the temporary password securely. They must change it on first login.</li>
+            <li>DEFAULT is the built-in demo book. You can rename it. You cannot delete it.</li>
+            <li>Delete a bank only when it should leave the platform and its deals can go with it.</li>
+          </ol>
+          <h3>Malaysia desk modes</h3>
+          <ul className="meta-list">
+            {BSAS_MODE_ORDER.map((id) => {
+              const item = getBsasMode(id);
+              return (
+                <li key={id}>
+                  <strong>{item.label}.</strong> {item.when}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="meta">
+            This mode is the default for Malaysia. Kenya float purchase uses Agent Dealers and
+            Integrations, not this field.
+          </p>
+          {createdId ? (
+            <div className="inline-actions" style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <Link className="btn btn-primary btn-sm" to={`/integrations?institution=${createdId}`}>
+                Configure integrations
+              </Link>
+              <Link className="btn btn-secondary btn-sm" to={`/users?institution=${createdId}`}>
+                Create ops users
+              </Link>
+            </div>
+          ) : null}
+        </section>
+
+        {(error || message) && (
+          <div className="span-2">
+            {error ? <Alert tone="error">{error}</Alert> : null}
+            {message ? <Alert tone="success">{message}</Alert> : null}
+          </div>
+        )}
+
+        <section className="panel span-2">
+          <h2>Institutions</h2>
+          {loading ? (
+            <LoadingPanel rows={4} />
+          ) : institutions.length === 0 ? (
+            <EmptyState title="No institutions yet" description="Register the first bank or SACCO above." />
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Code</th>
+                    <th>Malaysia desk</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {institutions.map((item) => {
+                    const selected = editing?.id === item.id || createdId === item.id;
+                    const busyRow = busyId === item.id;
+                    const protectedRow = isProtected(item);
+                    return (
+                      <tr key={item.id} className={selected ? "is-selected" : undefined}>
+                        <td data-label="Name">
+                          {item.name}
+                          {selected ? <span className="row-mark">This institution</span> : null}
+                        </td>
+                        <td data-label="Code">
+                          <code>{item.code}</code>
+                        </td>
+                        <td data-label="Malaysia desk">{getBsasMode(item.bsas_mode).label}</td>
+                        <td data-label="Created">{new Date(item.created_at).toLocaleString()}</td>
+                        <td data-label="Actions">
+                          <div className="cell-actions">
+                            <Link className="btn btn-secondary btn-sm" to={`/integrations?institution=${item.id}`}>
+                              Integrations
+                            </Link>
+                            {canManage ? (
+                              <Link className="btn btn-secondary btn-sm" to={`/users?institution=${item.id}`}>
+                                Users
+                              </Link>
+                            ) : null}
+                            {canManage ? (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                disabled={busyRow}
+                                onClick={() => startEdit(item)}
+                              >
+                                Update
+                              </button>
+                            ) : null}
+                            {canManage ? (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                disabled={busyRow || protectedRow}
+                                title={protectedRow ? "The default institution cannot be deleted" : undefined}
+                                onClick={() => void onDelete(item)}
+                              >
+                                {confirmDeleteId === item.id ? "Confirm delete" : "Delete"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+    </PageShell>
+  );
+}

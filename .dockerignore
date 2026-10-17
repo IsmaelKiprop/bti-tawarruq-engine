@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+portal/node_modules
+portal/dist
+mobile/node_modules
+mobile/.expo
+data/
+*.db
+.env
+pyc_backup
+.cursor

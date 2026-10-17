@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tawarruq
+      POSTGRES_PASSWORD: tawarruq
+      POSTGRES_DB: tawarruq
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tawarruq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+psycopg://tawarruq:tawarruq@postgres:5432/tawarruq
+      - AMANAH_WRITE_ENABLED=true
+      - AMANAH_POLL_INTERVAL_SECONDS=5
+      - KENYA_INTEGRATION_MODE=mock
+      - SHARIAH_AUDIT_SERVICE_URL=http://shariah-audit:8001
+      - AUTH_ENABLED=true
+      - OPS_BOOTSTRAP_ADMIN_EMAIL=admin@bti.local
+      - OPS_BOOTSTRAP_ADMIN_PASSWORD=ChangeMeNow!123
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "tawarruq.cli", "serve", "--host", "0.0.0.0", "--port", "8000"]
+
+  shariah-audit:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      - SHARIAH_AUDIT_DATABASE_URL=sqlite:////app/data/shariah_audit.db
+      - SHARIAH_AUDIT_PORT=8001
+    volumes:
+      - ./data:/app/data
+    command: ["python", "shariah-audit-service/app.py"]
+
+  portal:
+    build:
+      context: ./portal
+    ports:
+      - "5173:5173"
+    environment:
+      # Same-origin via Vite proxy (avoids browser CORS to :8000)
+      - VITE_API_URL=/api/v1
+      - VITE_PROXY_TARGET=http://api:8000
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  

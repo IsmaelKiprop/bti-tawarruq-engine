@@ -1,0 +1,597 @@
+/* Explanatory layer: page guides, actor attribution, and process flows. */
+
+.actor-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.actor-chip {
+  --actor-color: var(--color-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--actor-color) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--actor-color) 8%, var(--color-surface));
+  color: var(--actor-color);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.actor-chip.is-owner {
+  background: color-mix(in srgb, var(--actor-color) 16%, var(--color-surface));
+  font-weight: 600;
+}
+
+.actor-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--actor-color);
+  flex-shrink: 0;
+}
+
+.actor-bti {
+  --actor-color: var(--color-primary);
+}
+
+.actor-bursa {
+  --actor-color: var(--color-info);
+}
+
+.actor-amanah {
+  --actor-color: #3b4f6b;
+}
+
+[data-theme="dark"] .actor-amanah {
+  --actor-color: #8fa3bf;
+}
+
+.actor-bank {
+  --actor-color: var(--color-warning);
+}
+
+.actor-sacco {
+  --actor-color: #b45309;
+}
+
+[data-theme="dark"] .actor-sacco {
+  --actor-color: #fbbf24;
+}
+
+.actor-sedania {
+  --actor-color: #1a6b6b;
+}
+
+[data-theme="dark"] .actor-sedania {
+  --actor-color: #4db6b0;
+}
+
+.actor-customer {
+  --actor-color: #0891b2;
+}
+
+[data-theme="dark"] .actor-customer {
+  --actor-color: #22d3ee;
+}
+
+.actor-partner {
+  --actor-color: #c2410c;
+}
+
+[data-theme="dark"] .actor-partner {
+  --actor-color: #fb923c;
+}
+
+.actor-shariah {
+  --actor-color: var(--color-success);
+}
+
+.actor-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 0.75rem;
+}
+
+.actor-legend li {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-background);
+  padding: 0.75rem;
+}
+
+.actor-legend-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.actor-legend-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.actor-legend p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+.actor-kind {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  padding: 0 0.3rem;
+}
+
+/* ---------- page guide ---------- */
+
+.page-guide {
+  border: 1px solid color-mix(in srgb, var(--color-info) 22%, var(--color-border));
+  border-left: 3px solid var(--color-info);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-info) 5%, var(--color-surface));
+  padding: 1rem 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.page-guide-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.page-guide-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.page-guide-stage {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-info);
+}
+
+.page-guide-summary {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-foreground);
+  max-width: 78ch;
+}
+
+.page-guide-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 0.875rem;
+}
+
+.page-guide-col h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.page-guide-col ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.page-guide-col li + li {
+  margin-top: 0.3rem;
+}
+
+.page-guide-watch {
+  margin: 0;
+  padding: 0.6rem 0.75rem 0.6rem 1.9rem;
+  list-style: disc;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+  color: var(--color-warning);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.page-guide-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.6rem;
+}
+
+.page-guide-nav a {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+/* ---------- track flow ---------- */
+
+.track-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.track-phase {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-background);
+  padding: 0.875rem;
+}
+
+.track-phase-head h4 {
+  margin: 0 0 0.2rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.track-phase-head p {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.track-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.track-step {
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.track-step-num {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--color-secondary);
+  color: var(--color-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.track-step-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.track-step-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.track-step-title strong {
+  font-size: 0.875rem;
+}
+
+.track-step-body p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  line-height: 1.5;
+  max-width: 82ch;
+}
+
+.track-step-link {
+  align-self: flex-start;
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.mode-tag {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  background: var(--color-background);
+  white-space: nowrap;
+}
+
+.mode-manual {
+  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 30%, var(--color-border));
+}
+
+.mode-automated {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+}
+
+.mode-external {
+  color: var(--color-info);
+  border-color: color-mix(in srgb, var(--color-info) 30%, var(--color-border));
+}
+
+/* ---------- responsibility split ---------- */
+
+.responsibility-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 0.75rem;
+}
+
+.responsibility-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-background);
+  padding: 0.875rem;
+}
+
+.responsibility-card header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.responsibility-card header strong {
+  font-size: 0.8125rem;
+}
+
+.responsibility-card ul {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.responsibility-card li + li {
+  margin-top: 0.25rem;
+}
+
+.responsibility-never {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--color-destructive);
+}
+
+/* ---------- track switcher on the dashboard ---------- */
+
+.track-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.875rem;
+}
+
+.track-tab {
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-muted);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.track-tab.active {
+  background: var(--color-foreground);
+  color: var(--color-background);
+  border-color: var(--color-foreground);
+}
+
+.track-subtitle {
+  margin: 0 0 0.875rem;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  line-height: 1.5;
+  max-width: 90ch;
+}
+
+/* ---------- whose turn is it ---------- */
+
+.turn-indicator {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-background);
+}
+
+.turn-label {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.turn-note {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+/* ---------- quick actions grouped by stage ---------- */
+
+.quick-action-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 0.875rem;
+}
+
+.quick-action-group h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+}
+
+/* ---------- handoff list: numbered steps with the acting party ---------- */
+
+.handoff-list {
+  list-style: none;
+  counter-reset: handoff;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.handoff-list li {
+  counter-increment: handoff;
+  display: grid;
+  grid-template-columns: 1.4rem auto;
+  grid-template-areas: "num chips" "num text";
+  column-gap: 0.5rem;
+  row-gap: 0.25rem;
+  align-items: start;
+}
+
+.handoff-list li::before {
+  content: counter(handoff);
+  grid-area: num;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  background: var(--color-secondary);
+  color: var(--color-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.handoff-list .actor-chips {
+  grid-area: chips;
+}
+
+.handoff-list li > span:not(.actor-chips) {
+  grid-area: text;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+/* ---------- inline step callouts used inside workbench pages ---------- */
+
+.step-callout {
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--actor-accent, var(--color-primary));
+  border-radius: var(--radius);
+  background: var(--color-background);
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.875rem;
+}
+
+.step-callout-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.step-callout-head strong {
+  font-size: 0.8125rem;
+}
+
+.step-callout p {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+  max-width: 88ch;
+}
+
+@media (max-width: 768px) {
+  .page-guide-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-guide-top .btn {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-guide {
+    padding: 0.875rem 1rem;
+    gap: 0.75rem;
+  }
+
+  .track-phase {
+    padding: 0.75rem;
+  }
+
+  .track-step {
+    padding: 0.55rem 0.6rem;
+    gap: 0.5rem;
+  }
+
+  .track-tab {
+    flex: 1 1 100%;
+    text-align: center;
+  }
+
+  .page-guide-nav {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+}

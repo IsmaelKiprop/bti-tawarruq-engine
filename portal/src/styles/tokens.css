@@ -1,0 +1,89 @@
+:root {
+  color-scheme: light;
+  --radius: 5px;
+  --font-family: "IBM Plex Sans", system-ui, sans-serif;
+
+  /* Buruuj Fintech — navy + gold from official logo */
+  --color-brand-navy: #0b1f3a;
+  --color-brand-gold: #c9a227;
+
+  --color-background: #f3f5f8;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-foreground: #0b1f3a;
+  --color-muted: #5c6b7a;
+  --color-border: #d8dee6;
+  --color-primary: #0b1f3a;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #c9a227;
+  --color-accent-foreground: #0b1f3a;
+  --color-secondary: #eef2f6;
+  --color-secondary-foreground: #1e3348;
+  --color-destructive: #b42318;
+  --color-success: #1f6b4a;
+  --color-warning: #b45309;
+  --color-info: #1d4e8c;
+  --color-focus: #c9a227;
+  --color-sidebar: #ffffff;
+  --color-navbar: #ffffff;
+  --color-scrollbar-track: #f3f5f8;
+  --color-scrollbar-thumb: #c5cdd8;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-brand-navy: #0b1f3a;
+  --color-brand-gold: #d4af37;
+
+  --color-background: #070d16;
+  --color-surface: #0f1824;
+  --color-surface-elevated: #162233;
+  --color-foreground: #f2f4f7;
+  --color-muted: #9aa8b8;
+  --color-border: #243247;
+  --color-primary: #d4af37;
+  --color-primary-foreground: #0b1f3a;
+  --color-accent: #e8c96a;
+  --color-accent-foreground: #0b1f3a;
+  --color-secondary: #162233;
+  --color-secondary-foreground: #e5eaf0;
+  --color-destructive: #f97066;
+  --color-success: #3dcf8e;
+  --color-warning: #f5b84c;
+  --color-info: #6ba3e0;
+  --color-focus: #e8c96a;
+  --color-sidebar: #0f1824;
+  --color-navbar: #0f1824;
+  --color-scrollbar-track: #070d16;
+  --color-scrollbar-thumb: #334155;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-brand-navy: #0b1f3a;
+    --color-brand-gold: #d4af37;
+
+    --color-background: #070d16;
+    --color-surface: #0f1824;
+    --color-surface-elevated: #162233;
+    --color-foreground: #f2f4f7;
+    --color-muted: #9aa8b8;
+    --color-border: #243247;
+    --color-primary: #d4af37;
+    --color-primary-foreground: #0b1f3a;
+    --color-accent: #e8c96a;
+    --color-accent-foreground: #0b1f3a;
+    --color-secondary: #162233;
+    --color-secondary-foreground: #e5eaf0;
+    --color-destructive: #f97066;
+    --color-success: #3dcf8e;
+    --color-warning: #f5b84c;
+    --color-info: #6ba3e0;
+    --color-focus: #e8c96a;
+    --color-sidebar: #0f1824;
+    --color-navbar: #0f1824;
+    --color-scrollbar-track: #070d16;
+    --color-scrollbar-thumb: #334155;
+  }
+}

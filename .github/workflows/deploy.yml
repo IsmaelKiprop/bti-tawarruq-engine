@@ -1,0 +1,53 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "portal/**"
+      - "docker-compose.yml"
+      - "Dockerfile"
+      - ".github/workflows/deploy.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build production images
+        run: |
+          docker build -t bti-tawarruq-engine:${{ github.sha }} .
+          docker build -t bti-tawarruq-portal:${{ github.sha }} ./portal
+
+      - name: Export deploy bundle
+        run: |
+          mkdir -p deploy-artifacts
+          docker save bti-tawarruq-engine:${{ github.sha }} | gzip > deploy-artifacts/engine-image.tar.gz
+          docker save bti-tawarruq-portal:${{ github.sha }} | gzip > deploy-artifacts/portal-image.tar.gz
+          cp docker-compose.yml deploy-artifacts/
+          cp docs/PRODUCTION_OPS.md deploy-artifacts/
+
+      - name: Upload deploy artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tawarruq-deploy-${{ github.sha }}
+          path: deploy-artifacts/
+
+      - name: Deploy note
+        run: |
+          echo "Images built for ${{ github.event.inputs.environment || 'staging' }}."
+          echo "Pull deploy-artifacts and run: docker compose up -d"
+          echo "Set AUTH_ENABLED=true, DATABASE_URL (Postgres), and institution API keys before go-live."
