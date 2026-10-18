@@ -191,7 +191,7 @@ function ApplicationCostCell({ item }: { item: Application }) {
     <td data-label="Cost / Murabaha">
       <div>{formatMoney(item.currency, deal.cost)}</div>
       <div className="meta">
-        Murabaha {formatMoney(item.currency, deal.total)} · {deal.months} ×{" "}
+        Murabaha {formatMoney(item.currency, deal.total)} · {deal.termMonths} ×{" "}
         {formatMoney(item.currency, deal.installment)}
       </div>
     </td>

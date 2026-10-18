@@ -10,7 +10,7 @@ COPY . .
 ARG VITE_API_URL=https://api.buruujfintech.com/api/v1
 ENV VITE_API_URL=$VITE_API_URL
 
-RUN npm run build
+RUN npx vite build
 
 FROM nginx:1.27-alpine
 

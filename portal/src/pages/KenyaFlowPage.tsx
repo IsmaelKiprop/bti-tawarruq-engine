@@ -84,7 +84,7 @@ function stepDone(caseData: KenyaOpsCase, key: string): boolean {
 export function KenyaFlowPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get("case");
-  const [queue, setQueue] = useState<QueueFilter>("active");
+  const [queue, setQueue] = useState<QueueFilter>("all");
   const [cases, setCases] = useState<KenyaOpsCase[]>([]);
   const [selected, setSelected] = useState<KenyaOpsCase | null>(null);
   const [brokers, setBrokers] = useState<BrokerInfo[]>([]);

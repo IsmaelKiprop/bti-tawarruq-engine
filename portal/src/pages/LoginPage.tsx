@@ -47,11 +47,6 @@ export function LoginPage() {
           <BrandLogo variant="lockup" />
           <p>Ops portal sign in</p>
         </div>
-        <p className="muted">
-          This portal runs Kenya float Tawarruq and Malaysia palm oil Tawarruq. It is not a cash-loan
-          book. Use the email and password issued by your admin. Temporary passwords must be changed
-          after first sign-in. Then pick a customer, lock the Murabaha offer, and run the commodity desk.
-        </p>
         <label>
           Email
           <input

@@ -150,14 +150,17 @@ export function MobileLendApprovalsPage() {
   }
 
   return (
-    <PageShell
-      title="Mobile Lend approvals"
-      subtitle="Invite members and activate Buruuj Lend accounts before they can borrow."
-    >
+    <PageShell>
+      <header className="page-header">
+        <h1>Mobile Lend approvals</h1>
+        <p className="muted">
+          Invite members and activate Buruuj Lend accounts before they can borrow.
+        </p>
+      </header>
       <PageExplain content={PAGE_EXPLAINS["/mobile-lend"] || PAGE_EXPLAINS["/customers"]} />
       <HowItWorks content={HOW_IT_WORKS["/mobile-lend"] || HOW_IT_WORKS["/customers"]} />
 
-      {error ? <Alert tone="danger">{error}</Alert> : null}
+      {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
 
       {canWrite ? (
@@ -229,7 +232,7 @@ export function MobileLendApprovalsPage() {
           </select>
         </div>
         {loading ? (
-          <LoadingPanel label="Loading accounts…" />
+          <LoadingPanel />
         ) : accounts.length === 0 ? (
           <EmptyState title="No accounts" description="Self-registered app users appear here after email verify." />
         ) : (

@@ -682,10 +682,10 @@ export function MalaysiaManualBridgePage() {
             <>
               <MalaysiaLegTape
                 currency={selected.currency || "MYR"}
-                bid={selected.bid_amount || selected.amount_requested}
-                profit={selected.profit_amount}
-                total={selected.murabaha_total}
-                legNumber={selected.leg_number}
+                bid={String(selected.bid_amount || selected.amount_requested || "0")}
+                profit={String(selected.profit_amount ?? "0")}
+                total={String(selected.murabaha_total ?? "0")}
+                legNumber={String(selected.leg_number ?? "1")}
               />
               <div className="info-grid">
                 <div className="info-item">
@@ -866,11 +866,10 @@ export function MalaysiaManualBridgePage() {
             ) : (
               <MalaysiaLegTape
                 currency={activeDeal.currency}
-                bid={activeDeal.bid}
-                profit={activeDeal.profit}
-                total={activeDeal.total}
-                termMonths={activeDeal.termMonths}
-                legNumber={activeDeal.legNumber}
+                bid={String(activeDeal.bid ?? "0")}
+                profit={String(activeDeal.profit ?? "0")}
+                total={String(activeDeal.total ?? "0")}
+                legNumber={String(activeDeal.legNumber ?? "1")}
               />
             )}
 
