@@ -94,17 +94,26 @@ def create_app() -> FastAPI:
     )
 
     # Inner middlewares first; CORS must be outermost so 401/403 still get ACAO headers.
+    settings = get_settings()
+    cors_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    portal_origin = (settings.portal_public_url or "").rstrip("/")
+    if portal_origin and portal_origin not in cors_origins:
+        cors_origins.append(portal_origin)
+
     app.add_middleware(ApiKeyMiddleware)
     app.add_middleware(RequestMetricsMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
-        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+        allow_origins=cors_origins,
+        allow_origin_regex=(
+            r"https?://(localhost|127\.0\.0\.1)(:\d+)?"
+            r"|https://([a-z0-9-]+\.)?buruujfintech\.com"
+        ),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

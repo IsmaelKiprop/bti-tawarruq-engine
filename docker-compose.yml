@@ -49,12 +49,10 @@ services:
   portal:
     build:
       context: ./portal
+      args:
+        VITE_API_URL: https://api.buruujfintech.com/api/v1
     ports:
-      - "5173:5173"
-    environment:
-      # Same-origin via Vite proxy (avoids browser CORS to :8000)
-      - VITE_API_URL=/api/v1
-      - VITE_PROXY_TARGET=http://api:8000
+      - "127.0.0.1:15173:80"
     depends_on:
       - api
 
