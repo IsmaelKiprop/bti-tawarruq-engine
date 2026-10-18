@@ -7,6 +7,8 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: true,
+    // Allow reverse-proxied public hostnames (e.g. ops.buruujfintech.com)
+    allowedHosts: true,
     proxy: {
       "/api": process.env.VITE_PROXY_TARGET || "http://api:8000",
       "/health": process.env.VITE_PROXY_TARGET || "http://api:8000",
