@@ -318,15 +318,24 @@ export function MalaysiaManualBridgePage() {
     if (!transaction) return;
     setBusy(true);
     try {
-      const result = await api.createDisbursement(transaction.application_id, transaction.id);
-      setMessage(
-        `Disbursement created${
-          result.tawarruq_certificate
-            ? ` · financing cert ${result.tawarruq_certificate.certificate_number}`
-            : ""
-        }`,
-      );
-      append("Disbursement created.");
+      const result = (await api.createDisbursement(transaction.application_id, transaction.id)) as {
+        queued?: boolean;
+        message?: string;
+        tawarruq_certificate?: { certificate_number?: string };
+      };
+      if (result.queued) {
+        setMessage(result.message || "Disbursement queued for FI Approver.");
+        append("Disbursement queued for maker-checker.");
+      } else {
+        setMessage(
+          `Disbursement created${
+            result.tawarruq_certificate
+              ? ` · financing cert ${result.tawarruq_certificate.certificate_number}`
+              : ""
+          }`,
+        );
+        append("Disbursement created.");
+      }
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Disbursement failed");

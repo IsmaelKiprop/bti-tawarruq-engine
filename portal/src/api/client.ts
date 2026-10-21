@@ -47,6 +47,8 @@ export interface SessionUser {
   agent_dealer_id?: string | null;
   must_change_password: boolean;
   permissions: string[];
+  mfa_enroll_required?: boolean;
+  mfa_enabled?: boolean;
 }
 
 export function getStoredSessionUser(): SessionUser | null {
@@ -232,6 +234,10 @@ export interface Institution {
   name: string;
   code: string;
   bsas_mode: string;
+  active?: boolean;
+  approval_steps?: string;
+  approval_limit_amount?: string | null;
+  billing_fee_bps?: number;
   created_at: string;
 }
 
@@ -268,6 +274,8 @@ export interface AuthContext {
   agent_dealer_id?: string | null;
   must_change_password?: boolean;
   auth_method?: string | null;
+  mfa_enabled?: boolean;
+  mfa_enroll_required?: boolean;
 }
 
 export interface OpsMetrics {
@@ -304,6 +312,59 @@ export interface LoginResponse {
   agent_dealer_id?: string | null;
   must_change_password: boolean;
   permissions: string[];
+  mfa_required?: boolean;
+  mfa_token?: string | null;
+  mfa_enroll_required?: boolean;
+  mfa_enabled?: boolean;
+}
+
+export interface PendingApproval {
+  id: string;
+  institution_id: string;
+  institution_name?: string | null;
+  step: string;
+  action: string;
+  status: string;
+  amount: string | null;
+  currency: string;
+  application_id: string | null;
+  transaction_id: string | null;
+  requested_by_id: string | null;
+  decision_note: string | null;
+  last_error: string | null;
+  created_at: string | null;
+  queued?: boolean;
+}
+
+export interface BillingInvoice {
+  id: string;
+  institution_id: string;
+  institution_name?: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  transaction_count: number;
+  volume_amount: string;
+  fee_bps: number;
+  fee_amount: string;
+  currency: string;
+  status: string;
+  issued_at: string | null;
+  paid_at: string | null;
+  note: string | null;
+}
+
+export interface ReconciliationRow {
+  id: string;
+  institution_id: string;
+  institution_name?: string | null;
+  transaction_id: string;
+  application_id: string | null;
+  expected_amount: string;
+  settled_amount: string;
+  currency: string;
+  status: string;
+  note: string | null;
+  created_at: string | null;
 }
 
 export interface OpsUserRecord {
@@ -315,6 +376,8 @@ export interface OpsUserRecord {
   agent_dealer_id?: string | null;
   must_change_password: boolean;
   active: boolean;
+  approval_limit_amount?: string | null;
+  mfa_enabled?: boolean;
   created_at: string;
 }
 
@@ -807,7 +870,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  updateInstitution: (institutionId: string, body: { name?: string; bsas_mode?: string }) =>
+  updateInstitution: (
+    institutionId: string,
+    body: {
+      name?: string;
+      bsas_mode?: string;
+      active?: boolean;
+      approval_steps?: string;
+      approval_limit_amount?: string | null;
+      billing_fee_bps?: number;
+    },
+  ) =>
     request<Institution>(`/institutions/${institutionId}`, {
       method: "PATCH",
       body: JSON.stringify(body),
@@ -835,6 +908,57 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
+  verifyMfa: (mfa_token: string, code: string) =>
+    request<LoginResponse>("/ops/auth/mfa", {
+      method: "POST",
+      body: JSON.stringify({ mfa_token, code }),
+    }),
+
+  enrollMfa: () => request<{ secret: string; otpauth_url: string; email: string }>("/ops/auth/mfa/enroll", { method: "POST" }),
+
+  confirmMfa: (code: string) =>
+    request<LoginResponse>("/ops/auth/mfa/confirm", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+
+  listApprovals: (status = "pending") =>
+    request<PendingApproval[]>(`/ops/approvals${status ? `?status=${status}` : ""}`),
+  approvePending: (id: string, note?: string) =>
+    request<PendingApproval>(`/ops/approvals/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    }),
+  rejectPending: (id: string, note?: string) =>
+    request<PendingApproval>(`/ops/approvals/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    }),
+  listBillingInvoices: (institutionId?: string) =>
+    request<BillingInvoice[]>(
+      `/ops/billing/invoices${institutionId ? `?institution_id=${institutionId}` : ""}`,
+    ),
+  generateInvoice: (body: { institution_id: string; period_start: string; period_end: string; note?: string }) =>
+    request<BillingInvoice>("/ops/billing/invoices", { method: "POST", body: JSON.stringify(body) }),
+  payInvoice: (id: string) => request<BillingInvoice>(`/ops/billing/invoices/${id}/pay`, { method: "POST" }),
+  scanReconciliation: (institutionId?: string) =>
+    request<{ scanned: boolean; created_or_updated: number }>(
+      `/ops/reconciliation/scan${institutionId ? `?institution_id=${institutionId}` : ""}`,
+      { method: "POST" },
+    ),
+  listReconciliation: (status?: string) =>
+    request<ReconciliationRow[]>(`/ops/reconciliation${status ? `?status=${status}` : ""}`),
+  resolveReconciliation: (id: string, status: string, note?: string) =>
+    request<ReconciliationRow>(`/ops/reconciliation/${id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ status, note }),
+    }),
+  retryKenyaCase: (applicationId: string) =>
+    request<{ application_id: string; reset_legs: number; message: string }>(
+      `/kenya/ops/cases/${applicationId}/retry`,
+      { method: "POST" },
+    ),
+
   changePassword: (current_password: string, new_password: string) =>
     request<LoginResponse>("/ops/auth/change-password", {
       method: "POST",
@@ -849,6 +973,7 @@ export const api = {
     role: string;
     institution_id?: string | null;
     agent_dealer_id?: string | null;
+    approval_limit_amount?: string | null;
     temporary_password?: string;
   }) =>
     request<OpsUserRecord & { temporary_password: string }>("/ops/auth/users", {
@@ -865,6 +990,7 @@ export const api = {
       institution_id?: string | null;
       agent_dealer_id?: string | null;
       active?: boolean;
+      approval_limit_amount?: string | null;
     },
   ) => request<OpsUserRecord>(`/ops/auth/users/${userId}`, { method: "PATCH", body: JSON.stringify(body) }),
 

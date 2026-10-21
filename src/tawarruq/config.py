@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     ops_session_secret: str = ""
     ops_bootstrap_admin_email: str = "admin@bti.local"
     ops_bootstrap_admin_password: str = "ChangeMeNow!123"
+    # Idempotent catalogue users (BTI roles doc). Safe in production; skips existing emails.
+    ops_seed_users: bool = True
+    ops_seed_password: str = "BuruujSeed2026!"
+    ops_seed_email_domain: str = "buruujfintech.com"
 
     log_level: str = "INFO"
     api_prefix: str = "/api/v1"

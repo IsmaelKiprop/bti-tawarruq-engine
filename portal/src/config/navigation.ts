@@ -48,9 +48,22 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: IconMonitor,
         hint: "Engine telemetry for your role",
         permission: "view_metrics",
-        roles: ["platform_admin", "institution_admin", "institution_ops", "read_only"],
       },
       { to: "/customer", label: "Customer Journey", Icon: IconApplications, hint: "Eight-step tracker and certificates" },
+      {
+        to: "/billing",
+        label: "Billing",
+        Icon: IconMonitor,
+        hint: "Fees and invoices (BTI Finance)",
+        permission: "manage_billing",
+      },
+      {
+        to: "/reconciliation",
+        label: "Reconciliation",
+        Icon: IconTransactions,
+        hint: "Settlement matching",
+        permission: "reconcile",
+      },
     ],
   },
   {
@@ -74,10 +87,17 @@ export const NAV_SECTIONS: NavSection[] = [
         to: "/mobile-lend",
         label: "Mobile Lend",
         Icon: IconUsers,
-        hint: "Invite and approve app borrowers",
-        permission: "write_ops",
+        hint: "Invite (ops) and approve (approver)",
+        roles: ["bti_ops", "institution_admin", "institution_ops", "fi_approver"],
       },
       { to: "/repayments", label: "Repayments", Icon: IconRepayments, hint: "After disbursement", permission: "write_ops" },
+      {
+        to: "/approvals",
+        label: "Approvals",
+        Icon: IconUsers,
+        hint: "Maker-checker queue",
+        permission: "approve_txn",
+      },
     ],
   },
   {
@@ -171,6 +191,22 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
   "/shariah": {
     title: "Shariah Compliance",
     description: "Verify hash chain, possession seals, and export the audit ledger",
+  },
+  "/approvals": {
+    title: "Approvals",
+    description: "Maker-checker queue: Murabaha, liquidation, disbursement, and Mobile Lend",
+  },
+  "/mfa-enroll": {
+    title: "Authenticator setup",
+    description: "Privileged roles must enroll TOTP before using the portal",
+  },
+  "/billing": {
+    title: "Billing & fees",
+    description: "Platform usage charges and invoices for BTI Finance",
+  },
+  "/reconciliation": {
+    title: "Reconciliation",
+    description: "Settlement matching and exception management",
   },
   "/customers": {
     title: "Customers",

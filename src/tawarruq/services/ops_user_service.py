@@ -17,9 +17,12 @@ from tawarruq.config import get_settings
 from tawarruq.enums import ApiKeyRole
 from tawarruq.models.kenya_flow import AgentDealer
 from tawarruq.models.ops_user import OpsUser
+from tawarruq.services.rbac import PLATFORM_SCOPED_ROLES, PORTAL_ASSIGNABLE_ROLES
 
 TOKEN_TTL_SECONDS = 60 * 60 * 12  # 12 hours
+MFA_CHALLENGE_TTL_SECONDS = 60 * 5
 PBKDF2_ITERATIONS = 120_000
+_UNSET = object()
 
 
 def _session_secret() -> str:
@@ -78,9 +81,59 @@ def decode_session_token(token: str) -> dict[str, Any] | None:
         payload = json.loads(base64.urlsafe_b64decode(body + padding).decode())
         if int(payload.get("exp", 0)) < int(time.time()):
             return None
+        if payload.get("typ") == "mfa":
+            return None
         return payload
     except (ValueError, TypeError, json.JSONDecodeError):
         return None
+
+
+def create_mfa_challenge_token(user: OpsUser) -> str:
+    payload = {
+        "sub": user.id,
+        "typ": "mfa",
+        "email": user.email,
+        "exp": int(time.time()) + MFA_CHALLENGE_TTL_SECONDS,
+    }
+    body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
+    sig = hmac.new(_session_secret().encode(), body.encode(), hashlib.sha256).hexdigest()
+    return f"{body}.{sig}"
+
+
+def decode_mfa_challenge_token(token: str) -> dict[str, Any] | None:
+    try:
+        body, sig = token.rsplit(".", 1)
+        expected = hmac.new(_session_secret().encode(), body.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            return None
+        padding = "=" * (-len(body) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(body + padding).decode())
+        if int(payload.get("exp", 0)) < int(time.time()):
+            return None
+        if payload.get("typ") != "mfa":
+            return None
+        return payload
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def begin_mfa_enroll(user: OpsUser) -> tuple[str, str]:
+    from tawarruq.services.totp_service import generate_totp_secret, otpauth_url
+
+    secret = generate_totp_secret()
+    user.mfa_secret = secret
+    user.mfa_enabled = False
+    return secret, otpauth_url(secret, user.email)
+
+
+def confirm_mfa_enroll(user: OpsUser, code: str) -> None:
+    from tawarruq.services.totp_service import verify_totp
+
+    if not user.mfa_secret:
+        raise ValueError("Start MFA enrollment first")
+    if not verify_totp(user.mfa_secret, code):
+        raise ValueError("Invalid authenticator code")
+    user.mfa_enabled = True
 
 
 def get_user_by_email(db: Session, email: str) -> OpsUser | None:
@@ -126,26 +179,35 @@ def create_ops_user(
     created_by_id: str | None = None,
     must_change_password: bool = True,
     agent_dealer_id: str | None = None,
+    approval_limit_amount=None,
 ) -> tuple[OpsUser, str]:
     email_norm = email.strip().lower()
     if get_user_by_email(db, email_norm):
         raise ValueError(f"User already exists: {email_norm}")
-    if role not in {ApiKeyRole.PLATFORM_ADMIN, ApiKeyRole.AGENT_DEALER} and not institution_id:
+    if role not in PORTAL_ASSIGNABLE_ROLES:
+        raise ValueError(f"Role {role.value} cannot be used for portal logins")
+    # Reconciler may be BTI-wide (null institution) or tenant-scoped.
+    if role not in PLATFORM_SCOPED_ROLES and role != ApiKeyRole.RECONCILER and not institution_id:
         raise ValueError("institution_id is required for bank and SACCO roles")
+    if role == ApiKeyRole.RECONCILER and not institution_id:
+        # BTI-wide reconciler — allowed
+        pass
     bound_dealer_id = _bound_dealer_id(
         db, role=role, institution_id=None, agent_dealer_id=agent_dealer_id
     )
     temp = temporary_password or generate_temporary_password()
+    clear_institution = role in PLATFORM_SCOPED_ROLES
     user = OpsUser(
         email=email_norm,
         full_name=full_name.strip(),
         password_hash=hash_password(temp),
         role=role.value,
-        institution_id=None if role in {ApiKeyRole.PLATFORM_ADMIN, ApiKeyRole.AGENT_DEALER} else institution_id,
+        institution_id=None if clear_institution else institution_id,
         agent_dealer_id=bound_dealer_id,
         must_change_password=must_change_password,
         active=True,
         created_by_id=created_by_id,
+        approval_limit_amount=approval_limit_amount,
     )
     db.add(user)
     db.flush()
@@ -195,6 +257,7 @@ def update_ops_user(
     institution_id: str | None = None,
     agent_dealer_id: str | None = None,
     active: bool | None = None,
+    approval_limit_amount=_UNSET,
     actor_id: str | None = None,
     actor_is_platform_admin: bool = False,
 ) -> OpsUser:
@@ -207,8 +270,12 @@ def update_ops_user(
     if full_name is not None:
         user.full_name = full_name.strip()
     if role is not None:
-        if role == ApiKeyRole.PLATFORM_ADMIN and not actor_is_platform_admin:
-            raise ValueError("Only platform admins can assign platform_admin")
+        if role not in PORTAL_ASSIGNABLE_ROLES:
+            raise ValueError(f"Role {role.value} cannot be used for portal logins")
+        from tawarruq.services.rbac import BTI_INTERNAL_ROLES
+
+        if role in BTI_INTERNAL_ROLES and not actor_is_platform_admin:
+            raise ValueError("Only platform admins can assign BTI internal roles")
         if (
             user.role == ApiKeyRole.PLATFORM_ADMIN.value
             and role != ApiKeyRole.PLATFORM_ADMIN
@@ -217,17 +284,18 @@ def update_ops_user(
         ):
             raise ValueError("Cannot demote the last active platform admin")
         if (
-            role not in {ApiKeyRole.PLATFORM_ADMIN, ApiKeyRole.AGENT_DEALER}
+            role not in PLATFORM_SCOPED_ROLES
+            and role != ApiKeyRole.RECONCILER
             and not institution_id
             and not user.institution_id
         ):
             raise ValueError("institution_id is required for bank and SACCO roles")
         user.role = role.value
-        if role in {ApiKeyRole.PLATFORM_ADMIN, ApiKeyRole.AGENT_DEALER}:
+        if role in PLATFORM_SCOPED_ROLES:
             user.institution_id = None
-            if role == ApiKeyRole.PLATFORM_ADMIN:
+            if role != ApiKeyRole.AGENT_DEALER:
                 user.agent_dealer_id = None
-        elif institution_id:
+        elif institution_id is not None:
             user.institution_id = institution_id
         user.agent_dealer_id = _bound_dealer_id(
             db,
@@ -235,7 +303,7 @@ def update_ops_user(
             institution_id=user.institution_id,
             agent_dealer_id=agent_dealer_id if role == ApiKeyRole.AGENT_DEALER else None,
         )
-    elif institution_id and user.role != ApiKeyRole.PLATFORM_ADMIN.value:
+    elif institution_id and user.role not in {r.value for r in PLATFORM_SCOPED_ROLES}:
         user.institution_id = institution_id
     if role is None and agent_dealer_id is not None and user.role == ApiKeyRole.AGENT_DEALER.value:
         user.agent_dealer_id = _bound_dealer_id(
@@ -255,6 +323,8 @@ def update_ops_user(
         ):
             raise ValueError("Cannot deactivate the last active platform admin")
         user.active = active
+    if approval_limit_amount is not _UNSET:
+        user.approval_limit_amount = approval_limit_amount
     db.flush()
     return user
 

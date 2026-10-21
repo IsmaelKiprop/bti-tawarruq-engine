@@ -1,11 +1,14 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api, type OpsUserRecord } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
 import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
+import { PORTAL_ROLE_OPTIONS, getRoleProfile } from "../config/roles";
 import "../components/ui.css";
 
 export function UsersPage() {
+  const { user } = useAuth();
   const [items, setItems] = useState<OpsUserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -15,6 +18,12 @@ export function UsersPage() {
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState("institution_ops");
   const [tempPassword, setTempPassword] = useState("");
+  const [approvalLimit, setApprovalLimit] = useState("");
+
+  const roleOptions = useMemo(() => {
+    const isPlatform = user?.role === "platform_admin";
+    return PORTAL_ROLE_OPTIONS.filter((opt) => isPlatform || !opt.btiOnly);
+  }, [user?.role]);
 
   async function load() {
     setLoading(true);
@@ -41,6 +50,7 @@ export function UsersPage() {
         email,
         full_name: fullName,
         role,
+        approval_limit_amount: approvalLimit.trim() || null,
       } as Parameters<typeof api.createOpsUser>[0]);
       setTempPassword((created as { temporary_password?: string }).temporary_password || "");
       setEmail("");
@@ -76,12 +86,20 @@ export function UsersPage() {
           <label>
             Role
             <select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="platform_admin">platform_admin</option>
-              <option value="institution_admin">institution_admin</option>
-              <option value="institution_ops">institution_ops</option>
-              <option value="read_only">read_only</option>
-              <option value="agent_dealer">agent_dealer</option>
+              {roleOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
+          </label>
+          <label>
+            Approval limit (optional)
+            <input
+              value={approvalLimit}
+              onChange={(e) => setApprovalLimit(e.target.value)}
+              placeholder="e.g. 500000"
+            />
           </label>
           <button className="btn btn-primary" type="submit" disabled={busy}>
             {busy ? "Creating…" : "Create user"}
@@ -103,6 +121,7 @@ export function UsersPage() {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th>Limit</th>
                   <th>Active</th>
                 </tr>
               </thead>
@@ -111,7 +130,8 @@ export function UsersPage() {
                   <tr key={item.id}>
                     <td>{item.full_name}</td>
                     <td>{item.email}</td>
-                    <td>{item.role}</td>
+                    <td>{getRoleProfile(item.role).label}</td>
+                    <td>{item.approval_limit_amount || "—"}</td>
                     <td>{item.active ? "Yes" : "No"}</td>
                   </tr>
                 ))}

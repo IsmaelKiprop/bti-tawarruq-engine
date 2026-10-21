@@ -41,6 +41,20 @@ def require_write_ops(request: Request) -> None:
     require_permission(request, "write_ops")
 
 
+def require_approve_txn(request: Request) -> None:
+    """Maker-checker: FI Approver, or ops/admin that still hold approve_txn."""
+    require_permission(request, "approve_txn")
+
+
+def require_write_ops_or_approve(request: Request) -> None:
+    """Transitional gate: invite/ops write or approver-only actions."""
+    from tawarruq.services.rbac import has_permission
+
+    if has_permission(request, "write_ops") or has_permission(request, "approve_txn"):
+        return
+    require_permission(request, "approve_txn")
+
+
 def require_manage_credentials(request: Request) -> None:
     require_permission(request, "manage_credentials")
 
@@ -51,6 +65,22 @@ def require_manage_integrations(request: Request) -> None:
 
 def require_manage_institutions(request: Request) -> None:
     require_permission(request, "manage_institutions")
+
+
+def require_manage_billing(request: Request) -> None:
+    require_permission(request, "manage_billing")
+
+
+def require_reconcile(request: Request) -> None:
+    require_permission(request, "reconcile")
+
+
+def require_write_bti_ops(request: Request) -> None:
+    require_permission(request, "write_bti_ops")
+
+
+def require_export_data(request: Request) -> None:
+    require_permission(request, "export_data")
 
 
 def get_auth_role(request: Request):

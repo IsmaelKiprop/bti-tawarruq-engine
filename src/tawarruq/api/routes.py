@@ -160,6 +160,7 @@ def list_applications(
 def create_application(
     payload: ApplicationCreate, request: Request, db: Session = Depends(get_db)
 ) -> ApplicationRead:
+    require_write_ops(request)
     tenant_id = tenant_filter_institution_id(request, payload.institution_id)
     if tenant_id and payload.institution_id and payload.institution_id != tenant_id:
         raise HTTPException(status_code=403, detail="Cannot create application for another institution")
@@ -246,6 +247,7 @@ def delete_application(application_id: str, request: Request, db: Session = Depe
 def generate_offer(
     application_id: str, payload: OfferCreate, request: Request, db: Session = Depends(get_db)
 ) -> OfferRead:
+    require_write_ops(request)
     application = db.get(FinancingApplication, application_id)
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -281,6 +283,19 @@ def accept_offer(application_id: str, request: Request, db: Session = Depends(ge
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     require_tenant_access(request, application.institution_id)
+    from tawarruq.api.approval_http import queued_or_none
+
+    queued = queued_or_none(
+        db,
+        request,
+        action="application.accept_offer",
+        institution_id=application.institution_id,
+        amount=application.amount_requested,
+        application_id=application.id,
+        currency=application.currency or "KES",
+    )
+    if queued:
+        return queued  # type: ignore[return-value]
     try:
         offer = application_service.accept_offer(db, application_id)
         db.commit()
@@ -338,6 +353,7 @@ def list_transactions(
 def create_transaction(
     payload: TransactionCreate, request: Request, db: Session = Depends(get_db)
 ) -> TransactionRead:
+    require_write_ops(request)
     application = db.get(FinancingApplication, payload.application_id)
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -428,6 +444,22 @@ def _execute_leg(transaction_id: str, request: Request, db: Session) -> Transact
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     require_tenant_access(request, transaction.institution_id)
+    require_write_ops(request)
+    next_leg = next((leg for leg in transaction.legs if leg.status in {"pending", "in_progress"}), None)
+    if next_leg and str(next_leg.leg_number) == "3":
+        from tawarruq.api.approval_http import queued_or_none
+
+        queued = queued_or_none(
+            db,
+            request,
+            action="malaysia.sale_leg",
+            institution_id=transaction.institution_id,
+            application_id=transaction.application_id,
+            transaction_id=transaction.id,
+            payload={"transaction_id": transaction.id},
+        )
+        if queued:
+            return queued  # type: ignore[return-value]
 
     worker = AmanahWorker(write_enabled=True)
     worker.process_transaction(db, transaction)
@@ -497,6 +529,21 @@ def create_disbursement(
     application = db.get(FinancingApplication, payload.application_id)
     if application:
         require_tenant_access(request, application.institution_id)
+        from tawarruq.api.approval_http import queued_or_none
+
+        queued = queued_or_none(
+            db,
+            request,
+            action="malaysia.disburse",
+            institution_id=application.institution_id,
+            amount=application.amount_requested,
+            application_id=application.id,
+            transaction_id=payload.transaction_id,
+            payload={"application_id": payload.application_id, "transaction_id": payload.transaction_id},
+            currency=application.currency or "KES",
+        )
+        if queued:
+            return queued  # type: ignore[return-value]
     try:
         disbursement = transaction_service.create_disbursement(
             db,
@@ -533,6 +580,20 @@ def run_full_malaysia_flow(application_id: str, request: Request, db: Session = 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     require_tenant_access(request, application.institution_id)
+    require_write_ops(request)
+    from tawarruq.api.approval_http import queued_or_none
+
+    queued = queued_or_none(
+        db,
+        request,
+        action="malaysia.run_full_flow",
+        institution_id=application.institution_id,
+        amount=application.amount_requested,
+        application_id=application.id,
+        currency=application.currency or "KES",
+    )
+    if queued:
+        return queued  # type: ignore[return-value]
     try:
         result = malaysia_flow_service.run_ordered_malaysia_flow(db, application_id)
         db.commit()

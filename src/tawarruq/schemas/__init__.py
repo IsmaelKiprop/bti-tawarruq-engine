@@ -16,6 +16,10 @@ class InstitutionRead(BaseModel):
     name: str
     code: str
     bsas_mode: str = Field(..., description='Default BSAS integration mode for new transactions')
+    active: bool = True
+    approval_steps: str = 'murabaha,liquidation,disbursement'
+    approval_limit_amount: Decimal | None = None
+    billing_fee_bps: int = 25
     created_at: datetime
 
 class ApplicationCreate(BaseModel):
@@ -122,7 +126,7 @@ class TransactionRead(BaseModel):
     status: str = Field(..., description='created | executing | awaiting_manual | completed | failed | escalated')
     created_at: datetime
     updated_at: datetime
-    legs: list = Field(default_factory=list, description='All 3 legs with certificates')
+    legs: list[LegRead] = Field(default_factory=list, description='All 3 legs with certificates')
 
 class DisbursementCreate(BaseModel):
     model_config = ConfigDict(json_schema_extra={'examples': [{'application_id': '00000000-0000-0000-0000-000000000000', 'transaction_id': '00000000-0000-0000-0000-000000000000'}]})
@@ -171,6 +175,8 @@ class AuthContextRead(BaseModel):
     agent_dealer_id: str | None = None
     must_change_password: bool = False
     auth_method: str | None = Field(None, description='session | api_key | none')
+    mfa_enabled: bool = False
+    mfa_enroll_required: bool = False
 
 class OpsLoginRequest(BaseModel):
     email: str = Field(..., examples=['admin@bti.local'])
@@ -187,6 +193,10 @@ class OpsLoginResponse(BaseModel):
     agent_dealer_id: str | None = None
     must_change_password: bool
     permissions: list = Field(default_factory=list)
+    mfa_required: bool = False
+    mfa_token: str | None = None
+    mfa_enroll_required: bool = False
+    mfa_enabled: bool = False
 
 class OpsChangePasswordRequest(BaseModel):
     current_password: str
@@ -195,9 +205,16 @@ class OpsChangePasswordRequest(BaseModel):
 class OpsUserCreate(BaseModel):
     email: str
     full_name: str
-    role: str = Field('institution_ops', description='platform_admin | institution_admin | institution_ops | agent_dealer | shariah_officer | read_only')
+    role: str = Field(
+        'institution_ops',
+        description=(
+            'platform_admin | bti_ops | bti_finance | institution_admin | institution_ops | '
+            'fi_approver | shariah_officer | reconciler | read_only | agent_dealer'
+        ),
+    )
     institution_id: str | None = None
     agent_dealer_id: str | None = Field(None, description='Required when role is agent_dealer. Binds this login to one float pool.')
+    approval_limit_amount: Decimal | None = Field(None, description='Max amount this approver may authorize. Null inherits the institution limit.')
     temporary_password: str | None = Field(None, description='Optional; generated if omitted. Shown once to admin to share.')
 
 class OpsUserRead(BaseModel):
@@ -211,17 +228,26 @@ class OpsUserRead(BaseModel):
     agent_dealer_id: str | None = None
     must_change_password: bool
     active: bool
+    approval_limit_amount: Decimal | None = None
+    mfa_enabled: bool = False
     created_at: datetime
 
 class OpsUserUpdate(BaseModel):
     full_name: str | None = None
     email: str | None = None
-    role: str | None = Field(None, description='platform_admin | institution_admin | institution_ops | agent_dealer | shariah_officer | read_only')
+    role: str | None = Field(
+        None,
+        description=(
+            'platform_admin | bti_ops | bti_finance | institution_admin | institution_ops | '
+            'fi_approver | shariah_officer | reconciler | read_only | agent_dealer'
+        ),
+    )
     institution_id: str | None = None
     agent_dealer_id: str | None = None
     active: bool | None = None
+    approval_limit_amount: Decimal | None = None
 
-class OpsUserCreatedRead(BaseModel):
+class OpsUserCreatedRead(OpsUserRead):
     temporary_password: str = Field(..., description='Share securely; not shown again')
 
 class OpsUserPasswordResetRequest(BaseModel):
@@ -260,6 +286,10 @@ class OpsMetricsRead(BaseModel):
 class InstitutionUpdate(BaseModel):
     name: str | None = None
     bsas_mode: str | None = Field(None, description='mock | manual_bridge | live')
+    active: bool | None = Field(None, description='False suspends the tenant: writes are blocked')
+    approval_steps: str | None = Field(None, description='Comma-separated: murabaha,liquidation,disbursement')
+    approval_limit_amount: Decimal | None = None
+    billing_fee_bps: int | None = Field(None, description='Platform fee in basis points of disbursed volume')
 
 class WebhookCreate(BaseModel):
     institution_id: str
@@ -276,12 +306,16 @@ class WebhookRead(BaseModel):
     active: bool
     created_at: datetime
 
-class WebhookCreatedRead(BaseModel):
+class WebhookCreatedRead(WebhookRead):
     secret: str = Field(..., description='Signing secret shown once at creation')
 
 class ApiKeyCreate(BaseModel):
     name: str = Field(..., examples=['Production integration'])
-    role: str = Field('institution_ops', description='platform_admin | institution_admin | institution_ops | shariah_officer | read_only', examples=['institution_ops'])
+    role: str = Field(
+        'api_client',
+        description='api_client | institution_ops | institution_admin | platform_admin | bti_ops | shariah_officer | read_only',
+        examples=['api_client'],
+    )
 
 class ApiKeyRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -294,7 +328,7 @@ class ApiKeyRead(BaseModel):
     active: bool
     created_at: datetime
 
-class ApiKeyCreatedRead(BaseModel):
+class ApiKeyCreatedRead(ApiKeyRead):
     api_key: str = Field(..., description='Full key shown once at creation')
     hmac_secret: str | None = Field(None, description='HMAC secret shown once. Sign POST /tawarruq/execute with X-BTI-Signature.')
 

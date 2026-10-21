@@ -263,6 +263,44 @@ def list_repayment_board(
     return board
 
 
+def retry_kenya_case(db: Session, application: FinancingApplication) -> dict[str, Any]:
+    """Reset failed legs so BTI ops can re-run the next Kenya step (audited)."""
+    from tawarruq.enums import AuditActor, LegStatus, TransactionStatus
+    from tawarruq.services.audit_service import log_audit
+
+    txn = None
+    for candidate in application.transactions:
+        if candidate.mode in _KENYA_TXN_MODES:
+            txn = candidate
+            break
+    if not txn and application.transactions:
+        txn = application.transactions[-1]
+    reset = 0
+    if txn:
+        for leg in txn.legs:
+            if leg.status == LegStatus.FAILED:
+                leg.status = LegStatus.PENDING
+                leg.error_message = None
+                reset += 1
+        if txn.status == TransactionStatus.FAILED:
+            txn.status = TransactionStatus.CREATED
+    log_audit(
+        db,
+        entity_type="application",
+        entity_id=application.id,
+        actor=AuditActor.HUMAN,
+        action="bti.retry",
+        details=f"reset_legs={reset}",
+    )
+    db.flush()
+    return {
+        "application_id": application.id,
+        "transaction_id": txn.id if txn else None,
+        "reset_legs": reset,
+        "message": "Failed Kenya legs reset for retry",
+    }
+
+
 def list_brokers(db: Session) -> list[dict[str, Any]]:
     brokers = db.query(ThirdPartyBroker).order_by(ThirdPartyBroker.code).all()
     return [

@@ -3,7 +3,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
-from tawarruq.api.deps import require_write_ops, tenant_filter_institution_id
+from tawarruq.api.deps import (
+    require_approve_txn,
+    require_write_ops,
+    require_write_ops_or_approve,
+    tenant_filter_institution_id,
+)
 from tawarruq.database import get_db
 from tawarruq.schemas.mobile_auth import (
     MobileApproveRequest,
@@ -23,7 +28,7 @@ def list_accounts(
     institution_id: str | None = None,
     db: Session = Depends(get_db),
 ):
-    require_write_ops(request)
+    require_write_ops_or_approve(request)
     scoped = tenant_filter_institution_id(request, institution_id)
     accounts = onboarding.list_mobile_accounts(
         db, institution_id=scoped, approval_status=approval_status
@@ -38,7 +43,7 @@ def approve_account(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    require_write_ops(request)
+    require_approve_txn(request)
     try:
         scoped = tenant_filter_institution_id(request, payload.institution_id)
         account = onboarding.approve_account(
@@ -64,7 +69,7 @@ def reject_account(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    require_write_ops(request)
+    require_approve_txn(request)
     try:
         account = onboarding.reject_account(
             db,

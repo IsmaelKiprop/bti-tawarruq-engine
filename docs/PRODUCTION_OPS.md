@@ -1,17 +1,26 @@
 # Production Ops Stack
 
-This guide covers role-based auth, monitoring, and CI/CD deploy for the Buruuj Tawarruq engine.
+This guide covers production auth flags, monitoring, and CI/CD deploy for the Buruuj Tawarruq engine.
+
+Complete users, maker-checker, billing, reconciliation, and MFA documentation: **[USERS_ACCESS_CONTROLS.md](USERS_ACCESS_CONTROLS.md)**. Stakeholder catalogue: `docs/BTI_Tawarruq_Users_ver_001.docx`.
 
 ## Role-based access control (RBAC)
 
-When `AUTH_ENABLED=true`, every protected route requires an `X-API-Key` header. API keys carry one of four roles:
+When `AUTH_ENABLED=true`, protected routes require an ops session Bearer token or an `X-API-Key`. Roles align with `docs/BTI_Tawarruq_Users_ver_001.docx`. Full permission matrix and APIs: [USERS_ACCESS_CONTROLS.md](USERS_ACCESS_CONTROLS.md).
 
-| Role | Scope | Permissions |
-|------|-------|-------------|
-| `platform_admin` | All institutions | Full access including create institutions and cross-tenant reads |
-| `institution_admin` | Own institution | Ops writes + manage webhooks, API keys, integrations |
-| `institution_ops` | Own institution | Daily ops (applications, transactions, manual bridge, Kenya flow) |
-| `read_only` | Own institution | GET only + metrics (auditors, dashboards) |
+| Role | Doc category | Scope | Core permissions |
+|------|--------------|-------|------------------|
+| `platform_admin` | BTI Platform Super Administrator | Platform | Tenant lifecycle, credentials, billing, retries (`write_bti_ops`). **No** `write_ops` / `approve_txn` — admin access does not execute trades |
+| `bti_ops` | BTI Tawarruq Operations Officer | Platform | Cross-tenant ops (`write_ops`, `write_bti_ops`) — not tenant lifecycle |
+| `bti_finance` | BTI Finance / Billing Officer | Platform | `manage_billing` (no trade execution) |
+| `institution_admin` | FI Administrator | Own tenant | Ops + users/keys/integrations + `approve_txn` |
+| `institution_ops` | FI Operations Officer | Own tenant | Initiate/monitor (`write_ops`) |
+| `fi_approver` | FI Approver | Own tenant | `approve_txn` only (maker-checker) |
+| `shariah_officer` | Shariah / Audit | Tenant | Read-only + `view_shariah` |
+| `reconciler` | Reconciliation Officer | Tenant or BTI-wide | `reconcile` |
+| `read_only` | Viewer | Own tenant | GET + metrics |
+| `agent_dealer` | Kenya float desk | Dealer | `dealer_desk` only |
+| `api_client` | Institution API Client | Machine key | `api_submit` + `write_ops` (not a portal login) |
 
 ### Create keys with roles
 
@@ -19,20 +28,37 @@ When `AUTH_ENABLED=true`, every protected route requires an `X-API-Key` header. 
 curl -X POST http://localhost:8000/api/v1/institutions/{id}/api-keys \
   -H "X-API-Key: $PLATFORM_ADMIN_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"name":"ops-portal","role":"institution_admin"}'
+  -d '{"name":"fi-core-banking","role":"api_client"}'
 ```
 
-Only `platform_admin` keys can create other `platform_admin` keys or register new institutions.
+Only `platform_admin` can create other BTI-internal users/keys or register new institutions.
 
 ### Portal auth (email + password)
 
 With `AUTH_ENABLED=true`, the ops portal uses a login page (not pasted API keys):
 
-1. Bootstrap admin is created on first API start when no ops users exist (`OPS_BOOTSTRAP_ADMIN_EMAIL` / `OPS_BOOTSTRAP_ADMIN_PASSWORD`).
-2. Sign in at `/login`. Temporary passwords force `/change-password` before any other page.
-3. **Log out** clears the session and returns to `/login`.
-4. Platform / institution admins open **Users** to create logins, copy the temporary password, and send it out of band.
-5. Machine clients can still use `X-API-Key` for API automation.
+1. On API start (when `OPS_SEED_USERS=true`, default), the engine **idempotently** seeds the BTI role catalogue: BTI ops/finance, FI admin/ops/approver, shariah, reconciler, read-only, agent dealer, plus an `api_client` key. Existing emails are never overwritten.
+2. Bootstrap / seed passwords come from `OPS_BOOTSTRAP_*` and `OPS_SEED_PASSWORD`. New secrets are appended to `data/ops_seed_credentials.txt` (gitignored).
+3. Sign in at `/login`. Temporary passwords force `/change-password` before any other page.
+4. Re-run anytime: `python -m tawarruq.cli seed-ops-users`
+5. Platform / institution admins can still create more logins under **Users**.
+6. Machine clients use `X-API-Key` (`api_client` role preferred).
+7. Privileged portal roles (Super Admin, BTI Ops, BTI Finance) should enroll TOTP at `/mfa-enroll`. After enrollment, login requires the authenticator code.
+8. Murabaha, liquidation, and disbursement are maker-checker gated when `AUTH_ENABLED=true`. FI Ops queues the step; FI Approvers act on **Approvals**. Amount limits on the institution or the approver are enforced. The initiator cannot be the sole approver.
+
+| Seeded email (domain = `OPS_SEED_EMAIL_DOMAIN`) | Role |
+|-----------------------------------------------|------|
+| `OPS_BOOTSTRAP_ADMIN_EMAIL` | `platform_admin` |
+| `bti.ops@…` | `bti_ops` |
+| `bti.finance@…` | `bti_finance` |
+| `fi.admin@…` | `institution_admin` (default / MWALIMU tenant) |
+| `fi.ops@…` | `institution_ops` |
+| `fi.approver@…` | `fi_approver` |
+| `shariah@…` | `shariah_officer` |
+| `reconciler@…` | `reconciler` (BTI-wide) |
+| `fi.reconciler@…` | `reconciler` (tenant) |
+| `readonly@…` | `read_only` |
+| `dealer@…` | `agent_dealer` (SEED-DEALER pool) |
 
 ### Environment
 
@@ -45,7 +71,7 @@ OPS_BOOTSTRAP_ADMIN_PASSWORD=ChangeMeNow!123
 CALLBACK_AUTH_TOKEN=your-callback-secret   # optional, for inbound Daraja/MNO webhooks
 ```
 
-Run Alembic migration `004` (or restart with SQLite — `init_db` adds the `role` column automatically):
+Run Alembic through `011` (controls, billing, MFA columns). SQLite `init_db` adds missing columns automatically:
 
 ```bash
 alembic upgrade head
@@ -116,7 +142,9 @@ Services:
 
 - [ ] Postgres `DATABASE_URL` (not SQLite)
 - [ ] `AUTH_ENABLED=true`
-- [ ] Create `platform_admin` + per-institution keys
+- [ ] Alembic `011` applied (approvals, billing, MFA columns)
+- [ ] Super Admin password rotated and TOTP enrolled
+- [ ] Create `platform_admin` + per-institution keys / FI Approver
 - [ ] Configure real Daraja / MNO / BSAS credentials
 - [ ] Register HTTPS callback URLs
 - [ ] Scrape `/metrics` into your observability stack

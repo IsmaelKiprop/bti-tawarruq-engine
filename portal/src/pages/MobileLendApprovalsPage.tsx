@@ -36,7 +36,8 @@ type MobileInviteRow = {
 
 export function MobileLendApprovalsPage() {
   const { user } = useAuth();
-  const canWrite = !user || user.permissions.includes("write_ops") || user.role === "platform_admin";
+  const canInvite = !user || user.permissions.includes("write_ops");
+  const canApprove = !user || user.permissions.includes("approve_txn");
   const [accounts, setAccounts] = useState<MobileAccountRow[]>([]);
   const [invites, setInvites] = useState<MobileInviteRow[]>([]);
   const [institutions, setInstitutions] = useState<Institution[]>([]);
@@ -84,7 +85,7 @@ export function MobileLendApprovalsPage() {
 
   async function sendInvite(event: FormEvent) {
     event.preventDefault();
-    if (!canWrite) return;
+    if (!canInvite) return;
     setBusy(true);
     setError("");
     setMessage("");
@@ -112,7 +113,7 @@ export function MobileLendApprovalsPage() {
   }
 
   async function approve(account: MobileAccountRow) {
-    if (!canWrite) return;
+    if (!canApprove) return;
     const phone = (approvePhone[account.id] || account.phone || "").trim();
     const limit = (approveLimit[account.id] || account.credit_limit || "100000").trim();
     setBusy(true);
@@ -134,7 +135,7 @@ export function MobileLendApprovalsPage() {
   }
 
   async function reject(account: MobileAccountRow) {
-    if (!canWrite) return;
+    if (!canApprove) return;
     const reason = window.prompt("Rejection reason", "Incomplete KYC documentation") || "";
     if (!reason.trim()) return;
     setBusy(true);
@@ -163,7 +164,7 @@ export function MobileLendApprovalsPage() {
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
 
-      {canWrite ? (
+      {canInvite ? (
         <form className="card stack gap-md" onSubmit={sendInvite}>
           <h2>Invite by email</h2>
           <p className="muted">
@@ -260,7 +261,7 @@ export function MobileLendApprovalsPage() {
                     </td>
                     <td>{account.institution_name || "—"}</td>
                     <td>
-                      {account.approval_status === "pending" && canWrite ? (
+                      {account.approval_status === "pending" && canApprove ? (
                         <div className="stack gap-sm">
                           <input
                             placeholder="2547…"

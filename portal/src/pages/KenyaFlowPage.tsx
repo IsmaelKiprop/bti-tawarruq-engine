@@ -15,6 +15,7 @@ import { Alert, EmptyState, LoadingPanel, PageShell, statusBadgeClass } from "..
 import { AuditTape, DealTape, MurabahaTape, PossessionTape, SettlementTape, WakalaTape } from "../components/DealTape";
 import { FloatExplain } from "../components/FloatExplain";
 import { ActorChips, StepCallout } from "../components/ProcessGuide";
+import { useAuth } from "../auth/AuthContext";
 import { DEFAULT_PROFIT_RATE_PCT, KENYA_QUEUES, KENYA_STEP_GUIDE, type KenyaQueueId } from "../config/kenyaOps";
 import type { ActorId } from "../config/processModel";
 import "../components/ui.css";
@@ -82,6 +83,8 @@ function stepDone(caseData: KenyaOpsCase, key: string): boolean {
 }
 
 export function KenyaFlowPage() {
+  const { user } = useAuth();
+  const canRetry = Boolean(user?.permissions.includes("write_bti_ops"));
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get("case");
   const [queue, setQueue] = useState<QueueFilter>("all");
@@ -177,8 +180,12 @@ export function KenyaFlowPage() {
     setError("");
     setMessage("");
     try {
-      await action();
-      setMessage(label);
+      const result = await action();
+      if (result && typeof result === "object" && "queued" in result && (result as { queued?: boolean }).queued) {
+        setMessage((result as { message?: string }).message || "Queued for FI Approver.");
+      } else {
+        setMessage(label);
+      }
       await refreshAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
@@ -426,6 +433,18 @@ export function KenyaFlowPage() {
                       Run automated 8-step flow
                     </button>
                   )}
+                  {canRetry ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={busy}
+                      onClick={() =>
+                        runAction("Failed legs reset for BTI retry.", () => api.retryKenyaCase(selected.application_id))
+                      }
+                    >
+                      Retry failed legs
+                    </button>
+                  ) : null}
                 </div>
                 {selected.status !== "completed" ? (
                   <p className="meta">

@@ -6,12 +6,13 @@ from starlette.responses import JSONResponse
 
 from tawarruq.config import get_settings
 from tawarruq.database import SessionLocal
-from tawarruq.enums import ApiKeyRole
 from tawarruq.models.mobile_account import MobileAccount
 from tawarruq.models.ops_user import OpsUser
 from tawarruq.services.auth_service import validate_api_key
 from tawarruq.services.mobile_auth_service import decode_mobile_access_token
 from tawarruq.services.ops_user_service import decode_session_token
+from tawarruq.enums import ApiKeyRole
+from tawarruq.models.institution import Institution
 from tawarruq.services.rbac import WRITE_BLOCKED_ROLES
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 PUBLIC_PATHS = {"/health", "/metrics", "/docs", "/redoc", "/openapi.json", "/"}
 PUBLIC_API_PATHS = {
     "/api/v1/ops/auth/login",
+    "/api/v1/ops/auth/mfa",
     "/api/v1/mobile/auth/register",
     "/api/v1/mobile/auth/verify-email",
     "/api/v1/mobile/auth/resend-verification",
@@ -33,7 +35,11 @@ PASSWORD_CHANGE_ALLOWED = {
     "/api/v1/ops/auth/change-password",
     "/api/v1/ops/auth/me",
     "/api/v1/ops/auth/login",
+    "/api/v1/ops/auth/mfa",
+    "/api/v1/ops/auth/mfa/enroll",
+    "/api/v1/ops/auth/mfa/confirm",
 }
+MFA_ENROLL_ALLOWED = PASSWORD_CHANGE_ALLOWED
 DEALER_ALLOWED_PREFIXES = (
     "/api/v1/ops/auth/me",
     "/api/v1/ops/auth/change-password",
@@ -44,6 +50,25 @@ DEALER_ALLOWED_PREFIXES = (
 
 def _dealer_path_allowed(path: str) -> bool:
     return any(path == prefix or path.startswith(f"{prefix}/") or path.startswith(prefix) for prefix in DEALER_ALLOWED_PREFIXES)
+
+
+def _write_forbidden(role: str, path: str, method: str) -> bool:
+    if method in READ_METHODS:
+        return False
+    if path in PASSWORD_CHANGE_ALLOWED or path.startswith("/api/v1/ops/auth/mfa"):
+        return False
+    if role == ApiKeyRole.BTI_FINANCE.value and "/ops/billing" in path:
+        return False
+    if role == ApiKeyRole.RECONCILER.value and "/ops/reconciliation" in path:
+        return False
+    if role == ApiKeyRole.FI_APPROVER.value:
+        if "/ops/approvals" in path:
+            return False
+        stripped = path.rstrip("/")
+        if stripped.endswith("/approve") or stripped.endswith("/reject"):
+            return False
+        return True
+    return role in {item.value for item in WRITE_BLOCKED_ROLES}
 
 
 def _is_public_callback_path(path: str) -> bool:
@@ -152,15 +177,19 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                         status_code=403,
                         content={"detail": "Password change required before using the portal"},
                     )
-                if (
-                    user.role in {role.value for role in WRITE_BLOCKED_ROLES}
-                    and request.method not in READ_METHODS
-                    and path not in PASSWORD_CHANGE_ALLOWED
-                ):
+                if _write_forbidden(user.role, path, request.method):
                     return JSONResponse(
                         status_code=403,
                         content={"detail": "This role cannot perform write operations"},
                     )
+                if user.institution_id and request.method not in READ_METHODS:
+                    institution = db.get(Institution, user.institution_id)
+                    if institution is not None and not getattr(institution, "active", True):
+                        if not path.startswith("/api/v1/institutions/"):
+                            return JSONResponse(
+                                status_code=403,
+                                content={"detail": "Institution is suspended"},
+                            )
             finally:
                 db.close()
             return await call_next(request)
@@ -183,10 +212,18 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
             request.state.api_key_role = record.role
             request.state.is_platform_admin = record.role == ApiKeyRole.PLATFORM_ADMIN.value
             request.state.auth_method = "api_key"
+            if record.institution_id and request.method not in READ_METHODS:
+                institution = db.get(Institution, record.institution_id)
+                if institution is not None and not getattr(institution, "active", True):
+                    if not (path.startswith("/api/v1/institutions/") and request.method == "PATCH"):
+                        return JSONResponse(
+                            status_code=403,
+                            content={"detail": "Institution is suspended"},
+                        )
         finally:
             db.close()
 
-        if record.role in {role.value for role in WRITE_BLOCKED_ROLES} and request.method not in READ_METHODS:
+        if _write_forbidden(record.role, path, request.method):
             return JSONResponse(
                 status_code=403,
                 content={"detail": "This role cannot perform write operations"},

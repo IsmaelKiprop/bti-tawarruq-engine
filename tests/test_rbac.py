@@ -168,6 +168,86 @@ def test_ops_metrics_and_auth_me(client, monkeypatch):
     get_settings.cache_clear()
 
 
+def test_bti_ops_cross_tenant_without_manage_institutions(client, monkeypatch):
+    from tawarruq.config import get_settings
+
+    db = SessionLocal()
+    default = get_or_create_default_institution(db)
+    db.commit()
+    bti_ops_key = _create_key(db, default.id, ApiKeyRole.BTI_OPS)
+    db.close()
+
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    get_settings.cache_clear()
+    headers = {"X-API-Key": bti_ops_key}
+
+    me = client.get("/api/v1/ops/auth/me", headers=headers)
+    assert me.status_code == 200
+    perms = me.json()["permissions"]
+    assert "write_bti_ops" in perms
+    assert "manage_institutions" not in perms
+
+    blocked = client.post(
+        "/api/v1/institutions",
+        headers=headers,
+        json={"name": "Should Fail", "code": "NOPE", "bsas_mode": "mock"},
+    )
+    assert blocked.status_code == 403
+    get_settings.cache_clear()
+
+
+def test_fi_approver_cannot_write_ops_but_has_approve(client, monkeypatch):
+    from tawarruq.config import get_settings
+
+    db = SessionLocal()
+    default = get_or_create_default_institution(db)
+    db.commit()
+    approver_key = _create_key(db, default.id, ApiKeyRole.FI_APPROVER)
+    db.close()
+
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    get_settings.cache_clear()
+    headers = {"X-API-Key": approver_key}
+
+    me = client.get("/api/v1/ops/auth/me", headers=headers)
+    assert me.status_code == 200
+    perms = set(me.json()["permissions"])
+    assert "approve_txn" in perms
+    assert "write_ops" not in perms
+
+    blocked = client.post(
+        "/api/v1/applications",
+        headers=headers,
+        json={"amount_requested": "1000.00", "term_months": 3, "purpose": "Test"},
+    )
+    assert blocked.status_code == 403
+    get_settings.cache_clear()
+
+
+def test_api_client_role_allowed_for_keys(client, monkeypatch):
+    from tawarruq.config import get_settings
+
+    db = SessionLocal()
+    default = get_or_create_default_institution(db)
+    admin_key = _create_key(db, default.id, ApiKeyRole.PLATFORM_ADMIN)
+    institution_id = default.id
+    db.commit()
+    db.close()
+
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    get_settings.cache_clear()
+    headers = {"X-API-Key": admin_key}
+
+    created = client.post(
+        f"/api/v1/institutions/{institution_id}/api-keys",
+        headers=headers,
+        json={"name": "core-banking", "role": "api_client"},
+    )
+    assert created.status_code == 201
+    assert created.json()["role"] == "api_client"
+    get_settings.cache_clear()
+
+
 def test_create_institution_requires_platform_admin(client, monkeypatch):
     from tawarruq.config import get_settings
 

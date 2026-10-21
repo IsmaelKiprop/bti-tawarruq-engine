@@ -49,6 +49,10 @@ export function InstitutionsPage() {
   const [editing, setEditing] = useState<Institution | null>(null);
   const [editName, setEditName] = useState("");
   const [editMode, setEditMode] = useState("manual_bridge");
+  const [editActive, setEditActive] = useState(true);
+  const [editSteps, setEditSteps] = useState("murabaha,liquidation,disbursement");
+  const [editLimit, setEditLimit] = useState("");
+  const [editFeeBps, setEditFeeBps] = useState("25");
   const [confirmDeleteId, setConfirmDeleteId] = useState("");
   const [busyId, setBusyId] = useState("");
 
@@ -76,6 +80,10 @@ export function InstitutionsPage() {
     setEditing(item);
     setEditName(item.name);
     setEditMode(item.bsas_mode);
+    setEditActive(item.active !== false);
+    setEditSteps(item.approval_steps || "murabaha,liquidation,disbursement");
+    setEditLimit(item.approval_limit_amount || "");
+    setEditFeeBps(String(item.billing_fee_bps ?? 25));
     setConfirmDeleteId("");
     setCreatedId("");
     setError("");
@@ -117,6 +125,10 @@ export function InstitutionsPage() {
       const updated = await api.updateInstitution(editing.id, {
         name: editName.trim(),
         bsas_mode: editMode,
+        active: editActive,
+        approval_steps: editSteps,
+        approval_limit_amount: editLimit.trim() || null,
+        billing_fee_bps: Number(editFeeBps),
       });
       setEditing(updated);
       setMessage(`Updated ${updated.name} (${updated.code}).`);
@@ -173,6 +185,26 @@ export function InstitutionsPage() {
                   <span className="meta">Shown on dashboards, journeys, and certificates.</span>
                 </label>
                 <BsasModeField value={editMode} onChange={setEditMode} />
+                <label>
+                  Tenant status
+                  <select value={editActive ? "active" : "suspended"} onChange={(event) => setEditActive(event.target.value === "active")}>
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </label>
+                <label>
+                  Maker-checker steps
+                  <input value={editSteps} onChange={(event) => setEditSteps(event.target.value)} />
+                  <span className="meta">Comma-separated: murabaha, liquidation, disbursement</span>
+                </label>
+                <label>
+                  Approval limit
+                  <input value={editLimit} onChange={(event) => setEditLimit(event.target.value)} placeholder="Unlimited if blank" />
+                </label>
+                <label>
+                  Billing fee (bps)
+                  <input value={editFeeBps} onChange={(event) => setEditFeeBps(event.target.value)} />
+                </label>
                 <div className="actions">
                   <button className="btn btn-primary btn-sm" type="submit" disabled={busyId === editing.id}>
                     Save changes
@@ -288,6 +320,7 @@ export function InstitutionsPage() {
                     <th>Name</th>
                     <th>Code</th>
                     <th>Malaysia desk</th>
+                    <th>Status</th>
                     <th>Created</th>
                     <th>Actions</th>
                   </tr>
@@ -307,6 +340,7 @@ export function InstitutionsPage() {
                           <code>{item.code}</code>
                         </td>
                         <td data-label="Malaysia desk">{getBsasMode(item.bsas_mode).label}</td>
+                        <td data-label="Status">{item.active === false ? "Suspended" : "Active"}</td>
                         <td data-label="Created">{new Date(item.created_at).toLocaleString()}</td>
                         <td data-label="Actions">
                           <div className="cell-actions">

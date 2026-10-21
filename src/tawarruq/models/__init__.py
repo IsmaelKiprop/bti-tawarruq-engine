@@ -21,6 +21,7 @@ from tawarruq.models.kenya_flow import (
     ThirdPartyBroker,
     WalletDisbursement,
 )
+from tawarruq.models.controls import BillingInvoice, PendingApproval, ReconciliationItem
 from tawarruq.models.ops_user import OpsUser
 from tawarruq.models.mobile_account import MobileAccount, MobileInvite
 from tawarruq.models.mobile_notification import MobileNotification
@@ -56,6 +57,9 @@ __all__ = [
     "WalletDisbursement",
     "ShariahAuditLog",
     "OpsUser",
+    "PendingApproval",
+    "BillingInvoice",
+    "ReconciliationItem",
     "MobileAccount",
     "MobileInvite",
     "MobileNotification",

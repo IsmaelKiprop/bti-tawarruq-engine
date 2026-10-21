@@ -23,21 +23,32 @@ from tawarruq.schemas import (
     OpsUserUpdate,
 )
 from tawarruq.services.metrics_service import collect_ops_metrics
+from pydantic import BaseModel, Field
+
 from tawarruq.services.ops_user_service import (
     authenticate_user,
+    begin_mfa_enroll,
     change_password,
+    confirm_mfa_enroll,
+    create_mfa_challenge_token,
     create_ops_user,
     create_session_token,
+    decode_mfa_challenge_token,
     delete_ops_user,
     list_ops_users,
     reset_ops_password,
     update_ops_user,
 )
+from tawarruq.services.totp_service import verify_totp
 from tawarruq.services.rbac import (
+    BTI_INTERNAL_ROLES,
+    PLATFORM_SCOPED_ROLES,
+    PRIVILEGED_MFA_ROLES,
     ROLE_PERMISSIONS,
     can_cross_tenant,
     get_request_role,
     has_permission,
+    is_platform_admin,
     parse_role,
     require_permission,
 )
@@ -45,21 +56,62 @@ from tawarruq.services.rbac import (
 router = APIRouter(tags=["Production Ops"])
 
 
-def _permissions_for_request(request: Request) -> list[str]:
-    return sorted(
-        p
-        for p in (
-            "read",
-            "write_ops",
-            "manage_credentials",
-            "manage_integrations",
-            "manage_institutions",
-            "view_metrics",
-            "view_shariah",
-            "dealer_desk",
+class OpsMfaVerifyRequest(BaseModel):
+    mfa_token: str
+    code: str = Field(..., min_length=6, max_length=8)
+
+
+class OpsMfaConfirmRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=8)
+
+
+def _mfa_enroll_required(user: OpsUser) -> bool:
+    try:
+        role = parse_role(user.role)
+    except HTTPException:
+        return False
+    return role in PRIVILEGED_MFA_ROLES and not user.mfa_enabled
+
+
+def _ops_login_payload(db: Session, user: OpsUser, *, require_mfa_challenge: bool = True) -> OpsLoginResponse:
+    role = parse_role(user.role)
+    if require_mfa_challenge and user.mfa_enabled:
+        return OpsLoginResponse(
+            access_token="",
+            role=user.role,
+            email=user.email,
+            full_name=user.full_name,
+            institution_id=user.institution_id,
+            institution_name=_institution_name(db, user.institution_id),
+            agent_dealer_id=user.agent_dealer_id,
+            must_change_password=user.must_change_password,
+            permissions=[],
+            mfa_required=True,
+            mfa_token=create_mfa_challenge_token(user),
+            mfa_enroll_required=False,
+            mfa_enabled=True,
         )
-        if has_permission(request, p)
+    return OpsLoginResponse(
+        access_token=create_session_token(user),
+        role=user.role,
+        email=user.email,
+        full_name=user.full_name,
+        institution_id=user.institution_id,
+        institution_name=_institution_name(db, user.institution_id),
+        agent_dealer_id=user.agent_dealer_id,
+        must_change_password=user.must_change_password,
+        permissions=_permissions_for_role(role),
+        mfa_required=False,
+        mfa_enroll_required=_mfa_enroll_required(user),
+        mfa_enabled=bool(user.mfa_enabled),
     )
+
+
+def _permissions_for_request(request: Request) -> list[str]:
+    role = get_request_role(request)
+    if role is None:
+        return []
+    return sorted(ROLE_PERMISSIONS.get(role, frozenset()))
 
 
 def _permissions_for_role(role: ApiKeyRole) -> list[str]:
@@ -81,19 +133,52 @@ def ops_login(payload: OpsLoginRequest, db: Session = Depends(get_db)) -> OpsLog
     user = authenticate_user(db, payload.email, payload.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    role = parse_role(user.role)
-    token = create_session_token(user)
-    return OpsLoginResponse(
-        access_token=token,
-        role=user.role,
-        email=user.email,
-        full_name=user.full_name,
-        institution_id=user.institution_id,
-        institution_name=_institution_name(db, user.institution_id),
-        agent_dealer_id=user.agent_dealer_id,
-        must_change_password=user.must_change_password,
-        permissions=_permissions_for_role(role),
-    )
+    return _ops_login_payload(db, user)
+
+
+@router.post("/ops/auth/mfa", response_model=OpsLoginResponse, summary="Verify privileged MFA code")
+def ops_mfa_verify(payload: OpsMfaVerifyRequest, db: Session = Depends(get_db)) -> OpsLoginResponse:
+    challenge = decode_mfa_challenge_token(payload.mfa_token)
+    if not challenge:
+        raise HTTPException(status_code=401, detail="Invalid or expired MFA challenge")
+    user = db.get(OpsUser, challenge.get("sub"))
+    if not user or not user.active or not user.mfa_secret:
+        raise HTTPException(status_code=401, detail="User not found")
+    if not verify_totp(user.mfa_secret, payload.code):
+        raise HTTPException(status_code=401, detail="Invalid authenticator code")
+    return _ops_login_payload(db, user, require_mfa_challenge=False)
+
+
+@router.post("/ops/auth/mfa/enroll", summary="Start TOTP enrollment for privileged roles")
+def ops_mfa_enroll(request: Request, db: Session = Depends(get_db)) -> dict:
+    user_id = getattr(request.state, "ops_user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = db.get(OpsUser, user_id)
+    if not user or not user.active:
+        raise HTTPException(status_code=401, detail="User not found")
+    secret, url = begin_mfa_enroll(user)
+    db.commit()
+    return {"secret": secret, "otpauth_url": url, "email": user.email}
+
+
+@router.post("/ops/auth/mfa/confirm", response_model=OpsLoginResponse, summary="Confirm TOTP enrollment")
+def ops_mfa_confirm(
+    payload: OpsMfaConfirmRequest, request: Request, db: Session = Depends(get_db)
+) -> OpsLoginResponse:
+    user_id = getattr(request.state, "ops_user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = db.get(OpsUser, user_id)
+    if not user or not user.active:
+        raise HTTPException(status_code=401, detail="User not found")
+    try:
+        confirm_mfa_enroll(user, payload.code)
+        db.commit()
+        db.refresh(user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _ops_login_payload(db, user, require_mfa_challenge=False)
 
 
 @router.post("/ops/auth/change-password", response_model=OpsLoginResponse, summary="Change password")
@@ -117,18 +202,7 @@ def ops_change_password(
         db.refresh(user)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    role = parse_role(user.role)
-    return OpsLoginResponse(
-        access_token=create_session_token(user),
-        role=user.role,
-        email=user.email,
-        full_name=user.full_name,
-        institution_id=user.institution_id,
-        institution_name=_institution_name(db, user.institution_id),
-        agent_dealer_id=user.agent_dealer_id,
-        must_change_password=user.must_change_password,
-        permissions=_permissions_for_role(role),
-    )
+    return _ops_login_payload(db, user, require_mfa_challenge=False)
 
 
 @router.get("/ops/auth/me", response_model=AuthContextRead, summary="Current auth context")
@@ -140,6 +214,8 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
     email = None
     full_name = None
     must_change = False
+    mfa_enabled = False
+    mfa_enroll_required = False
     agent_dealer_id = getattr(request.state, "agent_dealer_id", None)
     if user_id:
         user = db.get(OpsUser, user_id)
@@ -148,6 +224,8 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
             full_name = user.full_name
             must_change = user.must_change_password
             agent_dealer_id = user.agent_dealer_id
+            mfa_enabled = bool(user.mfa_enabled)
+            mfa_enroll_required = _mfa_enroll_required(user)
     return AuthContextRead(
         auth_enabled=settings.auth_enabled,
         authenticated=role is not None or not settings.auth_enabled,
@@ -162,6 +240,8 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
         agent_dealer_id=agent_dealer_id,
         must_change_password=must_change,
         auth_method=getattr(request.state, "auth_method", None),
+        mfa_enabled=mfa_enabled,
+        mfa_enroll_required=mfa_enroll_required,
     )
 
 
@@ -187,11 +267,11 @@ def create_ops_user_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid role: {payload.role}") from exc
 
-    if role == ApiKeyRole.PLATFORM_ADMIN and not can_cross_tenant(request):
-        raise HTTPException(status_code=403, detail="Only platform admins can create platform_admin users")
+    if role in BTI_INTERNAL_ROLES and not is_platform_admin(request):
+        raise HTTPException(status_code=403, detail="Only platform admins can create BTI internal users")
 
     institution_id = payload.institution_id
-    if role == ApiKeyRole.AGENT_DEALER:
+    if role in PLATFORM_SCOPED_ROLES:
         institution_id = None
     elif not can_cross_tenant(request):
         institution_id = get_tenant_institution_id(request)
@@ -204,6 +284,7 @@ def create_ops_user_endpoint(
             role=role,
             institution_id=institution_id,
             agent_dealer_id=payload.agent_dealer_id,
+            approval_limit_amount=payload.approval_limit_amount,
             temporary_password=payload.temporary_password,
             created_by_id=getattr(request.state, "ops_user_id", None),
             must_change_password=True,
@@ -222,6 +303,8 @@ def create_ops_user_endpoint(
         agent_dealer_id=user.agent_dealer_id,
         must_change_password=user.must_change_password,
         active=user.active,
+        approval_limit_amount=user.approval_limit_amount,
+        mfa_enabled=user.mfa_enabled,
         created_at=user.created_at,
         temporary_password=temp,
     )
@@ -234,8 +317,8 @@ def _managed_user(request: Request, db: Session, user_id: str) -> OpsUser:
         raise HTTPException(status_code=404, detail="User not found")
     if not can_cross_tenant(request):
         tenant_id = get_tenant_institution_id(request)
-        if target.role == ApiKeyRole.PLATFORM_ADMIN.value:
-            raise HTTPException(status_code=403, detail="Institution admins cannot manage platform admins")
+        if target.role in {r.value for r in BTI_INTERNAL_ROLES}:
+            raise HTTPException(status_code=403, detail="Institution admins cannot manage BTI internal users")
         if target.role != ApiKeyRole.AGENT_DEALER.value and target.institution_id != tenant_id:
             raise HTTPException(status_code=403, detail="Access denied for this user")
     return target
@@ -256,15 +339,18 @@ def update_ops_user_endpoint(
             role = ApiKeyRole(payload.role)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Invalid role: {payload.role}") from exc
-        if role == ApiKeyRole.PLATFORM_ADMIN and not can_cross_tenant(request):
-            raise HTTPException(status_code=403, detail="Only platform admins can assign platform_admin")
+        if role in BTI_INTERNAL_ROLES and not is_platform_admin(request):
+            raise HTTPException(status_code=403, detail="Only platform admins can assign BTI internal roles")
     institution_id = payload.institution_id
     next_role = role.value if role is not None else target.role
-    if next_role == ApiKeyRole.AGENT_DEALER.value:
+    if next_role in {r.value for r in PLATFORM_SCOPED_ROLES}:
         institution_id = None
     elif not can_cross_tenant(request):
         institution_id = get_tenant_institution_id(request)
     try:
+        extra = {}
+        if "approval_limit_amount" in payload.model_fields_set:
+            extra["approval_limit_amount"] = payload.approval_limit_amount
         updated = update_ops_user(
             db,
             target,
@@ -276,6 +362,7 @@ def update_ops_user_endpoint(
             active=payload.active,
             actor_id=getattr(request.state, "ops_user_id", None),
             actor_is_platform_admin=can_cross_tenant(request),
+            **extra,
         )
         db.commit()
         db.refresh(updated)

@@ -13,9 +13,10 @@ Multi-tenant **Tawarruq-as-a-Service** platform for Buruuj Fintech: Malaysia BSA
 | **Live integrations** | M-Pesa (Daraja B2C/STK), Safaricom/Airtel airtime, Airtel Money disbursement, broker OTC API |
 | **Multi-tenant** | Per-institution credentials, API keys, webhooks, integration profiles |
 | **Amanah worker** | Auto-advances Kenya/Malaysia legs after eligibility or offer acceptance |
-| **Ops portal** | Dashboard, Malaysia manual bridge, Kenya step-by-step flow, integrations, webhooks, API keys |
+| **Ops portal** | Dashboard, Kenya/Malaysia desks, Users, Approvals, Billing, Reconciliation, MFA |
+| **Users & controls** | Catalogue RBAC, maker-checker, amount limits, tenant suspend, TOTP, usage invoices |
 | **Expo mobile app** | Timiza-style Shariah lending app (`mobile/` · Buruuj Lend) |
-| **Tests** | 27 pytest cases covering Kenya flow, Shariah, No-Inah, auth, callbacks |
+| **Tests** | pytest: Kenya/Malaysia flows, Shariah, No-Inah, RBAC, maker-checker, billing, auth |
 
 ## Architecture overview
 
@@ -175,7 +176,10 @@ Set `SHARIAH_AUDIT_SERVICE_URL=http://localhost:8001` in `.env` so the engine mi
 | PUT | `/api/v1/institutions/{id}/integrations` | Per-tenant Daraja/MNO credentials |
 | POST | `/api/v1/webhooks` | Outbound event webhooks |
 | POST | `/api/v1/institutions/{id}/api-keys` | Tenant API keys (`AUTH_ENABLED=true`) |
-| GET | `/api/v1/audit/export` | Operational audit CSV |
+| GET | `/api/v1/audit/export` | Operational audit CSV (`export_data`) |
+| GET/POST | `/api/v1/ops/approvals` | Maker-checker queue, approve, reject |
+| GET/POST | `/api/v1/ops/billing/invoices` | Usage invoices (volume × fee bps) |
+| GET/POST | `/api/v1/ops/reconciliation` | Scan trades vs disbursements |
 
 ## Project layout
 
@@ -189,9 +193,9 @@ bti-tawarruq-engine/
 ├── shariah-audit-service/  # Python append-only audit microservice
 ├── mobile/                 # Expo React Native customer app
 ├── portal/                 # Vite ops portal
-├── alembic/                # DB migrations (001–003)
-├── tests/                  # pytest suite (27 tests)
-├── docs/                   # Flow docs and the local test guide
+├── alembic/                # DB migrations (through 011 controls/billing/MFA)
+├── tests/                  # pytest suite (flows, RBAC, maker-checker)
+├── docs/                   # Flow, users/access, and local test guides
 ├── scripts/                # Demo and smoke scripts
 ├── assets/                 # Brand assets
 └── INTEGRATIONS.md         # Live partner setup guide
@@ -221,17 +225,19 @@ Copy `.env.example` to `.env`. Important variables:
 | `DATABASE_URL` | SQLite default; use PostgreSQL in production |
 | `SHARIAH_AUDIT_SERVICE_URL` | Mirror audit entries to isolated service |
 | `BROKER_LIQUIDATION_API_URL` | Independent OTC broker liquidation API |
-| `AUTH_ENABLED` | Enforce RBAC API keys (`platform_admin`, `institution_admin`, `institution_ops`, `read_only`) |
+| `AUTH_ENABLED` | Enforce RBAC (portal sessions + API keys). Production: `true` |
 | `PUBLIC_API_BASE_URL` | Build per-institution callback URLs |
 
 Full list: `.env.example` and [INTEGRATIONS.md](INTEGRATIONS.md).
 
 ## Documentation
 
-- [docs/KENYA_FLOW.md](docs/KENYA_FLOW.md) — Kenya 4-phase flow, No-Inah, mobile mapping
+- [docs/USERS_ACCESS_CONTROLS.md](docs/USERS_ACCESS_CONTROLS.md) — Roles, maker-checker, billing, recon, MFA, APIs
+- [docs/BTI_Tawarruq_Users_ver_001.docx](docs/BTI_Tawarruq_Users_ver_001.docx) — Stakeholder users catalogue
+- [docs/KENYA_FLOW.md](docs/KENYA_FLOW.md) — Kenya eight-step flow, No-Inah, mobile mapping
 - [docs/SHARIAH_AUDIT.md](docs/SHARIAH_AUDIT.md) — Ledger, hash chain, export, microservice
 - [INTEGRATIONS.md](INTEGRATIONS.md) — Daraja, MNO, Airtel, broker, multi-tenant callbacks
-- [docs/PRODUCTION_OPS.md](docs/PRODUCTION_OPS.md) — RBAC roles, monitoring, Prometheus, CI/CD deploy
+- [docs/PRODUCTION_OPS.md](docs/PRODUCTION_OPS.md) — Seed emails, monitoring, Prometheus, CI/CD deploy
 - [docs/LOCAL_TEST.md](docs/LOCAL_TEST.md) — Local run, Swagger walkthrough, mobile, Docker
 
 ## License

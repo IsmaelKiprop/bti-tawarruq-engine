@@ -203,7 +203,7 @@ def collect_repayment(
 
     log_shariah_step(
         db,
-        step_id=ShariahStepId.REPAYMENT_COLLECTED,
+        step_id=ShariahStepId.REPAYMENT_RECEIVED,
         entity_type="repayment_installment",
         entity_id=installment.id,
         actor_from=application.customer_ref if application else "customer",

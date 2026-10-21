@@ -23,6 +23,7 @@ from tawarruq.api.routes_manual_bridge import router as manual_bridge_router
 from tawarruq.api.routes_ops import router as ops_router
 from tawarruq.api.routes_ops_mobile import router as ops_mobile_router
 from tawarruq.api.routes_mobile_auth import router as mobile_auth_router
+from tawarruq.api.routes_controls import router as controls_router
 from tawarruq.api.routes_sacco import router as sacco_router
 from tawarruq.config import get_settings
 from tawarruq.database import SessionLocal, init_db
@@ -45,15 +46,16 @@ async def lifespan(app: FastAPI):
     try:
         get_or_create_default_institution(db)
         from tawarruq.services.seed_service import seed_kenya_defaults
-        from tawarruq.services.ops_user_service import ensure_bootstrap_admin
+        from tawarruq.services.ops_seed_service import seed_ops_role_catalogue
 
         seed_kenya_defaults(db)
-        admin = ensure_bootstrap_admin(db)
+        seeded = seed_ops_role_catalogue(db)
         db.commit()
-        if admin:
+        created = [row for row in seeded if row.created]
+        if created:
             logger.warning(
-                "Bootstrapped ops admin %s — change password on first login (must_change_password=true)",
-                admin.email,
+                "Seeded %s ops catalogue identities — see data/ops_seed_credentials.txt; force password change on first login",
+                len(created),
             )
     finally:
         db.close()
@@ -206,6 +208,7 @@ def create_app() -> FastAPI:
     app.include_router(integrations_router, prefix=settings.api_prefix)
     app.include_router(ops_router, prefix=settings.api_prefix)
     app.include_router(ops_mobile_router, prefix=settings.api_prefix)
+    app.include_router(controls_router, prefix=settings.api_prefix)
     app.include_router(mobile_auth_router, prefix=settings.api_prefix)
     app.include_router(customer_router, prefix=settings.api_prefix)
     return app

@@ -174,11 +174,24 @@ class VaultCertificateKind(StrEnum):
 
 
 class ApiKeyRole(StrEnum):
-    """RBAC roles for API keys and ops portal access."""
+    """RBAC roles for API keys and ops portal access.
 
-    PLATFORM_ADMIN = "platform_admin"
+    Maps to BTI_Tawarruq_Users_ver_001.docx categories. Legacy names
+    (platform_admin, institution_*) are kept as stable API values.
+    """
+
+    # BTI internal
+    PLATFORM_ADMIN = "platform_admin"  # BTI Platform Super Administrator
+    BTI_OPS = "bti_ops"  # BTI Tawarruq Operations Officer
+    BTI_FINANCE = "bti_finance"  # BTI Finance / Billing Officer
+    # Financial institution
     INSTITUTION_ADMIN = "institution_admin"
     INSTITUTION_OPS = "institution_ops"
-    AGENT_DEALER = "agent_dealer"
+    FI_APPROVER = "fi_approver"  # Financial Institution Approver (maker-checker)
+    # Controls / desks
     SHARIAH_OFFICER = "shariah_officer"
+    RECONCILER = "reconciler"
     READ_ONLY = "read_only"
+    AGENT_DEALER = "agent_dealer"  # Kenya float desk (extra vs doc MVP)
+    # Machine identity (API keys; not a portal login)
+    API_CLIENT = "api_client"

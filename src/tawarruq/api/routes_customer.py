@@ -277,7 +277,9 @@ def _build_journey(application: FinancingApplication, transaction: CommodityTran
     if documents:
         for kind in TRADE_DOC_KINDS:
             meta = documents.get(kind)
-            if meta:
+            if isinstance(meta, str):
+                meta = {"title": kind.replace("_", " ").title(), "reference": meta}
+            if isinstance(meta, dict):
                 certs.append({
                     "step": 2,
                     "label": meta.get("title", kind),
@@ -390,7 +392,7 @@ def download_trade_document(
     if not batch:
         raise HTTPException(status_code=404, detail="Trade documents not available yet (Leg 1 not confirmed)")
     try:
-        doc = build_trade_document(batch, kind=kind, commodity_code=transaction.commodity_code)
+        doc = build_trade_document(application, transaction, batch, kind)
         html = render_trade_document_html(doc)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))

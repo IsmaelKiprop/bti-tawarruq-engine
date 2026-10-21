@@ -40,6 +40,7 @@ def init_db() -> None:
     _ensure_mobile_approval_columns()
     _ensure_customer_kyc_columns()
     _ensure_mobile_push_token_column()
+    _ensure_control_schema()
     register_append_only_guards()
 
 
@@ -296,3 +297,42 @@ def _ensure_mobile_push_token_column() -> None:
         return
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE mobile_accounts ADD COLUMN push_token VARCHAR(512)"))
+
+
+def _ensure_control_schema() -> None:
+    """Add maker-checker / billing / MFA columns on existing SQLite and Postgres databases."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    bool_true = "1" if settings.is_sqlite else "TRUE"
+
+    def add_missing(table: str, additions: dict[str, str]) -> None:
+        if table not in tables:
+            return
+        existing = {col["name"] for col in inspector.get_columns(table)}
+        with engine.begin() as conn:
+            for name, ddl in additions.items():
+                if name not in existing:
+                    conn.execute(text(ddl))
+
+    add_missing(
+        "institutions",
+        {
+            "active": f"ALTER TABLE institutions ADD COLUMN active BOOLEAN DEFAULT {bool_true} NOT NULL",
+            "approval_steps": (
+                "ALTER TABLE institutions ADD COLUMN approval_steps VARCHAR(256) "
+                "DEFAULT 'murabaha,liquidation,disbursement' NOT NULL"
+            ),
+            "approval_limit_amount": "ALTER TABLE institutions ADD COLUMN approval_limit_amount NUMERIC(18, 2)",
+            "billing_fee_bps": "ALTER TABLE institutions ADD COLUMN billing_fee_bps INTEGER DEFAULT 25 NOT NULL",
+        },
+    )
+    add_missing(
+        "ops_users",
+        {
+            "approval_limit_amount": "ALTER TABLE ops_users ADD COLUMN approval_limit_amount NUMERIC(18, 2)",
+            "mfa_secret": "ALTER TABLE ops_users ADD COLUMN mfa_secret VARCHAR(64)",
+            "mfa_enabled": f"ALTER TABLE ops_users ADD COLUMN mfa_enabled BOOLEAN DEFAULT {0 if settings.is_sqlite else 'FALSE'} NOT NULL",
+        },
+    )

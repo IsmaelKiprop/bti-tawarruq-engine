@@ -4,6 +4,7 @@ import io
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session, joinedload
 
+from tawarruq.api.approval_http import queued_or_none
 from tawarruq.api.deps import resolve_write_institution_id, tenant_filter_institution_id
 from tawarruq.api.kenya_access import (
     bound_dealer_id,
@@ -84,6 +85,20 @@ from tawarruq.models.kenya_flow import AgentDealer, AgentDealerFloatTopup
 from tawarruq.services.kenya_flow_service import execute_agent_dealer_purchase_leg
 
 router = APIRouter(dependencies=[Depends(kenya_write_guard)])
+
+
+def _queue(db, request, application, action: str, transaction_id: str | None = None, extra: dict | None = None):
+    return queued_or_none(
+        db,
+        request,
+        action=action,
+        institution_id=application.institution_id,
+        amount=application.amount_requested,
+        application_id=application.id,
+        transaction_id=transaction_id,
+        payload=extra,
+        currency=application.currency or "KES",
+    )
 
 COMMON_ERRORS = {
     400: {"model": ErrorResponse, "description": "Invalid request"},
@@ -393,7 +408,10 @@ def kenya_resend_offer_email(
 
 @router.post("/kenya/applications/{application_id}/accept", response_model=OfferRead, tags=["Kenya MNO Flow"], summary="Kenya step 4: Accept Murabaha offer")
 def kenya_accept_offer(application_id: str, request: Request, db: Session = Depends(get_db)) -> OfferRead:
-    guarded_application(db, request, application_id)
+    application = guarded_application(db, request, application_id)
+    queued = _queue(db, request, application, "kenya.accept_offer")
+    if queued:
+        return queued  # type: ignore[return-value]
     try:
         offer = application_service.accept_offer(db, application_id)
         db.commit()
@@ -531,7 +549,10 @@ def appoint_wakala(
     ),
 )
 def complete_settlement(application_id: str, request: Request, db: Session = Depends(get_db)) -> KenyaDisbursementRead:
-    guarded_application(db, request, application_id)
+    application = guarded_application(db, request, application_id)
+    queued = _queue(db, request, application, "kenya.complete_settlement")
+    if queued:
+        return queued  # type: ignore[return-value]
     """After Wakala consent: liquidate, wallet credit, and schedule repayments."""
     txn = get_mno_transaction(db, application_id)
     if not txn:
@@ -557,7 +578,10 @@ def complete_settlement(application_id: str, request: Request, db: Session = Dep
     description="Generates cost-plus Murabaha contract from accepted offer. Logs `MURABAHA_OFFER` to Shariah audit.",
 )
 def create_murabaha(application_id: str, request: Request, db: Session = Depends(get_db)) -> MurabahaContractRead:
-    guarded_application(db, request, application_id)
+    application = guarded_application(db, request, application_id)
+    queued = _queue(db, request, application, "kenya.create_murabaha")
+    if queued:
+        return queued  # type: ignore[return-value]
     try:
         contract = create_murabaha_contract(db, application_id)
         db.commit()
@@ -619,7 +643,12 @@ def mno_transfer(transaction_id: str, request: Request, db: Session = Depends(ge
     ),
 )
 def mno_liquidate(transaction_id: str, request: Request, db: Session = Depends(get_db)) -> TransactionRead:
-    guarded_transaction(db, request, transaction_id)
+    txn = guarded_transaction(db, request, transaction_id)
+    application = db.get(FinancingApplication, txn.application_id) if txn.application_id else None
+    if application:
+        queued = _queue(db, request, application, "kenya.liquidate", transaction_id=txn.id, extra={"transaction_id": txn.id})
+        if queued:
+            return queued  # type: ignore[return-value]
     try:
         execute_liquidation_leg(db, transaction_id)
         db.commit()
@@ -645,8 +674,18 @@ def kenya_disburse(
     transaction_id: str = Query(...),
     db: Session = Depends(get_db),
 ) -> KenyaDisbursementRead:
-    guarded_application(db, request, application_id)
+    application = guarded_application(db, request, application_id)
     guarded_transaction(db, request, transaction_id)
+    queued = _queue(
+        db,
+        request,
+        application,
+        "kenya.disburse",
+        transaction_id=transaction_id,
+        extra={"application_id": application_id, "transaction_id": transaction_id},
+    )
+    if queued:
+        return queued  # type: ignore[return-value]
     try:
         result = complete_kenya_disbursement(db, application_id=application_id, transaction_id=transaction_id)
         db.commit()
@@ -791,9 +830,10 @@ def export_shariah_audit(
     limit: int = Query(10_000, le=100_000),
     db: Session = Depends(get_db),
 ):
-    from tawarruq.api.deps import require_permission
+    from tawarruq.api.deps import require_export_data, require_permission
 
     require_permission(request, "view_shariah")
+    require_export_data(request)
     if application_id:
         guarded_application(db, request, application_id)
     scoped = tenant_filter_institution_id(request, institution_id)
@@ -842,7 +882,7 @@ def get_shariah_audit(
 )
 def run_full_kenya_flow(application_id: str, request: Request, db: Session = Depends(get_db)) -> KenyaFlowStatusRead:
     """Automates all steps synchronously — only available when KENYA_INTEGRATION_MODE=mock."""
-    guarded_application(db, request, application_id)
+    application = guarded_application(db, request, application_id)
     settings = get_settings()
     if settings.kenya_integration_mode != "mock":
         raise HTTPException(
@@ -852,6 +892,9 @@ def run_full_kenya_flow(application_id: str, request: Request, db: Session = Dep
                 "In live mode, execute each step via the Kenya MNO endpoints and configure Daraja/MNO callbacks."
             ),
         )
+    queued = _queue(db, request, application, "kenya.run_full_flow")
+    if queued:
+        return queued  # type: ignore[return-value]
     try:
         run_ordered_kenya_flow(db, application_id)
         db.commit()

@@ -26,8 +26,11 @@ services:
       - KENYA_INTEGRATION_MODE=mock
       - SHARIAH_AUDIT_SERVICE_URL=http://shariah-audit:8001
       - AUTH_ENABLED=true
-      - OPS_BOOTSTRAP_ADMIN_EMAIL=admin@bti.local
+      - OPS_BOOTSTRAP_ADMIN_EMAIL=admin@buruujfintech.com
       - OPS_BOOTSTRAP_ADMIN_PASSWORD=ChangeMeNow!123
+      - OPS_SEED_USERS=true
+      - OPS_SEED_PASSWORD=BuruujSeed2026!
+      - OPS_SEED_EMAIL_DOMAIN=buruujfintech.com
     volumes:
       - ./data:/app/data
     depends_on:

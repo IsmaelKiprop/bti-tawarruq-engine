@@ -81,6 +81,12 @@ def update_institution(
             institution,
             name=payload.name,
             bsas_mode=payload.bsas_mode,
+            active=payload.active,
+            approval_steps=payload.approval_steps,
+            approval_limit_amount=payload.approval_limit_amount
+            if "approval_limit_amount" in payload.model_fields_set
+            else None,
+            billing_fee_bps=payload.billing_fee_bps,
         )
         db.commit()
         db.refresh(institution)
@@ -250,13 +256,15 @@ def create_institution_api_key(
         role = ApiKeyRole(payload.role)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid role: {payload.role}") from exc
-    if role == ApiKeyRole.AGENT_DEALER:
-        raise HTTPException(status_code=400, detail="Agent dealer is a portal login, not an API key role")
-    if role == ApiKeyRole.PLATFORM_ADMIN:
-        from tawarruq.services.rbac import can_cross_tenant
+    from tawarruq.services.rbac import API_KEY_ALLOWED_ROLES, can_cross_tenant
 
-        if not can_cross_tenant(request):
-            raise HTTPException(status_code=403, detail="Only platform admins can create platform_admin keys")
+    if role not in API_KEY_ALLOWED_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Role {role.value} is not valid for API keys (use api_client for machine clients)",
+        )
+    if role == ApiKeyRole.PLATFORM_ADMIN and not can_cross_tenant(request):
+        raise HTTPException(status_code=403, detail="Only platform admins can create platform_admin keys")
     record, raw_key = create_api_key(db, institution_id=institution_id, name=payload.name, role=role)
     db.commit()
     db.refresh(record)
@@ -307,6 +315,9 @@ def export_audit(
     format: str = Query("csv", pattern="^(csv)$"),
     db: Session = Depends(get_db),
 ) -> Response:
+    from tawarruq.api.deps import require_export_data
+
+    require_export_data(request)
     scoped = tenant_filter_institution_id(request, institution_id)
     events = query_audit_events(
         db,

@@ -41,6 +41,8 @@ function toSessionUser(result: LoginResponse): SessionUser {
     agent_dealer_id: result.agent_dealer_id,
     must_change_password: result.must_change_password,
     permissions: result.permissions || [],
+    mfa_enroll_required: Boolean(result.mfa_enroll_required),
+    mfa_enabled: Boolean(result.mfa_enabled),
   };
 }
 
@@ -89,6 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         agent_dealer_id: ctx.agent_dealer_id ?? stored?.agent_dealer_id,
         must_change_password: Boolean(ctx.must_change_password ?? stored?.must_change_password),
         permissions: ctx.permissions?.length ? ctx.permissions : stored?.permissions || [],
+        mfa_enroll_required: Boolean(ctx.mfa_enroll_required ?? stored?.mfa_enroll_required),
+        mfa_enabled: Boolean(ctx.mfa_enabled ?? stored?.mfa_enabled),
       };
       setStoredSessionUser(session);
       setUser(session);

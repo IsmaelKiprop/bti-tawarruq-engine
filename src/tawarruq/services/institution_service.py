@@ -14,12 +14,19 @@ VALID_BSAS_MODES = {TransactionMode.MOCK, TransactionMode.MANUAL_BRIDGE, Transac
 PROTECTED_INSTITUTION_CODE = "DEFAULT"
 
 
+VALID_APPROVAL_STEPS = {"murabaha", "liquidation", "disbursement"}
+
+
 def update_institution(
     db,
     institution: Institution,
     *,
     name: str | None = None,
     bsas_mode: str | None = None,
+    active: bool | None = None,
+    approval_steps: str | None = None,
+    approval_limit_amount=None,
+    billing_fee_bps: int | None = None,
     actor: AuditActor = AuditActor.HUMAN,
 ) -> Institution:
     if name is not None:
@@ -31,13 +38,30 @@ def update_institution(
         if bsas_mode not in VALID_BSAS_MODES:
             raise ValueError(f"bsas_mode must be one of: {', '.join(VALID_BSAS_MODES)}")
         institution.bsas_mode = bsas_mode
+    if active is not None:
+        institution.active = bool(active)
+    if approval_steps is not None:
+        parts = [part.strip().lower() for part in approval_steps.split(",") if part.strip()]
+        unknown = [part for part in parts if part not in VALID_APPROVAL_STEPS]
+        if unknown:
+            raise ValueError(f"Unknown approval steps: {', '.join(unknown)}")
+        institution.approval_steps = ",".join(parts)
+    if approval_limit_amount is not None:
+        institution.approval_limit_amount = approval_limit_amount if approval_limit_amount != "" else None
+    if billing_fee_bps is not None:
+        if billing_fee_bps < 0 or billing_fee_bps > 10_000:
+            raise ValueError("billing_fee_bps must be between 0 and 10000")
+        institution.billing_fee_bps = billing_fee_bps
     log_audit(
         db,
         entity_type="institution",
         entity_id=institution.id,
         actor=actor,
         action="institution.updated",
-        details=f"name={institution.name}, mode={institution.bsas_mode}",
+        details=(
+            f"name={institution.name}, mode={institution.bsas_mode}, active={institution.active}, "
+            f"steps={institution.approval_steps}"
+        ),
     )
     db.flush()
     return institution
@@ -86,6 +110,14 @@ def delete_institution(db, institution: Institution, *, actor: AuditActor = Audi
     db.query(ApiKey).filter(ApiKey.institution_id == institution_id).delete(synchronize_session=False)
     db.query(LiquidityPool).filter(LiquidityPool.institution_id == institution_id).delete(synchronize_session=False)
     db.query(Customer).filter(Customer.institution_id == institution_id).delete(synchronize_session=False)
+
+    from tawarruq.models.controls import BillingInvoice, PendingApproval, ReconciliationItem
+
+    db.query(PendingApproval).filter(PendingApproval.institution_id == institution_id).delete(synchronize_session=False)
+    db.query(BillingInvoice).filter(BillingInvoice.institution_id == institution_id).delete(synchronize_session=False)
+    db.query(ReconciliationItem).filter(ReconciliationItem.institution_id == institution_id).delete(
+        synchronize_session=False
+    )
 
     users = db.query(OpsUser).filter(OpsUser.institution_id == institution_id).all()
     user_ids = [item.id for item in users]

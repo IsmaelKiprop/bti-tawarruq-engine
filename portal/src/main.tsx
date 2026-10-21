@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
-import { OptionalAppLayout, RequireAnyPermission, RequireAuth, RequirePermission, RequireRole } from "./auth/RequireAuth";
+import { OptionalAppLayout, RequireAnyPermission, RequireAuth, RequirePermission } from "./auth/RequireAuth";
 import { AppLayout } from "./components/AppLayout";
 import { ApplicationDetailPage } from "./pages/ApplicationDetailPage";
 import { ApplicationsListPage } from "./pages/ApplicationsListPage";
@@ -25,6 +25,10 @@ import { AgentDealerPage } from "./pages/AgentDealerPage";
 import { CustomerJourneyPage } from "./pages/CustomerJourneyPage";
 import { CustomersPage } from "./pages/CustomersPage";
 import { MobileLendApprovalsPage } from "./pages/MobileLendApprovalsPage";
+import { BillingPage } from "./pages/BillingPage";
+import { ReconciliationPage } from "./pages/ReconciliationPage";
+import { ApprovalsPage } from "./pages/ApprovalsPage";
+import { MfaEnrollPage } from "./pages/MfaEnrollPage";
 import "./styles/globals.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -34,6 +38,7 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/change-password" element={<ChangePasswordPage />} />
+          <Route path="/mfa-enroll" element={<MfaEnrollPage />} />
           <Route element={<OptionalAppLayout />}>
             <Route path="/customer" element={<CustomerJourneyPage />} />
             <Route path="/customer/:ref" element={<CustomerJourneyPage />} />
@@ -43,17 +48,28 @@ createRoot(document.getElementById("root")!).render(
           <Route element={<RequireAuth />}>
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
-              <Route element={<RequireRole roles={["institution_admin", "institution_ops", "read_only"]} />}>
+              <Route element={<RequirePermission permission="view_metrics" />}>
                 <Route path="ops" element={<OpsMonitorPage />} />
+              </Route>
+              <Route element={<RequirePermission permission="manage_billing" />}>
+                <Route path="billing" element={<BillingPage />} />
+              </Route>
+              <Route element={<RequirePermission permission="reconcile" />}>
+                <Route path="reconciliation" element={<ReconciliationPage />} />
               </Route>
               <Route element={<RequireAnyPermission permissions={["write_ops", "dealer_desk"]} />}>
                 <Route path="agent-dealers" element={<AgentDealerPage />} />
                 <Route path="dealers" element={<AgentDealerPage />} />
               </Route>
+              <Route element={<RequireAnyPermission permissions={["write_ops", "approve_txn"]} />}>
+                <Route path="mobile-lend" element={<MobileLendApprovalsPage />} />
+              </Route>
+              <Route element={<RequirePermission permission="approve_txn" />}>
+                <Route path="approvals" element={<ApprovalsPage />} />
+              </Route>
               <Route element={<RequirePermission permission="write_ops" />}>
                 <Route path="customers" element={<CustomersPage />} />
                 <Route path="customers/:customerId" element={<CustomersPage />} />
-                <Route path="mobile-lend" element={<MobileLendApprovalsPage />} />
                 <Route path="malaysia" element={<MalaysiaManualBridgePage />} />
                 <Route path="kenya" element={<KenyaFlowPage />} />
                 <Route path="repayments" element={<RepaymentsPage />} />

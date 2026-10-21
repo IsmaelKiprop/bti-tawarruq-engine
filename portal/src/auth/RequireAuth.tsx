@@ -46,7 +46,7 @@ export function RequireRole({ roles }: { roles: string[] }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role === "platform_admin" || roles.includes(user.role)) {
+  if (roles.includes(user.role)) {
     return <Outlet />;
   }
 
@@ -79,7 +79,7 @@ export function RequireAnyPermission({ permissions }: { permissions: string[] })
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role === "platform_admin" || permissions.some((permission) => user.permissions.includes(permission))) {
+  if (permissions.some((permission) => user.permissions.includes(permission))) {
     return <Outlet />;
   }
 
@@ -112,7 +112,7 @@ export function RequirePermission({ permission }: { permission: string }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role === "platform_admin" || user.permissions.includes(permission)) {
+  if (user.permissions.includes(permission)) {
     return <Outlet />;
   }
 

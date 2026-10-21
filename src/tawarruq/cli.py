@@ -25,6 +25,10 @@ def main() -> None:
     worker_cmd.add_argument("--read-only", action="store_true")
 
     init_cmd = sub.add_parser("init-db", help="Initialize database")
+    seed_users = sub.add_parser(
+        "seed-ops-users",
+        help="Idempotent seed of BTI role catalogue users (safe for production)",
+    )
 
     args = parser.parse_args()
     logging.basicConfig(level=get_settings().log_level)
@@ -42,11 +46,30 @@ def main() -> None:
         db = SessionLocal()
         get_or_create_default_institution(db)
         from tawarruq.services.seed_service import seed_kenya_defaults
+        from tawarruq.services.ops_seed_service import seed_ops_role_catalogue
 
         seed_kenya_defaults(db)
+        seed_ops_role_catalogue(db)
         db.commit()
         db.close()
-        print("Database initialized with Kenya defaults.")
+        print("Database initialized with Kenya defaults and ops role catalogue.")
+    elif args.command == "seed-ops-users":
+        init_db()
+        from tawarruq.database import SessionLocal
+        from tawarruq.services.ops_seed_service import seed_ops_role_catalogue
+
+        db = SessionLocal()
+        get_or_create_default_institution(db)
+        rows = seed_ops_role_catalogue(db)
+        db.commit()
+        db.close()
+        created = sum(1 for r in rows if r.created)
+        print(f"Ops catalogue seed complete: {created} created, {len(rows) - created} already present.")
+        for row in rows:
+            flag = "NEW" if row.created else "exists"
+            print(f"  [{flag}] {row.kind:7} {row.email_or_name:40} {row.role}")
+        if created:
+            print("New secrets appended to data/ops_seed_credentials.txt")
     else:
         parser.print_help()
 

@@ -2,8 +2,9 @@
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tawarruq.database import Base
@@ -24,6 +25,9 @@ class OpsUser(Base):
     agent_dealer_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("agent_dealers.id"), nullable=True, index=True
     )
+    approval_limit_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_by_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("ops_users.id"), nullable=True)
