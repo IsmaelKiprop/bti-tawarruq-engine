@@ -31,7 +31,11 @@ class ShariahStepId(StrEnum):
     CUSTOMER_ACCEPTANCE = "CUSTOMER_ACCEPTANCE"
     OWNERSHIP_TRANSFER = "OWNERSHIP_TRANSFER"
     WAKALA_APPOINTMENT = "WAKALA_APPOINTMENT"
+    SASC_APPOINTMENT = "SASC_APPOINTMENT"
     THIRD_PARTY_LIQUIDATION = "THIRD_PARTY_LIQUIDATION"
+    MUQASSAH_SET_OFF = "MUQASSAH_SET_OFF"
+    CASA_CREDIT = "CASA_CREDIT"
+    PHYSICAL_DELIVERY = "PHYSICAL_DELIVERY"
     WALLET_DISBURSEMENT = "WALLET_DISBURSEMENT"
     REPAYMENT_SCHEDULED = "REPAYMENT_SCHEDULED"
     REPAYMENT_RECEIVED = "REPAYMENT_RECEIVED"
@@ -104,6 +108,10 @@ class WebhookEvent(StrEnum):
     REPAYMENT_RECEIVED = "repayment.received"
     HANDOFF_RECORDED = "handoff.recorded"
     TAWARRUQ_CERTIFICATES_READY = "tawarruq.certificates_ready"
+    MUQASSAH_COMPLETED = "muqassah.completed"
+    CASA_CREDITED = "casa.credited"
+    PHYSICAL_DELIVERY_ARRANGED = "physical_delivery.arranged"
+    SEDANIA_FINANCING_COMPLETED = "sedania.financing.completed"
 
 
 class AgencyStatus(StrEnum):
@@ -160,17 +168,59 @@ class ExecutionStatus(StrEnum):
     SPOT_PURCHASE = "spot_purchase"
     DEFERRED_MURABAHAH = "deferred_murabahah"
     SPOT_LIQUIDATION = "spot_liquidation"
+    MUQASSAH = "muqassah"
+    CASA_CREDIT = "casa_credit"
+    AWAITING_SETTLEMENT = "awaiting_settlement"
+    PHYSICAL_DELIVERY = "physical_delivery"
     WEBHOOK_RELAY = "webhook_relay"
     READY_FOR_SACCO_DISBURSEMENT = "ready_for_sacco_disbursement"
+    COMPLETED = "completed"
     FAILED = "failed"
+
+
+class ExecutionPath(StrEnum):
+    SACCO = "sacco"
+    BANK_FINANCING = "bank_financing"
+
+
+class SedaniaFlowVariant(StrEnum):
+    APPROVED_WAKEEL = "approved_wakeel"
+    AAOIFI_RASUL = "aaoifi_rasul"
+
+
+class SedaniaDeliveryMode(StrEnum):
+    CONSTRUCTIVE = "constructive"
+    PHYSICAL = "physical"
+
+
+class SedaniaAgencyRole(StrEnum):
+    WAKEEL = "wakeel"
+    RASUL = "rasul"
+
+
+class PhysicalDeliveryStatus(StrEnum):
+    NOT_APPLICABLE = "not_applicable"
+    REQUESTED = "requested"
+    AWAITING_SETTLEMENT = "awaiting_settlement"
+    ARRANGED = "arranged"
+    DELIVERED = "delivered"
 
 
 class VaultCertificateKind(StrEnum):
     WAD = "wad"
     WAKALAH = "wakalah"
+    RASUL = "rasul"
+    CMP = "cmp"
     PURCHASE = "purchase"
     MURABAHAH = "murabahah"
     LIQUIDATION = "liquidation"
+    PURCHASE_ORDER = "purchase_order"
+    COMMODITY_INVOICE = "commodity_invoice"
+    DELIVERY_ORDER = "delivery_order"
+    TRADING_ECERT = "trading_ecert"
+    MUQASSAH = "muqassah"
+    CASA_ADVICE = "casa_advice"
+    PHYSICAL_DELIVERY = "physical_delivery"
 
 
 class ApiKeyRole(StrEnum):

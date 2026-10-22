@@ -41,6 +41,7 @@ def init_db() -> None:
     _ensure_customer_kyc_columns()
     _ensure_mobile_push_token_column()
     _ensure_control_schema()
+    _ensure_sedania_financing_columns()
     register_append_only_guards()
 
 
@@ -336,3 +337,64 @@ def _ensure_control_schema() -> None:
             "mfa_enabled": f"ALTER TABLE ops_users ADD COLUMN mfa_enabled BOOLEAN DEFAULT {0 if settings.is_sqlite else 'FALSE'} NOT NULL",
         },
     )
+
+
+def _ensure_sedania_financing_columns() -> None:
+    """Add bank CMP / muqassah / CASA / physical-delivery columns on existing DBs."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "tawarruq_executions" not in inspector.get_table_names():
+        return
+    existing = {col["name"] for col in inspector.get_columns("tawarruq_executions")}
+    bool_true = "1" if settings.is_sqlite else "TRUE"
+    bool_false = "0" if settings.is_sqlite else "FALSE"
+    additions = {
+        "path": "ALTER TABLE tawarruq_executions ADD COLUMN path VARCHAR(32) DEFAULT 'sacco' NOT NULL",
+        "flow_variant": (
+            "ALTER TABLE tawarruq_executions ADD COLUMN flow_variant VARCHAR(32) "
+            "DEFAULT 'approved_wakeel' NOT NULL"
+        ),
+        "delivery_mode": (
+            "ALTER TABLE tawarruq_executions ADD COLUMN delivery_mode VARCHAR(32) "
+            "DEFAULT 'constructive' NOT NULL"
+        ),
+        "agency_role": "ALTER TABLE tawarruq_executions ADD COLUMN agency_role VARCHAR(16) DEFAULT 'wakeel' NOT NULL",
+        "agency_party": (
+            "ALTER TABLE tawarruq_executions ADD COLUMN agency_party VARCHAR(64) "
+            "DEFAULT 'SEDANIA_AS_SALAM_CAPITAL' NOT NULL"
+        ),
+        "appoint_sasc": (
+            f"ALTER TABLE tawarruq_executions ADD COLUMN appoint_sasc BOOLEAN DEFAULT {bool_true} NOT NULL"
+        ),
+        "purchase_order_ref": "ALTER TABLE tawarruq_executions ADD COLUMN purchase_order_ref VARCHAR(64)",
+        "commodity_invoice_ref": "ALTER TABLE tawarruq_executions ADD COLUMN commodity_invoice_ref VARCHAR(64)",
+        "delivery_order_ref": "ALTER TABLE tawarruq_executions ADD COLUMN delivery_order_ref VARCHAR(128)",
+        "trading_ecert_ref": "ALTER TABLE tawarruq_executions ADD COLUMN trading_ecert_ref VARCHAR(128)",
+        "supplier_ref": "ALTER TABLE tawarruq_executions ADD COLUMN supplier_ref VARCHAR(128)",
+        "purchaser_ref": "ALTER TABLE tawarruq_executions ADD COLUMN purchaser_ref VARCHAR(128)",
+        "muqassah_ref": "ALTER TABLE tawarruq_executions ADD COLUMN muqassah_ref VARCHAR(64)",
+        "muqassah_at": "ALTER TABLE tawarruq_executions ADD COLUMN muqassah_at DATETIME",
+        "casa_account": "ALTER TABLE tawarruq_executions ADD COLUMN casa_account VARCHAR(64)",
+        "casa_ref": "ALTER TABLE tawarruq_executions ADD COLUMN casa_ref VARCHAR(64)",
+        "casa_credited_at": "ALTER TABLE tawarruq_executions ADD COLUMN casa_credited_at DATETIME",
+        "cash_disbursement": (
+            "ALTER TABLE tawarruq_executions ADD COLUMN cash_disbursement VARCHAR(32) "
+            "DEFAULT 'sacco_cbs' NOT NULL"
+        ),
+        "physical_delivery_requested": (
+            "ALTER TABLE tawarruq_executions ADD COLUMN physical_delivery_requested "
+            f"BOOLEAN DEFAULT {bool_false} NOT NULL"
+        ),
+        "physical_delivery_status": "ALTER TABLE tawarruq_executions ADD COLUMN physical_delivery_status VARCHAR(32)",
+        "physical_delivery_notified_at": (
+            "ALTER TABLE tawarruq_executions ADD COLUMN physical_delivery_notified_at DATETIME"
+        ),
+        "repayment_settled_at": "ALTER TABLE tawarruq_executions ADD COLUMN repayment_settled_at DATETIME",
+    }
+    with engine.begin() as conn:
+        for name, ddl in additions.items():
+            if name not in existing:
+                conn.execute(text(ddl))
+        if "path" not in existing:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tawarruq_executions_path ON tawarruq_executions (path)"))

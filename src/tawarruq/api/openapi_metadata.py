@@ -6,6 +6,28 @@ Multi-tenant Islamic finance engine for **Tawarruq** commodity financing (Malays
 
 ---
 
+### Sedania bank financing (AS SIDQ, BTI Advisory deck 20 Oct 2026)
+
+Approved flow (`flow_variant=approved_wakeel`): SASC is independent *wakeel*, then **muqassah**, then the bank credits **CASA**.
+
+Proposed AAOIFI flow (`flow_variant=aaoifi_rasul`): SASC is *Rasul* (messenger), no muqassah, then the bank credits CASA.
+
+Physical delivery (`delivery_mode=physical`): customer keeps the commodity. After full settlement, SASC arranges *qabd hakiki* with the supplier.
+
+| Step | Action | API |
+|------|--------|-----|
+| 1 | Apply, sign CMP, appoint SASC | `POST /sedania/financing` |
+| 2–5 | Purchase, qabd hukmi, Murabahah, trade pack | Engine calls Sedania `/v1/trading/purchase` and `/transfer-murabahah` |
+| 6 | Independent sale (unless physical) | Sedania `/v1/trading/liquidate` |
+| 7 | Muqassah (approved wakeel only) | Vaulted set-off instruction |
+| 8 | Bank credits CASA | Vaulted CASA credit advice |
+| * | Physical delivery after settlement | `POST /sedania/financing/{id}/settle` then `.../physical-delivery` |
+| * | Documents | `GET /sedania/financing/{id}/documents/{kind}` |
+
+Trade pack: Purchase Order, Commodity Invoice, Delivery Order, Trading e-Cert.
+
+---
+
 ### SACCO execute path (Mwalimu CBS → Buruuj → Sedania)
 
 This is the inbound facility contract. The SACCO already pre-approved the member. Buruuj does **not** pay out cash.
@@ -191,6 +213,10 @@ OPENAPI_TAGS = [
     {
         "name": "Kenya Callbacks",
         "description": "Inbound Daraja B2C/STK and MNO possession webhooks (global + per-institution paths).",
+    },
+    {
+        "name": "Sedania Financing",
+        "description": "Bank Commodity Murabahah through AS SIDQ. Approved wakeel + muqassah + CASA, or AAOIFI Rasul, or physical delivery (qabd hakiki).",
     },
     {
         "name": "SACCO Execute",

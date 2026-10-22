@@ -458,6 +458,31 @@ textarea,
   gap: 0.5rem;
 }
 
+.step-list {
+  list-style: none;
+  margin: 0.85rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.step-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.step-list li:last-child {
+  border-bottom: 0;
+}
+
+.step-list p {
+  margin: 0.2rem 0 0;
+}
+
 .code-block {
   overflow: auto;
   background: var(--color-secondary);

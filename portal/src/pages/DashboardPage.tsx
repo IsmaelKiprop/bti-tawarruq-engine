@@ -57,7 +57,10 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="actions-row wrap" style={{ marginTop: "1rem" }}>
-            <Link className="btn btn-primary btn-sm" to="/kenya">
+            <Link className="btn btn-primary btn-sm" to="/sedania">
+              Sedania Financing
+            </Link>
+            <Link className="btn btn-secondary btn-sm" to="/kenya">
               Kenya Ops
             </Link>
             <Link className="btn btn-secondary btn-sm" to="/malaysia">

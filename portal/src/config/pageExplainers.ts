@@ -16,15 +16,27 @@ export type HowItWorksContent = {
 export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   "/": {
     title: "What this dashboard is",
-    lead: "This is the control tower for both Tawarruq tracks. It is not a cash-loan book. Kenya uses float. Malaysia uses crude palm oil on Suq Al-Sila'.",
+    lead: "This is the control tower for the Tawarruq tracks. It is not a cash-loan book. Kenya uses float. Sedania uses telecommunication airtime on AS SIDQ. Malaysia uses crude palm oil on Suq Al-Sila'.",
     dealTitle: "How a deal uses it",
     dealSteps: [
       "Check the engine is online and which desk is configured.",
       "Read the book numbers: amount is commodity cost, Murabaha is what the customer owes.",
-      "Open an active journey, or jump to Kenya Ops or Malaysia Manual Bridge.",
+      "Open an active journey, or jump to Sedania Financing, Kenya Ops, or Malaysia Manual Bridge.",
       "Setup pages (institutions, users, integrations) must exist before a live deal.",
     ],
     note: "Book Murabaha here is a 5% preview until each offer locks on the application.",
+  },
+  "/sedania": {
+    title: "What Sedania Financing is",
+    lead: "Bank Commodity Murabahah on AS SIDQ. SEDANIA As Salam Capital is appointed independently as wakeel (approved) or Rasul (AAOIFI). The bank credits CASA. Physical delivery is the keep-the-commodity path.",
+    dealTitle: "How a deal uses it",
+    dealSteps: [
+      "Pick the customer and the flow: approved wakeel, or AAOIFI Rasul.",
+      "Run financing. The engine buys airtime, seals qabd hukmi, then sells on Murabahah.",
+      "On the approved flow, muqassah set-off comes before the CASA credit.",
+      "If the customer keeps the commodity, settle the deferred price, then arrange physical delivery.",
+    ],
+    note: "Documents on this desk are Purchase Order, Commodity Invoice, Delivery Order, and Trading e-Cert.",
   },
   "/ops": {
     title: "What Ops Monitor is",
@@ -234,6 +246,16 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
       { n: 2, title: "Fill Kenya partners", body: "M-Pesa, Safaricom, Airtel." },
       { n: 3, title: "Register callbacks", body: "Copy URLs into the partner portal." },
     ],
+  },
+  "/sedania": {
+    title: "How Sedania financing works",
+    intro: "AS SIDQ trades telecommunication airtime. SASC sells independently. The bank pays CASA.",
+    steps: [
+      { n: 1, title: "Enter the CMP", body: "Customer signs the financing contract and may appoint SASC." },
+      { n: 2, title: "Trade on AS SIDQ", body: "Bank buys, takes qabd hukmi, then sells on Murabahah." },
+      { n: 3, title: "Pay or deliver", body: "Muqassah then CASA, or physical delivery after full settlement." },
+    ],
+    note: "SACCO execute still pays on the SACCO CBS. This desk is the bank CASA path.",
   },
   "/webhooks": {
     title: "How machine access works",

@@ -18,7 +18,11 @@ from tawarruq.config import get_settings
 from tawarruq.enums import (
     ApplicationStatus,
     AuditActor,
+    ExecutionPath,
     ExecutionStatus,
+    SedaniaAgencyRole,
+    SedaniaDeliveryMode,
+    SedaniaFlowVariant,
     ShariahStepId,
     TransactionPhase,
     VaultCertificateKind,
@@ -34,19 +38,14 @@ from tawarruq.integrations.sedania.client import (
 from tawarruq.models.application import FinancingApplication
 from tawarruq.models.customer import Customer
 from tawarruq.models.disbursement import Disbursement
-from tawarruq.models.execution import CertificateVault, TawarruqExecution
+from tawarruq.models.execution import TawarruqExecution
 from tawarruq.models.institution import Institution
 from tawarruq.models.integration import WebhookSubscription
 from tawarruq.models.kenya_flow import WalletDisbursement
-from tawarruq.schemas.sacco import (
-    LegalStampRead,
-    SaccoExecuteRead,
-    SaccoExecuteRequest,
-    VaultCertificateRead,
-)
+from tawarruq.schemas.sacco import SaccoExecuteRead, SaccoExecuteRequest
 from tawarruq.services.audit_service import log_audit
-from tawarruq.services.certificate_vault_service import store_certificate, vault_public_url
-from tawarruq.services.legal_token_service import stamp_wad, stamp_wakalah
+from tawarruq.services.certificate_vault_service import store_certificate
+from tawarruq.services.legal_token_service import SASC_PARTY_CODE, stamp_wad, stamp_wakalah
 from tawarruq.services.shariah_audit_service import log_shariah_step
 from tawarruq.services.webhook_service import deliver_signed_webhook, dispatch_webhook_event
 
@@ -83,70 +82,10 @@ def resolve_sacco_customer(db: Session, institution_id: str, customer_id: str) -
     )
 
 
-def _certificate_read(vault: CertificateVault) -> VaultCertificateRead:
-    serials: list[str] = []
-    if vault.serial_numbers_json:
-        try:
-            parsed = json.loads(vault.serial_numbers_json)
-            if isinstance(parsed, list):
-                serials = [str(item) for item in parsed]
-        except json.JSONDecodeError:
-            serials = []
-    return VaultCertificateRead(
-        kind=vault.kind,
-        certificate_number=vault.certificate_number,
-        source=vault.source,
-        url=vault_public_url(vault),
-        source_url=vault.source_url,
-        batch_id=vault.batch_id,
-        serial_numbers=serials,
-        retention_until=vault.retention_until,
-    )
-
-
 def to_execute_read(db: Session, execution: TawarruqExecution) -> SaccoExecuteRead:
-    vaults = (
-        db.query(CertificateVault)
-        .filter(CertificateVault.execution_id == execution.id)
-        .order_by(CertificateVault.received_at.asc())
-        .all()
-    )
-    certificates = {item.kind: _certificate_read(item) for item in vaults}
-    wad = (
-        LegalStampRead(token_id=execution.wad_token_id, signature=execution.wad_signature, kind="wad")
-        if execution.wad_token_id and execution.wad_signature
-        else None
-    )
-    wakalah = (
-        LegalStampRead(
-            token_id=execution.wakalah_token_id,
-            signature=execution.wakalah_signature,
-            kind="wakalah",
-        )
-        if execution.wakalah_token_id and execution.wakalah_signature
-        else None
-    )
-    return SaccoExecuteRead(
-        execution_id=execution.id,
-        application_id=execution.application_id,
-        customer_id=execution.customer_id,
-        institution_id=execution.institution_id,
-        amount=_money(execution.amount),
-        profit_amount=_money(execution.profit_amount),
-        deferred_price=_money(execution.deferred_price),
-        tenor_months=execution.tenor_months,
-        currency=execution.currency,
-        status=execution.status,
-        sedania_batch_id=execution.sedania_batch_id,
-        wad=wad,
-        wakalah=wakalah,
-        certificates=certificates,
-        callback_delivered=execution.callback_delivered_at is not None,
-        cash_disbursement="sacco_cbs",
-        error_message=execution.error_message,
-        created_at=execution.created_at,
-        completed_at=execution.completed_at,
-    )
+    from tawarruq.services.sedania_financing_service import to_financing_read
+
+    return to_financing_read(db, execution)
 
 
 def _assert_no_bti_cash(db: Session, application_id: str | None) -> None:
@@ -256,7 +195,15 @@ def execute_sacco_facility(
         tenor_months=payload.tenor,
         currency=payload.currency,
         status=ExecutionStatus.RECEIVED,
+        path=ExecutionPath.SACCO,
+        flow_variant=SedaniaFlowVariant.APPROVED_WAKEEL,
+        delivery_mode=SedaniaDeliveryMode.CONSTRUCTIVE,
+        agency_role=SedaniaAgencyRole.WAKEEL,
+        agency_party=SASC_PARTY_CODE,
+        appoint_sasc=True,
+        cash_disbursement="sacco_cbs",
         callback_url=payload.callback_url,
+        supplier_ref="TELECOMMUNICATION_AIRTIME_AGGREGATOR",
     )
     db.add(execution)
     db.flush()
@@ -297,6 +244,7 @@ def execute_sacco_facility(
             customer_id=customer.id,
             customer_name=customer.full_name,
             institution_name=institution.name,
+            agency_role=SedaniaAgencyRole.WAKEEL,
         )
         execution.wad_token_id = wad.token_id
         execution.wad_signature = wad.signature
@@ -342,7 +290,11 @@ def execute_sacco_facility(
             entity_id=execution.id,
             actor_from="customer",
             actor_to="bti",
-            payload={"wakalah_token_id": wakalah.token_id},
+            payload={
+                "wakalah_token_id": wakalah.token_id,
+                "agency_party": SASC_PARTY_CODE,
+                "agency_role": SedaniaAgencyRole.WAKEEL,
+            },
             institution_id=institution.id,
             application_id=application.id,
         )
@@ -361,6 +313,9 @@ def execute_sacco_facility(
         if not purchase.success or not purchase.batch_id or not purchase.certificate_number:
             raise IntegrationError(purchase.error_message or "Sedania purchase did not return a batch")
         execution.sedania_batch_id = purchase.batch_id
+        from tawarruq.services.sedania_financing_service import store_trade_pack
+
+        store_trade_pack(db, execution, institution=institution, customer=customer)
         store_certificate(
             db,
             execution_id=execution.id,
@@ -444,6 +399,8 @@ def execute_sacco_facility(
                 spot_amount=amount,
                 currency=payload.currency,
                 wakeel_ref=wakalah.token_id,
+                agency_role=SedaniaAgencyRole.WAKEEL,
+                agency_party=SASC_PARTY_CODE,
             )
         )
         if not liquidation.success or not liquidation.certificate_number:

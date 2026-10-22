@@ -45,6 +45,18 @@ class SedaniaLiquidateRequest:
     spot_amount: Decimal
     currency: str
     wakeel_ref: str
+    agency_role: str = "wakeel"
+    agency_party: str = "SEDANIA_AS_SALAM_CAPITAL"
+
+
+@dataclass
+class SedaniaPhysicalDeliveryRequest:
+    execution_id: str
+    batch_id: str
+    customer_id: str
+    amount: Decimal
+    currency: str
+    supplier_ref: str = "TELECOMMUNICATION_AIRTIME_AGGREGATOR"
 
 
 @dataclass
@@ -127,9 +139,26 @@ class SedaniaAsSidqClient:
                 "spot_amount": str(request.spot_amount),
                 "currency": request.currency,
                 "wakeel_ref": request.wakeel_ref,
+                "agency_role": request.agency_role,
+                "agency_party": request.agency_party,
             },
         )
         return _parse_trade_result(data, default_kind="liquidation")
+
+    def arrange_physical_delivery(self, request: SedaniaPhysicalDeliveryRequest) -> SedaniaTradeResult:
+        data = self._post(
+            "/v1/trading/physical-delivery",
+            {
+                "execution_id": request.execution_id,
+                "batch_id": request.batch_id,
+                "customer_id": request.customer_id,
+                "amount": str(request.amount),
+                "currency": request.currency,
+                "supplier_ref": request.supplier_ref,
+                "possession": "qabd_hakiki",
+            },
+        )
+        return _parse_trade_result(data, default_kind="physical_delivery")
 
 
 class MockSedaniaAsSidqClient:
@@ -149,6 +178,8 @@ class MockSedaniaAsSidqClient:
             "currency": request.currency,
             "institution_code": request.institution_code,
             "qabd_hukmi": True,
+            "supplier": "TELECOMMUNICATION_AIRTIME_AGGREGATOR",
+            "platform": "AS SIDQ Digital Commodity Trading Platform",
         }
         return SedaniaTradeResult(
             success=True,
@@ -188,9 +219,32 @@ class MockSedaniaAsSidqClient:
             "batch_id": request.batch_id,
             "spot_amount": str(request.spot_amount),
             "currency": request.currency,
-            "independent_buyer": "SEDANIA_TELCO_MARKET",
+            "independent_buyer": "SEDANIA_RANDOM_PURCHASER",
             "wakeel_ref": request.wakeel_ref,
+            "agency_role": request.agency_role,
+            "agency_party": request.agency_party,
             "bai_al_inah_avoided": True,
+        }
+        return SedaniaTradeResult(
+            success=True,
+            batch_id=request.batch_id,
+            certificate_number=number,
+            certificate_url=f"https://sedania.example/certificates/{number}",
+            payload=payload,
+        )
+
+    def arrange_physical_delivery(self, request: SedaniaPhysicalDeliveryRequest) -> SedaniaTradeResult:
+        number = f"CERT-PD-{request.execution_id[:8].upper()}"
+        payload = {
+            "certificate_type": "physical_delivery_confirmation",
+            "title": "Physical delivery (qabd hakiki)",
+            "batch_id": request.batch_id,
+            "supplier_ref": request.supplier_ref,
+            "customer_id": request.customer_id,
+            "amount": str(request.amount),
+            "currency": request.currency,
+            "arranged_by": "SEDANIA_AS_SALAM_CAPITAL",
+            "qabd_hakiki": True,
         }
         return SedaniaTradeResult(
             success=True,

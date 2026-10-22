@@ -25,6 +25,7 @@ from tawarruq.api.routes_ops_mobile import router as ops_mobile_router
 from tawarruq.api.routes_mobile_auth import router as mobile_auth_router
 from tawarruq.api.routes_controls import router as controls_router
 from tawarruq.api.routes_sacco import router as sacco_router
+from tawarruq.api.routes_sedania import router as sedania_router
 from tawarruq.config import get_settings
 from tawarruq.database import SessionLocal, init_db
 from tawarruq.schemas import HealthRead
@@ -202,6 +203,7 @@ def create_app() -> FastAPI:
     app.include_router(router, prefix=settings.api_prefix)
     app.include_router(extended_router, prefix=settings.api_prefix)
     app.include_router(sacco_router, prefix=settings.api_prefix)
+    app.include_router(sedania_router, prefix=settings.api_prefix)
     app.include_router(kenya_router, prefix=settings.api_prefix)
     app.include_router(manual_bridge_router, prefix=settings.api_prefix)
     app.include_router(callbacks_router, prefix=settings.api_prefix)

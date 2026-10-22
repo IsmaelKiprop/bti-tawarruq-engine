@@ -9,7 +9,8 @@ from tawarruq.api.deps import require_tenant_access, require_write_ops, resolve_
 from tawarruq.database import get_db
 from tawarruq.models.execution import TawarruqExecution
 from tawarruq.models.institution import Institution
-from tawarruq.schemas.sacco import SaccoExecuteRead, SaccoExecuteRequest
+from tawarruq.schemas.sacco import SaccoExecuteRequest
+from tawarruq.schemas.sedania import SedaniaFinancingRead
 from tawarruq.services.application_service import get_or_create_default_institution
 from tawarruq.services.auth_service import require_sacco_hmac
 from tawarruq.services.certificate_vault_service import get_vault_certificate
@@ -36,7 +37,7 @@ def _resolve_institution(db: Session, request: Request, payload: SaccoExecuteReq
 
 @router.post(
     "/tawarruq/execute",
-    response_model=SaccoExecuteRead,
+    response_model=SedaniaFinancingRead,
     status_code=200,
     tags=["SACCO Execute"],
     summary="Inbound SACCO facility request",
@@ -46,7 +47,7 @@ def _resolve_institution(db: Session, request: Request, payload: SaccoExecuteReq
         "certificates for 7 years, then webhooks the SACCO. Buruuj never disburses principal cash."
     ),
 )
-async def execute_tawarruq(request: Request, db: Session = Depends(get_db)) -> SaccoExecuteRead:
+async def execute_tawarruq(request: Request, db: Session = Depends(get_db)) -> SedaniaFinancingRead:
     require_write_ops(request)
     raw = await request.body()
     require_sacco_hmac(request, db, raw)
@@ -64,11 +65,11 @@ async def execute_tawarruq(request: Request, db: Session = Depends(get_db)) -> S
 
 @router.get(
     "/tawarruq/executions/{execution_id}",
-    response_model=SaccoExecuteRead,
+    response_model=SedaniaFinancingRead,
     tags=["SACCO Execute"],
     summary="Read a SACCO execute run",
 )
-def get_execution(execution_id: str, request: Request, db: Session = Depends(get_db)) -> SaccoExecuteRead:
+def get_execution(execution_id: str, request: Request, db: Session = Depends(get_db)) -> SedaniaFinancingRead:
     execution = db.get(TawarruqExecution, execution_id)
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
@@ -78,7 +79,7 @@ def get_execution(execution_id: str, request: Request, db: Session = Depends(get
 
 @router.get(
     "/tawarruq/executions",
-    response_model=list[SaccoExecuteRead],
+    response_model=list[SedaniaFinancingRead],
     tags=["SACCO Execute"],
     summary="List SACCO execute runs",
 )
@@ -87,7 +88,7 @@ def list_executions(
     db: Session = Depends(get_db),
     institution_id: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
-) -> list[SaccoExecuteRead]:
+) -> list[SedaniaFinancingRead]:
     from tawarruq.api.deps import tenant_filter_institution_id
 
     scoped = tenant_filter_institution_id(request, institution_id)

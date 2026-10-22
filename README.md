@@ -7,13 +7,14 @@ Multi-tenant **Tawarruq-as-a-Service** platform for Buruuj Fintech: Malaysia BSA
 | Area | Status |
 |------|--------|
 | **Malaysia Tawarruq** | 3-leg BSAS flow (mock / manual_bridge / live), business steps 7–12, Shariah audit |
+| **Sedania AS SIDQ financing** | Approved wakeel + muqassah + CASA, AAOIFI Rasul, or physical delivery (qabd hakiki) |
 | **Kenya float Tawarruq** | Eight-step flow: apply → purchase → possession → Murabaha → Wakala → independent sale → clear → pay / repay |
 | **No-Inah guardrail** | Blocks financier self-liquidation and originating MNO pool buybacks |
 | **Shariah audit ledger** | Append-only hash chain, ORM immutability, Python microservice + regulatory export |
 | **Live integrations** | M-Pesa (Daraja B2C/STK), Safaricom/Airtel airtime, Airtel Money disbursement, broker OTC API |
 | **Multi-tenant** | Per-institution credentials, API keys, webhooks, integration profiles |
 | **Amanah worker** | Auto-advances Kenya/Malaysia legs after eligibility or offer acceptance |
-| **Ops portal** | Dashboard, Kenya/Malaysia desks, Users, Approvals, Billing, Reconciliation, MFA |
+| **Ops portal** | Dashboard, Sedania/Kenya/Malaysia desks, Users, Approvals, Billing, Reconciliation, MFA |
 | **Users & controls** | Catalogue RBAC, maker-checker, amount limits, tenant suspend, TOTP, usage invoices |
 | **Expo mobile app** | Timiza-style Shariah lending app (`mobile/` · Buruuj Lend) |
 | **Tests** | pytest: Kenya/Malaysia flows, Shariah, No-Inah, RBAC, maker-checker, billing, auth |
@@ -29,6 +30,21 @@ Multi-tenant **Tawarruq-as-a-Service** platform for Buruuj Fintech: Malaysia BSA
          │                    │                    │
     Leg orchestration    Live partner APIs     Append-only ledger mirror
 ```
+
+### Sedania bank financing (AS SIDQ)
+
+Matches the BTI Advisory deck. Portal: **Sedania Financing**. API: `POST /sedania/financing`.
+
+1. Customer signs the financing contract and enters the CMP
+2. Customer may appoint SEDANIA As Salam Capital independently as wakeel (approved) or Rasul (AAOIFI)
+3. Bank purchases telecommunication airtime on AS SIDQ (Purchase Order, Commodity Invoice)
+4. Qabd hukmi via Delivery Order
+5. Murabahah deferred sale and Trading e-Cert
+6. SASC sells to random purchasers, unless the customer keeps the commodity
+7. Approved flow only: muqassah set-off
+8. Bank credits CASA, or SASC arranges physical delivery after full settlement
+
+See [docs/SEDANIA_FINANCING.md](docs/SEDANIA_FINANCING.md).
 
 ### Kenya flow (canonical 8 steps)
 

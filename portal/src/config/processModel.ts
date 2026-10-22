@@ -70,9 +70,9 @@ export const ACTORS: Record<ActorId, Actor> = {
   },
   sedania: {
     id: "sedania",
-    name: "Sedania As-Sidq",
-    short: "Sedania",
-    role: "External commodity engine. Matches airtime inventory, issues Certificate 1 (purchase), Certificate 2 (Murabahah), and Certificate 3 (liquidation).",
+    name: "Sedania As Salam Capital / AS SIDQ",
+    short: "SASC",
+    role: "Independent wakeel or Rasul. Matches airtime on AS SIDQ, issues the trade pack, and sells to random purchasers.",
     kind: "external",
   },
   partner: {
@@ -268,6 +268,95 @@ export const MALAYSIA_TRACK: ProcessTrack = {
           actors: ["bti", "customer"],
           route: "/transactions",
           routeLabel: "Transactions",
+          mode: "automated",
+        },
+      ],
+    },
+  ],
+};
+
+export const SEDANIA_FINANCING_TRACK: ProcessTrack = {
+  id: "sedania-financing",
+  name: "Sedania: AS SIDQ bank financing",
+  subtitle:
+    "BTI Advisory approved flow: SASC as independent wakeel, muqassah, bank credits CASA. AAOIFI variant uses Rasul. Physical delivery keeps the commodity.",
+  route: "/sedania",
+  phases: [
+    {
+      id: "cmp",
+      title: "Steps 1 to 2: Mandate",
+      summary: "Customer enters the Commodity Murabahah Program and may appoint SASC independently.",
+      steps: [
+        {
+          step: 1,
+          title: "Financing contract and CMP",
+          detail: "Customer applies, signs the financing contract, and enters the CMP. API: POST /sedania/financing.",
+          actors: ["customer", "bank"],
+          route: "/sedania",
+          routeLabel: "Sedania Financing",
+          mode: "manual",
+        },
+        {
+          step: 2,
+          title: "Appoint SASC",
+          detail: "Approved flow appoints SASC as wakeel. AAOIFI flow appoints SASC as Rasul (messenger).",
+          actors: ["customer", "sedania"],
+          mode: "automated",
+        },
+      ],
+    },
+    {
+      id: "trade",
+      title: "Steps 3 to 5: AS SIDQ trade",
+      summary: "Bank buys airtime, takes qabd hukmi, then sells on Murabahah.",
+      steps: [
+        {
+          step: 3,
+          title: "Spot purchase",
+          detail: "Bank purchases telecommunication airtime on a spot and credit basis via AS SIDQ. Documents: Purchase Order and Commodity Invoice.",
+          actors: ["bank", "sedania"],
+          mode: "external",
+        },
+        {
+          step: 4,
+          title: "Qabd hukmi",
+          detail: "Supplier delivers via AS SIDQ. Delivery Order proves constructive possession before any sale to the customer.",
+          actors: ["sedania", "bank"],
+          mode: "external",
+        },
+        {
+          step: 5,
+          title: "Murabahah deferred sale",
+          detail: "Bank sells at cost plus profit on deferred terms. Trading e-Cert is issued.",
+          actors: ["bank", "customer", "sedania"],
+          mode: "external",
+        },
+      ],
+    },
+    {
+      id: "exit",
+      title: "Steps 6 to 8: Sale, set-off, CASA",
+      summary: "Independent sale, muqassah on the approved flow, then the bank credits CASA. Physical delivery skips this.",
+      steps: [
+        {
+          step: 6,
+          title: "Independent sale",
+          detail: "SASC sells to random purchasers on AS SIDQ as wakeel or Rasul.",
+          actors: ["sedania", "customer"],
+          mode: "external",
+        },
+        {
+          step: 7,
+          title: "Muqassah",
+          detail: "Purchaser authorizes the bank to pay the customer, then agrees to pay the seller for set-off. Skipped on the Rasul flow.",
+          actors: ["bank", "sedania"],
+          mode: "automated",
+        },
+        {
+          step: 8,
+          title: "CASA credit",
+          detail: "The bank credits the customer's Current or Savings Account.",
+          actors: ["bank", "customer"],
           mode: "automated",
         },
       ],
@@ -504,7 +593,7 @@ export const SACCO_TRACK: ProcessTrack = {
   ],
 };
 
-export const TRACKS: ProcessTrack[] = [SACCO_TRACK, KENYA_TRACK, MALAYSIA_TRACK];
+export const TRACKS: ProcessTrack[] = [SEDANIA_FINANCING_TRACK, SACCO_TRACK, KENYA_TRACK, MALAYSIA_TRACK];
 
 /** Which parties own which side of the platform — used on the dashboard. */
 export interface ResponsibilitySplit {

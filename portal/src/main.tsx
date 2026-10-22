@@ -16,6 +16,7 @@ import { MalaysiaManualBridgePage } from "./pages/MalaysiaManualBridgePage";
 import { NewApplicationPage } from "./pages/NewApplicationPage";
 import { OpsMonitorPage } from "./pages/OpsMonitorPage";
 import { RepaymentsPage } from "./pages/RepaymentsPage";
+import { SedaniaFinancingPage } from "./pages/SedaniaFinancingPage";
 import { ShariahCompliancePage } from "./pages/ShariahCompliancePage";
 import { TransactionDetailPage } from "./pages/TransactionPages";
 import { TransactionsListPage } from "./pages/TransactionsListPage";
@@ -71,6 +72,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="customers" element={<CustomersPage />} />
                 <Route path="customers/:customerId" element={<CustomersPage />} />
                 <Route path="malaysia" element={<MalaysiaManualBridgePage />} />
+                <Route path="sedania" element={<SedaniaFinancingPage />} />
                 <Route path="kenya" element={<KenyaFlowPage />} />
                 <Route path="repayments" element={<RepaymentsPage />} />
               </Route>

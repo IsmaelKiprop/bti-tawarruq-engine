@@ -1,16 +1,16 @@
-"""SACCO-initiated Tawarruq executions and 7-year certificate vault."""
+"""SACCO and bank Sedania Tawarruq executions, plus 7-year certificate vault."""
 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tawarruq.database import Base
 
 
 class TawarruqExecution(Base):
-    """One inbound SACCO facility request through Sedania, until ready for SACCO payout."""
+    """One Sedania facility: SACCO execute, or bank CMP financing through AS SIDQ."""
 
     __tablename__ = "tawarruq_executions"
 
@@ -27,11 +27,33 @@ class TawarruqExecution(Base):
     tenor_months: Mapped[int] = mapped_column(nullable=False)
     currency: Mapped[str] = mapped_column(String(8), nullable=False, default="KES")
     status: Mapped[str] = mapped_column(String(48), nullable=False, default="received", index=True)
+    path: Mapped[str] = mapped_column(String(32), nullable=False, default="sacco", index=True)
+    flow_variant: Mapped[str] = mapped_column(String(32), nullable=False, default="approved_wakeel")
+    delivery_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="constructive")
+    agency_role: Mapped[str] = mapped_column(String(16), nullable=False, default="wakeel")
+    agency_party: Mapped[str] = mapped_column(String(64), nullable=False, default="SEDANIA_AS_SALAM_CAPITAL")
+    appoint_sasc: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     wad_token_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     wad_signature: Mapped[str | None] = mapped_column(String(128), nullable=True)
     wakalah_token_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     wakalah_signature: Mapped[str | None] = mapped_column(String(128), nullable=True)
     sedania_batch_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    purchase_order_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    commodity_invoice_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    delivery_order_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    trading_ecert_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    supplier_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    purchaser_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    muqassah_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    muqassah_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    casa_account: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    casa_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    casa_credited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cash_disbursement: Mapped[str] = mapped_column(String(32), nullable=False, default="sacco_cbs")
+    physical_delivery_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    physical_delivery_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    physical_delivery_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    repayment_settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     callback_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     callback_delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

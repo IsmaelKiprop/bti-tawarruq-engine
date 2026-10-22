@@ -416,7 +416,7 @@ def render_branded_document(
       {sections_html}
       {note_html}
       <div class="footer">
-        <div><strong>Buruuj Fintech</strong> provides the technology and wakeel rail. Financing is issued by the named institution.</div>
+        <div><strong>Buruuj Fintech</strong> provides the technology rail. SEDANIA As Salam Capital may be appointed independently as wakeel or Rasul. Financing is issued by the named institution.</div>
         <div class="stamp">{escape(stamped)}</div>
       </div>
     </main>

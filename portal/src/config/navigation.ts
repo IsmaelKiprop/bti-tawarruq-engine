@@ -101,6 +101,19 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    id: "sedania",
+    label: "Sedania track: AS SIDQ",
+    items: [
+      {
+        to: "/sedania",
+        label: "Sedania Financing",
+        Icon: IconMalaysia,
+        hint: "Wakeel or Rasul, muqassah, CASA",
+        permission: "write_ops",
+      },
+    ],
+  },
+  {
     id: "malaysia",
     label: "Malaysia track: Bursa BSAS",
     items: [
@@ -167,6 +180,10 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
   "/applications/new": {
     title: "New Application",
     description: "Pick a customer, set cost and profit, then lock the Murabaha offer",
+  },
+  "/sedania": {
+    title: "Sedania Financing",
+    description: "AS SIDQ commodity Murabahah: SASC wakeel or Rasul, muqassah, CASA, or physical delivery",
   },
   "/malaysia": {
     title: "Malaysia Manual Bridge",

@@ -229,6 +229,98 @@ export interface BusinessStatus {
   ready_for_leg_3: boolean;
 }
 
+export interface SedaniaStep {
+  n: number;
+  id: string;
+  title: string;
+  status: "done" | "pending" | "skipped" | string;
+  detail: string;
+  documents: string[];
+}
+
+export interface SedaniaCertificate {
+  kind: string;
+  certificate_number: string;
+  source: string;
+  url: string;
+  source_url?: string | null;
+  batch_id?: string | null;
+  serial_numbers: string[];
+  retention_until: string;
+}
+
+export interface SedaniaStamp {
+  token_id: string;
+  signature: string;
+  kind: string;
+}
+
+export interface SedaniaFinancing {
+  execution_id: string;
+  application_id: string | null;
+  customer_id: string;
+  institution_id: string;
+  amount: string;
+  profit_amount: string;
+  deferred_price: string;
+  tenor_months: number;
+  currency: string;
+  status: string;
+  sedania_batch_id: string | null;
+  wad: SedaniaStamp | null;
+  wakalah: SedaniaStamp | null;
+  cmp: SedaniaStamp | null;
+  certificates: Record<string, SedaniaCertificate>;
+  callback_delivered: boolean;
+  cash_disbursement: string;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+  path: string;
+  flow_variant: string;
+  delivery_mode: string;
+  agency_role: string;
+  agency_party: string;
+  appoint_sasc: boolean;
+  purchase_order_ref: string | null;
+  commodity_invoice_ref: string | null;
+  delivery_order_ref: string | null;
+  trading_ecert_ref: string | null;
+  supplier_ref: string | null;
+  purchaser_ref: string | null;
+  muqassah_ref: string | null;
+  muqassah_at: string | null;
+  casa_account: string | null;
+  casa_ref: string | null;
+  casa_credited_at: string | null;
+  physical_delivery_requested: boolean;
+  physical_delivery_status: string | null;
+  physical_delivery_notified_at: string | null;
+  repayment_settled_at: string | null;
+  steps: SedaniaStep[];
+}
+
+export interface SedaniaFinancingRequest {
+  customer_id: string;
+  amount: string;
+  tenor: number;
+  currency: string;
+  flow_variant: "approved_wakeel" | "aaoifi_rasul";
+  delivery_mode: "constructive" | "physical";
+  appoint_sasc: boolean;
+  casa_account?: string;
+  institution_id?: string;
+  client_request_id?: string;
+}
+
+export interface SedaniaDocumentIndex {
+  kind: string;
+  label: string;
+  available: boolean;
+  ref: string | null;
+  url: string | null;
+}
+
 export interface Institution {
   id: string;
   name: string;
@@ -1391,6 +1483,55 @@ export const api = {
     request<{ application_id: string; customer_ref: string; amount: string; status: string; institution: string | null; created_at: string | null }[]>(
       `/customer/applications?phone=${encodeURIComponent(phone)}`,
     ),
+
+  createSedaniaFinancing: (body: SedaniaFinancingRequest) =>
+    request<SedaniaFinancing>("/sedania/financing", { method: "POST", body: JSON.stringify(body) }),
+
+  listSedaniaFinancing: (institutionId?: string) =>
+    request<SedaniaFinancing[]>(
+      `/sedania/financing${institutionId ? `?institution_id=${encodeURIComponent(institutionId)}` : ""}`,
+    ),
+
+  getSedaniaFinancing: (executionId: string) =>
+    request<SedaniaFinancing>(`/sedania/financing/${executionId}`),
+
+  listSedaniaDocuments: (executionId: string) =>
+    request<SedaniaDocumentIndex[]>(`/sedania/financing/${executionId}/documents`),
+
+  sedaniaDocumentUrl: (executionId: string, kind: string) =>
+    `${API_BASE}/sedania/financing/${encodeURIComponent(executionId)}/documents/${encodeURIComponent(kind)}`,
+
+  downloadSedaniaDocument: async (executionId: string, kind: string) => {
+    const response = await fetch(
+      `${API_BASE}/sedania/financing/${encodeURIComponent(executionId)}/documents/${encodeURIComponent(kind)}`,
+      { headers: authHeaders() },
+    );
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error((body as { detail?: string }).detail || "This document is not ready.");
+    }
+    const blob = await response.blob();
+    const header = response.headers.get("content-disposition") || "";
+    const match = header.match(/filename="([^"]+)"/);
+    const filename = match?.[1] || `${kind}.html`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  settleSedaniaFinancing: (executionId: string) =>
+    request<SedaniaFinancing>(`/sedania/financing/${executionId}/settle`, { method: "POST" }),
+
+  arrangeSedaniaPhysicalDelivery: (executionId: string, markSettled = true) =>
+    request<SedaniaFinancing>(`/sedania/financing/${executionId}/physical-delivery`, {
+      method: "POST",
+      body: JSON.stringify({ mark_settled: markSettled }),
+    }),
 };
 
 export async function fetchHealth() {
