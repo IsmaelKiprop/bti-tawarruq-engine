@@ -206,10 +206,11 @@ class OpsUserCreate(BaseModel):
     email: str
     full_name: str
     role: str = Field(
-        'institution_ops',
+        'institution_admin',
         description=(
-            'platform_admin | bti_ops | bti_finance | institution_admin | institution_ops | '
-            'fi_approver | shariah_officer | reconciler | read_only | agent_dealer'
+            'Allowed values depend on the caller. Super Admin: platform_admin, institution_admin, '
+            'bti_ops, shariah_officer, bti_finance, reconciler. FI Admin: institution_admin, '
+            'institution_ops, fi_approver, shariah_officer, reconciler.'
         ),
     )
     institution_id: str | None = None
@@ -241,8 +242,8 @@ class OpsUserUpdate(BaseModel):
     role: str | None = Field(
         None,
         description=(
-            'platform_admin | bti_ops | bti_finance | institution_admin | institution_ops | '
-            'fi_approver | shariah_officer | reconciler | read_only | agent_dealer'
+            'Same invite rules as create. Super Admin cannot assign institution_ops or fi_approver. '
+            'FI Admin cannot assign BTI-internal roles.'
         ),
     )
     institution_id: str | None = None
@@ -328,7 +329,7 @@ class ApiKeyCreate(BaseModel):
     name: str = Field(..., examples=['Production integration'])
     role: str = Field(
         'api_client',
-        description='api_client | institution_ops | institution_admin | platform_admin | bti_ops | shariah_officer | read_only',
+        description='Super Admin only. Prefer api_client for machine clients. Also: institution_ops | institution_admin | platform_admin | bti_ops | shariah_officer | read_only',
         examples=['api_client'],
     )
 

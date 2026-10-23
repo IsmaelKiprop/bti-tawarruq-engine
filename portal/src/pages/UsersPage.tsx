@@ -1,15 +1,21 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { api, type OpsUserRecord } from "../api/client";
+import { api, type Institution, type OpsUserRecord } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
 import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
-import { PORTAL_ROLE_OPTIONS, getRoleProfile } from "../config/roles";
+import {
+  defaultInviteRole,
+  getRoleProfile,
+  inviteNeedsInstitution,
+  inviteRoleOptions,
+} from "../config/roles";
 import "../components/ui.css";
 
 export function UsersPage() {
   const { user } = useAuth();
   const [items, setItems] = useState<OpsUserRecord[]>([]);
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -17,19 +23,28 @@ export function UsersPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState("institution_ops");
+  const [role, setRole] = useState(() => defaultInviteRole(user?.role));
+  const [institutionId, setInstitutionId] = useState("");
   const [tempPassword, setTempPassword] = useState("");
   const [approvalLimit, setApprovalLimit] = useState("");
+  const isPlatform = user?.role === "platform_admin";
 
-  const roleOptions = useMemo(() => {
-    const isPlatform = user?.role === "platform_admin";
-    return PORTAL_ROLE_OPTIONS.filter((opt) => isPlatform || !opt.btiOnly);
+  const roleOptions = useMemo(() => inviteRoleOptions(user?.role), [user?.role]);
+
+  useEffect(() => {
+    setRole(defaultInviteRole(user?.role));
   }, [user?.role]);
 
   async function load() {
     setLoading(true);
     try {
-      setItems(await api.listOpsUsers());
+      const [users, books] = await Promise.all([
+        api.listOpsUsers(),
+        isPlatform ? api.listInstitutions().catch(() => [] as Institution[]) : Promise.resolve([] as Institution[]),
+      ]);
+      setItems(users);
+      setInstitutions(books);
+      if (!institutionId && books[0]) setInstitutionId(books[0].id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load users");
     } finally {
@@ -39,7 +54,7 @@ export function UsersPage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [isPlatform]);
 
   async function onInvite(event: FormEvent) {
     event.preventDefault();
@@ -52,8 +67,9 @@ export function UsersPage() {
         email,
         full_name: fullName,
         role,
+        institution_id: isPlatform && inviteNeedsInstitution(role) ? institutionId || null : undefined,
         approval_limit_amount: approvalLimit.trim() || null,
-      } as Parameters<typeof api.createOpsUser>[0]);
+      });
       setMessage(created.invite_message || "User invited.");
       if (created.temporary_password) {
         setTempPassword(created.temporary_password);
@@ -122,8 +138,9 @@ export function UsersPage() {
       <section className="panel">
         <h2>Invite user</h2>
         <p className="muted" style={{ marginTop: 0 }}>
-          Creates an active login with a generated temporary password, emails it via SMTP when configured,
-          and forces a password change on first sign-in.
+          {isPlatform
+            ? "Super Admin may invite Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, and Recon. FI Operations and FI Approver are created by the FI Administrator."
+            : "FI Admin may invite FI Admin, FI Operations, FI Approver, Shariah, and Recon for this institution. BTI Super Admin, BTI Ops, and BTI Finance are not available."}
         </p>
         <form className="grid-2" onSubmit={onInvite}>
           <label>
@@ -136,7 +153,13 @@ export function UsersPage() {
           </label>
           <label>
             Role
-            <select value={role} onChange={(e) => setRole(e.target.value)}>
+            <select
+              value={role}
+              onChange={(e) => {
+                const next = roleOptions.find((opt) => opt.value === e.target.value)?.value;
+                if (next) setRole(next);
+              }}
+            >
               {roleOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -144,6 +167,18 @@ export function UsersPage() {
               ))}
             </select>
           </label>
+          {isPlatform && inviteNeedsInstitution(role) ? (
+            <label>
+              Institution
+              <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)} required>
+                {institutions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label>
             Approval limit (optional)
             <input

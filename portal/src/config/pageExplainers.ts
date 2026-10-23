@@ -102,7 +102,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "A temporary password is generated and emailed via SMTP when configured.",
       "They must change it on first sign-in before desks open. Activate or deactivate from the list.",
     ],
-    note: "FI Admin invites FI staff. Only Super Admin invites BTI-internal roles. API keys on Webhooks are for machines.",
+    note: "Super Admin invites Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon — not FI Ops or FI Approver. FI Admin invites FI Admin, FI Ops, FI Approver, Shariah, Recon. API keys are Super Admin only.",
   },
   "/integrations": {
     title: "What integrations are",
@@ -118,11 +118,11 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   },
   "/webhooks": {
     title: "What webhooks and keys are",
-    lead: "Machine access for a SACCO CBS. Issue an API key plus HMAC secret, then receive tawarruq.certificates_ready when execute finishes.",
+    lead: "Machine access for a SACCO CBS. Super Admin onboards the API key. FI Admin requests that key from BTI, then registers callbacks.",
     dealTitle: "How a deal uses it",
     dealSteps: [
-      "Create an API key for the SACCO. Copy the key and the HMAC secret once.",
-      "Register POST /api/tawarruq/callback on the SACCO, or a webhook URL here.",
+      "Super Admin creates the institution API key on this page. Copy the key and HMAC secret once.",
+      "FI Admin cannot issue keys — request BTI to onboard, then register POST /api/tawarruq/callback here.",
       "The CBS calls POST /tawarruq/execute. Buruuj relays the three certificate URLs. The SACCO pays the member.",
     ],
     note: "Buruuj never disburses SACCO principal cash. HMAC is X-BTI-Signature over timestamp plus body.",
@@ -233,7 +233,7 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
     title: "How access works",
     intro: "Invite by email. SMTP delivers the temporary password; first login forces a change.",
     steps: [
-      { n: 1, title: "Pick the role", body: "BTI-internal roles are Super Admin only." },
+      { n: 1, title: "Pick the role", body: "Only roles your login is allowed to create. Super Admin does not invite FI Ops or FI Approver." },
       { n: 2, title: "Invite", body: "Password is emailed (or shown once if SMTP is off)." },
       { n: 3, title: "They sign in", body: "Forced password change, then the desks." },
     ],
@@ -261,7 +261,7 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
     title: "How machine access works",
     intro: "People use Users. Cores use keys and signed callbacks.",
     steps: [
-      { n: 1, title: "Create the API key", body: "Copy the key and the HMAC secret once." },
+      { n: 1, title: "Onboard the API key", body: "Super Admin issues it. FI Admin requests BTI if they do not have one." },
       { n: 2, title: "Register the callback", body: "SACCO POST /api/tawarruq/callback, or a webhook URL here." },
       { n: 3, title: "Execute then pay", body: "CBS calls /tawarruq/execute. Certificates arrive. SACCO disburses." },
     ],

@@ -243,6 +243,12 @@ def delete_webhook(webhook_id: str, request: Request, db: Session = Depends(get_
     response_model=ApiKeyCreatedRead,
     status_code=201,
     tags=["Institutions"],
+    summary="Create institution API key (Super Admin only)",
+    description=(
+        "Issues a machine key (prefer role api_client). When AUTH_ENABLED is on, only Super Admin "
+        "can create keys. FI Admin should request BTI to onboard the institution key. The full key "
+        "and HMAC secret are returned once."
+    ),
 )
 def create_institution_api_key(
     institution_id: str, payload: ApiKeyCreate, request: Request, db: Session = Depends(get_db)
@@ -256,8 +262,18 @@ def create_institution_api_key(
         role = ApiKeyRole(payload.role)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid role: {payload.role}") from exc
-    from tawarruq.services.rbac import API_KEY_ALLOWED_ROLES, can_cross_tenant
+    from tawarruq.services.rbac import (
+        API_KEY_ALLOWED_ROLES,
+        auth_is_enabled,
+        can_cross_tenant,
+        is_platform_admin,
+    )
 
+    if auth_is_enabled(request) and not is_platform_admin(request):
+        raise HTTPException(
+            status_code=403,
+            detail="Only Super Admin can create API keys. Request BTI to onboard the institution key.",
+        )
     if role not in API_KEY_ALLOWED_ROLES:
         raise HTTPException(
             status_code=400,
@@ -281,7 +297,13 @@ def create_institution_api_key(
     )
 
 
-@router.get("/institutions/{institution_id}/api-keys", response_model=list[ApiKeyRead], tags=["Institutions"])
+@router.get(
+    "/institutions/{institution_id}/api-keys",
+    response_model=list[ApiKeyRead],
+    tags=["Institutions"],
+    summary="List institution API keys",
+    description="Prefixes only. Creating keys is Super Admin only; this list is available to callers with tenant access.",
+)
 def get_institution_api_keys(
     institution_id: str, request: Request, db: Session = Depends(get_db)
 ) -> list[ApiKeyRead]:

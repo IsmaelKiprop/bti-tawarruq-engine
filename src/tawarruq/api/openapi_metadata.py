@@ -145,7 +145,13 @@ Per-institution credentials: `Institution Integrations` tag. See INTEGRATIONS.md
 
 ### Authentication
 
-Set `AUTH_ENABLED=true` and pass `X-API-Key` header (tenant-scoped). Default local dev: auth off.
+Set `AUTH_ENABLED=true` and pass `X-API-Key` (machine) or `Authorization: Bearer` (ops session). Default local dev: auth off.
+
+In Swagger (`/docs`): `POST /ops/auth/login` → copy `access_token` → **Authorize** → BearerAuth. Change password first if `must_change_password` is true, then Authorize with the new token.
+
+**Portal invites** (`POST /ops/auth/users`): only Super Admin (`platform_admin`) and FI Admin (`institution_admin`) may create users. Super Admin may invite Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon — not FI Ops or FI Approver. FI Admin may invite FI Admin, FI Ops, FI Approver, Shariah, Recon for their own tenant — not BTI-internal roles. The same rules apply to `PATCH` role.
+
+**API keys** (`POST /institutions/{id}/api-keys`): Super Admin only. FI Admin cannot issue keys; request BTI to onboard. Preferred machine role is `api_client`.
 
 ---
 
@@ -164,7 +170,7 @@ OPENAPI_TAGS = [
     },
     {
         "name": "Institutions",
-        "description": "Banks/Saccos. Each tenant has BSAS mode, API keys, and integration profile.",
+        "description": "Banks/Saccos. Each tenant has BSAS mode, API keys (Super Admin creates keys), and integration profile.",
     },
     {
         "name": "Applications",
@@ -224,6 +230,6 @@ OPENAPI_TAGS = [
     },
     {
         "name": "Production Ops",
-        "description": "RBAC auth context, operational metrics dashboard, and Prometheus `/metrics` scrape endpoint.",
+        "description": "Portal login, MFA, user invites (who may create whom), operational metrics, and Prometheus `/metrics`.",
     },
 ]

@@ -191,7 +191,8 @@ Set `SHARIAH_AUDIT_SERVICE_URL=http://localhost:8001` in `.env` so the engine mi
 |--------|------|-------------|
 | PUT | `/api/v1/institutions/{id}/integrations` | Per-tenant Daraja/MNO credentials |
 | POST | `/api/v1/webhooks` | Outbound event webhooks |
-| POST | `/api/v1/institutions/{id}/api-keys` | Tenant API keys (`AUTH_ENABLED=true`) |
+| POST | `/api/v1/ops/auth/users` | Invite portal user (Super Admin / FI Admin; role depends on caller) |
+| POST | `/api/v1/institutions/{id}/api-keys` | Tenant API keys — Super Admin only (`AUTH_ENABLED=true`) |
 | GET | `/api/v1/audit/export` | Operational audit CSV (`export_data`) |
 | GET/POST | `/api/v1/ops/approvals` | Maker-checker queue, approve, reject |
 | GET/POST | `/api/v1/ops/billing/invoices` | Usage invoices (volume × fee bps) |

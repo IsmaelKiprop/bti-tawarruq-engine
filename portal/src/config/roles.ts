@@ -27,6 +27,49 @@ export const PORTAL_ROLE_OPTIONS: { value: OpsRole; label: string; btiOnly?: boo
   { value: "agent_dealer", label: "Agent dealer (Kenya float desk)" },
 ];
 
+/** Who may invite whom. read_only and agent_dealer stay off the invite form. */
+export const INVITE_TARGETS_BY_CREATOR: Record<string, OpsRole[]> = {
+  platform_admin: [
+    "platform_admin",
+    "institution_admin",
+    "bti_ops",
+    "shariah_officer",
+    "bti_finance",
+    "reconciler",
+  ],
+  institution_admin: [
+    "institution_admin",
+    "institution_ops",
+    "fi_approver",
+    "shariah_officer",
+    "reconciler",
+  ],
+};
+
+const PLATFORM_SCOPED_INVITE_ROLES: OpsRole[] = ["platform_admin", "bti_ops", "bti_finance"];
+
+export function inviteRoleOptions(creatorRole?: string | null) {
+  const allowed = INVITE_TARGETS_BY_CREATOR[creatorRole || ""];
+  const values = allowed
+    ? allowed
+    : Array.from(
+        new Set([
+          ...INVITE_TARGETS_BY_CREATOR.platform_admin,
+          ...INVITE_TARGETS_BY_CREATOR.institution_admin,
+        ]),
+      );
+  return PORTAL_ROLE_OPTIONS.filter((opt) => values.includes(opt.value));
+}
+
+export function defaultInviteRole(creatorRole?: string | null): OpsRole {
+  if (creatorRole === "platform_admin") return "institution_admin";
+  return "institution_ops";
+}
+
+export function inviteNeedsInstitution(role: string): boolean {
+  return !PLATFORM_SCOPED_INVITE_ROLES.includes(role as OpsRole);
+}
+
 type NavVisibility = {
   to: string;
   permission?: string;

@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from sqlalchemy import text
@@ -34,6 +35,47 @@ from tawarruq.services.metrics_service import collect_ops_metrics, render_promet
 from tawarruq.services.monitoring import RequestMetricsMiddleware
 
 logger = logging.getLogger(__name__)
+
+
+def _attach_swagger_security(app: FastAPI) -> None:
+    """Show Authorize in /docs so testers can paste a Bearer session or X-API-Key."""
+
+    def custom_openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+        )
+        schema.setdefault("components", {})
+        schema["components"]["securitySchemes"] = {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": "Ops session. Login at POST /ops/auth/login, then paste access_token here.",
+            },
+            "ApiKeyAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-API-Key",
+                "description": "Machine key. Super Admin creates these on POST /institutions/{id}/api-keys.",
+            },
+        }
+        schema["security"] = [{"BearerAuth": []}, {"ApiKeyAuth": []}]
+        public_suffixes = ("/ops/auth/login", "/ops/auth/mfa", "/health")
+        for path, methods in schema.get("paths", {}).items():
+            if any(path.endswith(suffix) for suffix in public_suffixes):
+                for operation in methods.values():
+                    if isinstance(operation, dict):
+                        operation["security"] = []
+        app.openapi_schema = schema
+        return schema
+
+    app.openapi = custom_openapi
 
 
 @asynccontextmanager
@@ -95,6 +137,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+    _attach_swagger_security(app)
 
     # Inner middlewares first; CORS must be outermost so 401/403 still get ACAO headers.
     settings = get_settings()
@@ -183,6 +226,7 @@ def create_app() -> FastAPI:
                 "displayRequestDuration": True,
                 "filter": True,
                 "tryItOutEnabled": True,
+                "persistAuthorization": True,
             },
         )
 

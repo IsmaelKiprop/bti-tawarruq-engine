@@ -46,6 +46,7 @@ from tawarruq.services.rbac import (
     PLATFORM_SCOPED_ROLES,
     PRIVILEGED_MFA_ROLES,
     ROLE_PERMISSIONS,
+    assert_may_invite,
     can_cross_tenant,
     get_request_role,
     has_permission,
@@ -258,6 +259,13 @@ def get_ops_users(request: Request, db: Session = Depends(get_db)) -> list[OpsUs
     response_model=OpsUserCreatedRead,
     status_code=201,
     summary="Invite ops user: create account, email temporary password via SMTP",
+    description=(
+        "Requires manage_credentials. Super Admin may invite platform_admin, institution_admin, "
+        "bti_ops, shariah_officer, bti_finance, reconciler (not institution_ops or fi_approver). "
+        "FI Admin may invite institution_admin, institution_ops, fi_approver, shariah_officer, "
+        "reconciler for their own tenant. Tenant-scoped roles need institution_id when the caller "
+        "is Super Admin."
+    ),
 )
 def create_ops_user_endpoint(
     payload: OpsUserCreate, request: Request, db: Session = Depends(get_db)
@@ -268,8 +276,7 @@ def create_ops_user_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"Invalid role: {payload.role}") from exc
 
-    if role in BTI_INTERNAL_ROLES and not is_platform_admin(request):
-        raise HTTPException(status_code=403, detail="Only platform admins can create BTI internal users")
+    assert_may_invite(request, role)
 
     institution_id = payload.institution_id
     if role in PLATFORM_SCOPED_ROLES:
@@ -343,6 +350,10 @@ def _managed_user(request: Request, db: Session, user_id: str) -> OpsUser:
     "/ops/auth/users/{user_id}",
     response_model=OpsUserRead,
     summary="Update ops user name, role, institution, or active flag",
+    description=(
+        "Changing role uses the same invite rules as create: you cannot assign a role you are "
+        "not allowed to invite."
+    ),
 )
 def update_ops_user_endpoint(
     user_id: str, payload: OpsUserUpdate, request: Request, db: Session = Depends(get_db)
@@ -354,8 +365,7 @@ def update_ops_user_endpoint(
             role = ApiKeyRole(payload.role)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Invalid role: {payload.role}") from exc
-        if role in BTI_INTERNAL_ROLES and not is_platform_admin(request):
-            raise HTTPException(status_code=403, detail="Only platform admins can assign BTI internal roles")
+        assert_may_invite(request, role)
     institution_id = payload.institution_id
     next_role = role.value if role is not None else target.role
     if next_role in {r.value for r in PLATFORM_SCOPED_ROLES}:

@@ -102,6 +102,24 @@ Full flow reference: [KENYA_FLOW.md](KENYA_FLOW.md)
 
 ---
 
+## 4b. Users and API keys (Swagger)
+
+Open http://localhost:8000/docs (`AUTH_ENABLED=true`). Use **Authorize** after login so Try it out sends the session.
+
+1. **Production Ops → `POST /ops/auth/login`** with Super Admin (`OPS_BOOTSTRAP_ADMIN_EMAIL` / `OPS_BOOTSTRAP_ADMIN_PASSWORD`). Copy `access_token`.
+2. If `must_change_password` is true, run **`POST /ops/auth/change-password`**, then copy the new `access_token`.
+3. Click **Authorize** → **BearerAuth** → paste the token (no `Bearer ` prefix) → Authorize.
+4. **`GET /institutions`** — copy an `id`.
+5. **`POST /ops/auth/users`** as Super Admin with `role: institution_admin` and that `institution_id`. Super Admin cannot invite `institution_ops` or `fi_approver` (expect 403).
+6. Log in as the new FI Admin, change password, Authorize with that token, then **`POST /ops/auth/users`** with `role: institution_ops` or `fi_approver`.
+7. Switch back to Super Admin and **`POST /institutions/{id}/api-keys`** with `role: api_client`. The same call as FI Admin returns 403.
+
+Seeded FI Admin (`fi.admin@…` from `OPS_SEED_EMAIL_DOMAIN`) can skip step 5 if that user already exists. Password is in `data/ops_seed_credentials.txt` unless it was already changed.
+
+Who may invite whom: [USERS_ACCESS_CONTROLS.md](USERS_ACCESS_CONTROLS.md).
+
+---
+
 ## 5. Ops portal
 
 ```powershell

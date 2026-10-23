@@ -73,7 +73,19 @@ Engine codes are the stable API values. Product names are what the Users page sh
 | Agent dealer | `agent_dealer` | Bound dealer pool | `/agent-dealers` |
 | Institution API Client | `api_client` | Machine key | (not a portal login) |
 
-Only Super Admin may assign BTI-internal roles: `platform_admin`, `bti_ops`, `bti_finance`.
+### Who may create whom
+
+Only Super Admin (`platform_admin`) and FI Admin (`institution_admin`) may invite. Extra engine roles (`read_only`, `agent_dealer`) stay off the portal invite form. The same map applies to `PATCH` role — you cannot promote someone into a role you are not allowed to create.
+
+| Creator | May invite |
+|---------|------------|
+| Super Admin | Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon |
+| Super Admin must **not** | FI Ops, FI Approver (FI desk staff are created by the FI Admin) |
+| FI Admin (own tenant) | FI Admin, FI Ops, FI Approver, Shariah, Recon |
+| FI Admin must **not** | Super Admin, BTI Ops, BTI Finance |
+| Everyone else | Nobody |
+
+FI API Client and Sedania stay technical identities, not portal invites. Super Admin provisions API keys on **Webhooks**. FI Admin cannot create keys — they request BTI to onboard.
 
 ### Permission catalogue
 
@@ -83,7 +95,7 @@ Only Super Admin may assign BTI-internal roles: `platform_admin`, `bti_ops`, `bt
 | `write_ops` | Initiate and progress desks (queues checker steps when auth is on) |
 | `write_bti_ops` | Cross-tenant operational exceptions (failed-leg retry) |
 | `approve_txn` | Approve or reject queued Murabaha / liquidation / disbursement |
-| `manage_credentials` | Portal users, webhooks, API keys |
+| `manage_credentials` | Portal users and webhooks. API key **create** is Super Admin only |
 | `manage_integrations` | Partner credential profiles |
 | `manage_institutions` | Tenant lifecycle, suspend, approval policy, fee bps |
 | `manage_billing` | Generate / pay / list invoices |
@@ -149,7 +161,7 @@ Algorithm: RFC 6238, HMAC-SHA1, 30-second step, 6 digits, ±1 window. Issuer lab
 
 ### API keys
 
-Header `X-API-Key` (override with `API_KEY_HEADER`). Create under **Webhooks & Keys** or:
+Header `X-API-Key` (override with `API_KEY_HEADER`). Super Admin creates keys under **Webhooks**. FI Admin is blocked and should request BTI to onboard:
 
 ```http
 POST /api/v1/institutions/{id}/api-keys
@@ -168,7 +180,7 @@ POST   /api/v1/ops/auth/users/{id}/reset-password
 DELETE /api/v1/ops/auth/users/{id}
 ```
 
-Requires `manage_credentials`. Super Admin may create BTI-internal roles. FI Admin may create tenant roles only.
+Requires `manage_credentials` **and** the invite rules (`INVITE_TARGETS_BY_CREATOR` in `rbac.py`). Super Admin cannot invite FI Ops or FI Approver. FI Admin cannot invite BTI-internal roles.
 
 **Invite flow:** create generates a temporary password, sets `must_change_password=true`, emails it via SMTP when `SMTP_HOST` is set (local copy under `CUSTOMER_MAIL_DIR/ops_invites/`). When SMTP succeeds, `temporary_password` is omitted from the API response. When SMTP is off or fails, the password is returned once for out-of-band share. Reset-password uses the same delivery. Deactivated users (`active=false`) cannot log in.
 
@@ -444,8 +456,8 @@ Re-seed anytime: `python -m tawarruq.cli seed-ops-users`. Existing emails are le
 3. Sign in as Super Admin → change password → enroll TOTP at `/mfa-enroll`.
 4. Rotate seed passwords for BTI Ops, Finance, and the default FI users (or disable unused seeds).
 5. On each live FI: set `approval_steps`, `approval_limit_amount`, `billing_fee_bps`.
-6. Create the FI Approver (and optional amount cap) under **Users**.
-7. Issue an `api_client` key to core banking if they submit trades over API.
+6. Invite the FI Admin under **Users**. That FI Admin then invites FI Ops and FI Approver (and optional amount cap). Super Admin does not create FI desk staff.
+7. Super Admin issues an `api_client` key on **Webhooks** if the FI submits trades over API.
 
 ### FI Ops runs a Kenya deal
 
@@ -473,10 +485,12 @@ Reconciler → **Scan trades vs settlement** → filter mismatch/outstanding →
 ```powershell
 cd bti-tawarruq-engine
 $env:PYTHONPATH="src"
-python -m pytest tests/test_controls.py tests/test_rbac.py tests/test_ops_login.py tests/test_auth_scope.py tests/test_kenya_flow.py tests/test_api.py -q
+python -m pytest tests/test_controls.py tests/test_rbac.py tests/test_ops_login.py tests/test_invite_matrix.py tests/test_auth_scope.py tests/test_kenya_flow.py tests/test_api.py -q
 ```
 
 `tests/test_controls.py` covers: Super Admin cannot create applications; queue + self-approve blocked; amount cap; tenant suspend; billing + recon; BTI ops retry; TOTP round-trip.
+
+`tests/test_invite_matrix.py` and `tests/test_ops_login.py` cover who may invite whom: Super Admin invites FI Admin then FI Admin invites FI Ops; Super Admin cannot invite FI Ops or FI Approver; FI Admin cannot invite BTI roles or create API keys; FI Ops cannot invite anyone.
 
 Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it false so they execute immediately.
 
@@ -492,10 +506,11 @@ Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it 
 | Billing | `src/tawarruq/services/billing_service.py` |
 | Reconciliation | `src/tawarruq/services/reconciliation_service.py` |
 | TOTP | `src/tawarruq/services/totp_service.py` |
-| HTTP | `src/tawarruq/api/routes_controls.py`, `routes_ops.py` |
+| HTTP | `src/tawarruq/api/routes_controls.py`, `routes_ops.py`, `routes_extended.py` (API keys Super Admin only) |
+| OpenAPI / Swagger | `src/tawarruq/api/openapi_metadata.py` — invite rules and Super Admin key create |
 | Models | `src/tawarruq/models/controls.py`, `institution.py`, `ops_user.py` |
 | Migration | `alembic/versions/011_controls_billing_mfa.py` |
-| Portal | `portal/src/config/roles.ts`, `navigation.ts`, pages `ApprovalsPage`, `BillingPage`, `ReconciliationPage`, `MfaEnrollPage`, `LoginPage` |
+| Portal | `portal/src/config/roles.ts`, `UsersPage`, `WebhooksPage`, `navigation.ts`, pages `ApprovalsPage`, `BillingPage`, `ReconciliationPage`, `MfaEnrollPage`, `LoginPage` |
 | Catalogue generator | `scripts/build_users_doc.py` |
 
 ---

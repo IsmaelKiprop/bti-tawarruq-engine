@@ -132,6 +132,57 @@ CROSS_TENANT_ROLES = frozenset(
     }
 )
 
+# Only Super Admin and FI Admin may invite.
+# Super Admin does not create FI Ops or FI Approver. Those sit with the FI Admin.
+INVITE_TARGETS_BY_CREATOR: dict[ApiKeyRole, frozenset[ApiKeyRole]] = {
+    ApiKeyRole.PLATFORM_ADMIN: frozenset(
+        {
+            ApiKeyRole.PLATFORM_ADMIN,
+            ApiKeyRole.INSTITUTION_ADMIN,
+            ApiKeyRole.BTI_OPS,
+            ApiKeyRole.SHARIAH_OFFICER,
+            ApiKeyRole.BTI_FINANCE,
+            ApiKeyRole.RECONCILER,
+        }
+    ),
+    ApiKeyRole.INSTITUTION_ADMIN: frozenset(
+        {
+            ApiKeyRole.INSTITUTION_ADMIN,
+            ApiKeyRole.INSTITUTION_OPS,
+            ApiKeyRole.FI_APPROVER,
+            ApiKeyRole.SHARIAH_OFFICER,
+            ApiKeyRole.RECONCILER,
+        }
+    ),
+}
+
+
+def may_invite(actor_role: ApiKeyRole | None, target_role: ApiKeyRole) -> bool:
+    if actor_role is None:
+        return False
+    return target_role in INVITE_TARGETS_BY_CREATOR.get(actor_role, frozenset())
+
+
+def assert_may_invite(request: Request, target_role: ApiKeyRole) -> None:
+    """Block invites and role changes the caller is not allowed to make. Skipped when AUTH_ENABLED is off."""
+    if not auth_is_enabled(request):
+        return
+    actor = get_request_role(request)
+    if may_invite(actor, target_role):
+        return
+    actor_name = actor.value if actor else "none"
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            f"Not allowed to invite {target_role.value}. "
+            "FI Operations and FI Approver are invited by the FI Administrator."
+            if actor == ApiKeyRole.PLATFORM_ADMIN
+            and target_role in {ApiKeyRole.INSTITUTION_OPS, ApiKeyRole.FI_APPROVER}
+            else f"Not allowed to invite {target_role.value} (role={actor_name})."
+        ),
+    )
+
+
 API_KEY_ALLOWED_ROLES = frozenset(
     {
         ApiKeyRole.PLATFORM_ADMIN,

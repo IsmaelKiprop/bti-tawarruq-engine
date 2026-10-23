@@ -38,6 +38,49 @@ def _client():
     return TestClient(app)
 
 
+def _login(client, email: str, password: str) -> dict:
+    login = client.post("/api/v1/ops/auth/login", json={"email": email, "password": password})
+    assert login.status_code == 200, login.text
+    return login.json()
+
+
+def _change_password(client, token: str, current: str, new: str) -> dict:
+    changed = client.post(
+        "/api/v1/ops/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": current, "new_password": new},
+    )
+    assert changed.status_code == 200, changed.text
+    return changed.json()
+
+
+def _super_admin_headers(client) -> tuple[dict, str]:
+    login = _login(client, "admin@bti.local", "ChangeMeNow!123")
+    headers = {"Authorization": f"Bearer {login['access_token']}"}
+    if login.get("must_change_password"):
+        changed = _change_password(client, login["access_token"], "ChangeMeNow!123", "NewSecurePass!99")
+        headers = {"Authorization": f"Bearer {changed['access_token']}"}
+    institution_id = client.get("/api/v1/institutions", headers=headers).json()[0]["id"]
+    return headers, institution_id
+
+
+def _invite_fi_admin(client, headers: dict, institution_id: str, email="fi.admin@bank.local") -> tuple[str, str]:
+    created = client.post(
+        "/api/v1/ops/auth/users",
+        headers=headers,
+        json={
+            "email": email,
+            "full_name": "FI Admin",
+            "role": "institution_admin",
+            "institution_id": institution_id,
+        },
+    )
+    assert created.status_code == 201, created.text
+    temp = created.json()["temporary_password"]
+    assert temp
+    return created.json()["id"], temp
+
+
 def test_ops_login_change_password_and_create_user():
     client = _client()
 
@@ -76,9 +119,14 @@ def test_ops_login_change_password_and_create_user():
     assert institutions.status_code == 200
     institution_id = institutions.json()[0]["id"]
 
+    _, fi_temp = _invite_fi_admin(client, headers, institution_id, email="ops.admin@bank.local")
+    fi_login = _login(client, "ops.admin@bank.local", fi_temp)
+    fi_changed = _change_password(client, fi_login["access_token"], fi_temp, "FiAdminPass!22")
+    fi_headers = {"Authorization": f"Bearer {fi_changed['access_token']}"}
+
     created = client.post(
         "/api/v1/ops/auth/users",
-        headers=headers,
+        headers=fi_headers,
         json={
             "email": "ops.user@bank.local",
             "full_name": "Ops User",
@@ -86,7 +134,7 @@ def test_ops_login_change_password_and_create_user():
             "institution_id": institution_id,
         },
     )
-    assert created.status_code == 201
+    assert created.status_code == 201, created.text
     temp = created.json()["temporary_password"]
     assert temp
 
@@ -100,19 +148,7 @@ def test_ops_login_change_password_and_create_user():
 
 def test_ops_user_update_reset_and_delete():
     client = _client()
-    login = client.post(
-        "/api/v1/ops/auth/login",
-        json={"email": "admin@bti.local", "password": "ChangeMeNow!123"},
-    )
-    token = login.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-    changed = client.post(
-        "/api/v1/ops/auth/change-password",
-        headers=headers,
-        json={"current_password": "ChangeMeNow!123", "new_password": "NewSecurePass!99"},
-    )
-    headers = {"Authorization": f"Bearer {changed.json()['access_token']}"}
-    institution_id = client.get("/api/v1/institutions", headers=headers).json()[0]["id"]
+    headers, institution_id = _super_admin_headers(client)
 
     created = client.post(
         "/api/v1/ops/auth/users",
@@ -120,7 +156,7 @@ def test_ops_user_update_reset_and_delete():
         json={
             "email": "desk@bank.local",
             "full_name": "Desk User",
-            "role": "institution_ops",
+            "role": "institution_admin",
             "institution_id": institution_id,
         },
     )
@@ -242,8 +278,8 @@ def test_invite_user_emails_temp_password_via_smtp(monkeypatch, tmp_path):
             headers=headers,
             json={
                 "email": "invited@bank.local",
-                "full_name": "Invited Ops",
-                "role": "institution_ops",
+                "full_name": "Invited Admin",
+                "role": "institution_admin",
                 "institution_id": institution_id,
             },
         )
@@ -272,3 +308,110 @@ def test_invite_user_emails_temp_password_via_smtp(monkeypatch, tmp_path):
         os.environ.pop("SMTP_FROM", None)
         os.environ.pop("CUSTOMER_MAIL_DIR", None)
         get_settings.cache_clear()
+
+
+def test_super_admin_cannot_invite_fi_ops_or_approver():
+    client = _client()
+    headers, institution_id = _super_admin_headers(client)
+
+    for role in ("institution_ops", "fi_approver"):
+        denied = client.post(
+            "/api/v1/ops/auth/users",
+            headers=headers,
+            json={
+                "email": f"{role}@bank.local",
+                "full_name": role,
+                "role": role,
+                "institution_id": institution_id,
+            },
+        )
+        assert denied.status_code == 403, denied.text
+        assert "not allowed to invite" in denied.json()["detail"].lower()
+
+
+def test_fi_admin_cannot_invite_bti_roles():
+    client = _client()
+    headers, institution_id = _super_admin_headers(client)
+    _, fi_temp = _invite_fi_admin(client, headers, institution_id)
+    fi_login = _login(client, "fi.admin@bank.local", fi_temp)
+    fi_changed = _change_password(client, fi_login["access_token"], fi_temp, "FiAdminPass!22")
+    fi_headers = {"Authorization": f"Bearer {fi_changed['access_token']}"}
+
+    for role in ("platform_admin", "bti_ops", "bti_finance"):
+        denied = client.post(
+            "/api/v1/ops/auth/users",
+            headers=fi_headers,
+            json={
+                "email": f"{role}@bank.local",
+                "full_name": role,
+                "role": role,
+            },
+        )
+        assert denied.status_code == 403, denied.text
+        assert "not allowed to invite" in denied.json()["detail"].lower()
+
+
+def test_fi_ops_cannot_invite_anyone():
+    client = _client()
+    headers, institution_id = _super_admin_headers(client)
+    _, fi_temp = _invite_fi_admin(client, headers, institution_id)
+    fi_login = _login(client, "fi.admin@bank.local", fi_temp)
+    fi_changed = _change_password(client, fi_login["access_token"], fi_temp, "FiAdminPass!22")
+    fi_headers = {"Authorization": f"Bearer {fi_changed['access_token']}"}
+
+    ops = client.post(
+        "/api/v1/ops/auth/users",
+        headers=fi_headers,
+        json={
+            "email": "desk.ops@bank.local",
+            "full_name": "FI Ops",
+            "role": "institution_ops",
+        },
+    )
+    assert ops.status_code == 201, ops.text
+    ops_temp = ops.json()["temporary_password"]
+    ops_login = _login(client, "desk.ops@bank.local", ops_temp)
+    ops_changed = _change_password(client, ops_login["access_token"], ops_temp, "FiOpsPass!33")
+    ops_headers = {"Authorization": f"Bearer {ops_changed['access_token']}"}
+
+    denied = client.post(
+        "/api/v1/ops/auth/users",
+        headers=ops_headers,
+        json={
+            "email": "another@bank.local",
+            "full_name": "Another",
+            "role": "institution_ops",
+        },
+    )
+    assert denied.status_code == 403, denied.text
+
+
+def test_fi_admin_cannot_create_api_key():
+    client = _client()
+    headers, institution_id = _super_admin_headers(client)
+    _, fi_temp = _invite_fi_admin(client, headers, institution_id)
+    fi_login = _login(client, "fi.admin@bank.local", fi_temp)
+    fi_changed = _change_password(client, fi_login["access_token"], fi_temp, "FiAdminPass!22")
+    fi_headers = {"Authorization": f"Bearer {fi_changed['access_token']}"}
+
+    denied = client.post(
+        f"/api/v1/institutions/{institution_id}/api-keys",
+        headers=fi_headers,
+        json={"name": "should-fail", "role": "api_client"},
+    )
+    assert denied.status_code == 403, denied.text
+    assert "super admin" in denied.json()["detail"].lower()
+
+
+def test_super_admin_cannot_patch_role_outside_matrix():
+    client = _client()
+    headers, institution_id = _super_admin_headers(client)
+    user_id, _ = _invite_fi_admin(client, headers, institution_id, email="desk.lead@bank.local")
+
+    denied = client.patch(
+        f"/api/v1/ops/auth/users/{user_id}",
+        headers=headers,
+        json={"role": "institution_ops"},
+    )
+    assert denied.status_code == 403, denied.text
+    assert "not allowed to invite" in denied.json()["detail"].lower()

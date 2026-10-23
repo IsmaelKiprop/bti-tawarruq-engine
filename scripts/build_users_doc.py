@@ -167,7 +167,8 @@ def build() -> Path:
         [
             "Manage global platform configuration and shared settings.",
             "Create, configure, suspend, or deactivate financial institution tenants.",
-            "Manage BTI staff identities, roles, and permissions (including BTI ops and finance).",
+            "Invite Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, and Recon. Does not invite FI Ops or FI Approver.",
+            "Issue institution API keys for core-banking onboard.",
             "Configure platform-level controls and monitor service health and integrations.",
             "Maintain oversight of platform-wide limits and operational policies.",
         ],
@@ -176,7 +177,8 @@ def build() -> Path:
         doc,
         "Access and control: Powerful administrative actions must be authenticated strongly "
         "and logged. Super-admin must not be the only path for day-to-day trade execution. "
-        "Only this role may assign other BTI-internal roles or create institutions.",
+        "Only this role may assign other BTI-internal roles, create institutions, or issue API keys. "
+        "FI Operations and FI Approver are invited by the FI Administrator."
     )
 
     add_heading(doc, "3.2 BTI Tawarruq Operations Officer", 2)
@@ -224,9 +226,9 @@ def build() -> Path:
     add_bullets(
         doc,
         [
-            "Manage the institution’s users, roles, and access rights.",
+            "Invite FI Admin, FI Ops, FI Approver, Shariah, and Recon for this institution. Cannot invite BTI Super Admin, BTI Ops, or BTI Finance.",
             "Maintain institution-specific configuration, products, and limits within delegated authority.",
-            "Manage or request API onboarding and integration configuration.",
+            "Request BTI to onboard the institution API key; manage integration configuration.",
             "View institution-level transactions, reports, usage, and fees.",
             "Configure institution approval workflows where supported.",
         ],
@@ -234,7 +236,7 @@ def build() -> Path:
     add_para(
         doc,
         "Access and control: Must not access another institution’s data. Cannot create BTI-internal "
-        "users. High-risk setting changes should be subject to approval where required.",
+        "users or issue API keys. High-risk setting changes should be subject to approval where required.",
     )
 
     add_heading(doc, "3.5 Financial Institution Operations Officer", 2)
@@ -429,7 +431,7 @@ def build() -> Path:
             ["write_bti_ops", "Cross-tenant operational exceptions", "BTI ops, Super Admin"],
             ["approve_txn", "Maker-checker authorization", "FI approver, FI admin (not Super Admin)"],
             ["export_data", "CSV / Shariah pack downloads", "Super Admin, BTI ops, finance, Shariah, reconciler, FI admin"],
-            ["manage_credentials", "Portal users, webhooks, API keys", "FI admin, Super Admin"],
+            ["manage_credentials", "Portal users and webhooks; API key create is Super Admin only", "FI admin, Super Admin"],
             ["manage_integrations", "Partner credential profiles", "FI admin, Super Admin"],
             ["manage_institutions", "Tenant lifecycle", "Super Admin only"],
             ["manage_billing", "Fees and invoices", "BTI finance, Super Admin"],
@@ -464,8 +466,9 @@ def build() -> Path:
         ["Action", "Primary actor", "Data scope", "Control note"],
         [
             ["Manage tenants and global configuration", "BTI Super Admin", "Platform", "Logged; not a trade desk"],
-            ["Manage BTI staff", "BTI Super Admin", "Platform", "Only Super Admin assigns BTI-internal roles"],
-            ["Manage institution users", "FI Admin (or Super Admin)", "Own tenant", "Cannot manage BTI-internal users"],
+            ["Manage BTI staff", "BTI Super Admin", "Platform", "Invites Super Admin, BTI Ops, BTI Finance, Shariah, Recon, FI Admin"],
+            ["Manage institution users", "FI Admin", "Own tenant", "Invites FI Admin, FI Ops, FI Approver, Shariah, Recon. Super Admin does not invite FI Ops or FI Approver"],
+            ["Issue API keys", "BTI Super Admin", "Tenant", "FI Admin requests BTI to onboard"],
             ["Initiate transaction", "FI Ops / API Client", "Own tenant", "write_ops / api_submit"],
             ["Approve transaction / mobile activation", "FI Approver", "Own tenant", "approve_txn; not write_ops"],
             ["Monitor cross-tenant operations", "BTI Ops", "Operationally limited", "No tenant create/suspend"],
@@ -505,7 +508,8 @@ def build() -> Path:
         ["Capability", "Status", "Notes"],
         [
             ["Role enum + permission map", "Live", "src/tawarruq/enums.py, services/rbac.py"],
-            ["Portal Users picker", "Live", "BTI-internal roles only creatable by Super Admin"],
+            ["Portal Users picker", "Live", "Super Admin invites Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon. FI Admin invites FI desk staff. Super Admin does not invite FI Ops or FI Approver"],
+            ["API key onboard", "Live", "Super Admin only; FI Admin requests BTI"],
             ["Tenant isolation + suspend", "Live", "Writes blocked when Institution.active is false"],
             ["BTI Ops vs Super Admin split", "Live", "Super Admin has write_bti_ops, not write_ops/approve_txn"],
             ["Maker-checker Murabaha / liquidation / disbursement", "Live", "write_ops queues; approve_txn executes; no self-approve"],

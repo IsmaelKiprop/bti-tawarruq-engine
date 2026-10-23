@@ -349,6 +349,7 @@ def _ensure_sedania_financing_columns() -> None:
     existing = {col["name"] for col in inspector.get_columns("tawarruq_executions")}
     bool_true = "1" if settings.is_sqlite else "TRUE"
     bool_false = "0" if settings.is_sqlite else "FALSE"
+    dt = "DATETIME" if settings.is_sqlite else "TIMESTAMP"
     additions = {
         "path": "ALTER TABLE tawarruq_executions ADD COLUMN path VARCHAR(32) DEFAULT 'sacco' NOT NULL",
         "flow_variant": (
@@ -374,10 +375,10 @@ def _ensure_sedania_financing_columns() -> None:
         "supplier_ref": "ALTER TABLE tawarruq_executions ADD COLUMN supplier_ref VARCHAR(128)",
         "purchaser_ref": "ALTER TABLE tawarruq_executions ADD COLUMN purchaser_ref VARCHAR(128)",
         "muqassah_ref": "ALTER TABLE tawarruq_executions ADD COLUMN muqassah_ref VARCHAR(64)",
-        "muqassah_at": "ALTER TABLE tawarruq_executions ADD COLUMN muqassah_at DATETIME",
+        "muqassah_at": f"ALTER TABLE tawarruq_executions ADD COLUMN muqassah_at {dt}",
         "casa_account": "ALTER TABLE tawarruq_executions ADD COLUMN casa_account VARCHAR(64)",
         "casa_ref": "ALTER TABLE tawarruq_executions ADD COLUMN casa_ref VARCHAR(64)",
-        "casa_credited_at": "ALTER TABLE tawarruq_executions ADD COLUMN casa_credited_at DATETIME",
+        "casa_credited_at": f"ALTER TABLE tawarruq_executions ADD COLUMN casa_credited_at {dt}",
         "cash_disbursement": (
             "ALTER TABLE tawarruq_executions ADD COLUMN cash_disbursement VARCHAR(32) "
             "DEFAULT 'sacco_cbs' NOT NULL"
@@ -388,9 +389,9 @@ def _ensure_sedania_financing_columns() -> None:
         ),
         "physical_delivery_status": "ALTER TABLE tawarruq_executions ADD COLUMN physical_delivery_status VARCHAR(32)",
         "physical_delivery_notified_at": (
-            "ALTER TABLE tawarruq_executions ADD COLUMN physical_delivery_notified_at DATETIME"
+            f"ALTER TABLE tawarruq_executions ADD COLUMN physical_delivery_notified_at {dt}"
         ),
-        "repayment_settled_at": "ALTER TABLE tawarruq_executions ADD COLUMN repayment_settled_at DATETIME",
+        "repayment_settled_at": f"ALTER TABLE tawarruq_executions ADD COLUMN repayment_settled_at {dt}",
     }
     with engine.begin() as conn:
         for name, ddl in additions.items():
