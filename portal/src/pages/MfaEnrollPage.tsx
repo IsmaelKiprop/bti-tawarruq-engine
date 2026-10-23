@@ -14,6 +14,7 @@ export function MfaEnrollPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -32,6 +33,17 @@ export function MfaEnrollPage() {
     };
   }, []);
 
+  async function copySecret() {
+    if (!secret) return;
+    try {
+      await navigator.clipboard.writeText(secret);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -48,24 +60,43 @@ export function MfaEnrollPage() {
     }
   }
 
+  const qrSrc = url
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(url)}`
+    : "";
+
   return (
     <div className="login-shell">
-      <form className="login-card" onSubmit={onSubmit}>
+      <form className="login-card login-card--mfa" onSubmit={onSubmit}>
         <div className="login-brand login-brand--logo">
           <BrandLogo variant="lockup" />
-          <p>Privileged authenticator setup</p>
+          <p>Authenticator setup</p>
         </div>
         <p className="muted">
-          Super Admin, BTI Ops, and BTI Finance must enroll a TOTP authenticator (Google Authenticator,
-          Authy, or similar) before using the portal.
+          Super Admin, BTI Ops, and BTI Finance must add this account to Google Authenticator, Authy, or
+          Microsoft Authenticator before the desks open.
         </p>
+        <ol className="flow-list numbered">
+          <li>Open the authenticator app and tap add account.</li>
+          <li>Scan the QR code. If you cannot scan, copy the secret and add it manually.</li>
+          <li>Type the current 6-digit code below and enable MFA.</li>
+        </ol>
         {secret ? (
-          <label>
-            Secret
-            <input value={secret} readOnly />
-            <span className="meta">Add this key in your authenticator app. URI: {url}</span>
-          </label>
-        ) : null}
+          <div className="mfa-setup">
+            {qrSrc ? (
+              <img className="mfa-qr" src={qrSrc} alt="Scan this QR code in your authenticator app" />
+            ) : null}
+            <label>
+              Manual secret
+              <input value={secret} readOnly />
+              <span className="meta">Use this only if the camera cannot scan the code.</span>
+            </label>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copySecret()}>
+              {copied ? "Copied" : "Copy secret"}
+            </button>
+          </div>
+        ) : (
+          <p className="meta">Preparing your authenticator key…</p>
+        )}
         <label>
           6-digit code
           <input

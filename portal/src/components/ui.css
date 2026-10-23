@@ -439,6 +439,24 @@ textarea,
   color: var(--color-muted);
 }
 
+.login-card--mfa {
+  width: min(480px, 100%);
+}
+
+.mfa-setup {
+  display: grid;
+  gap: 0.65rem;
+  justify-items: start;
+}
+
+.mfa-qr {
+  width: 180px;
+  height: 180px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
 .login-error {
   color: var(--color-destructive);
   margin: 0;
