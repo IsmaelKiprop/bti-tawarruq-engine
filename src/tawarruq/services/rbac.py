@@ -133,15 +133,17 @@ CROSS_TENANT_ROLES = frozenset(
 )
 
 # Only Super Admin and FI Admin may invite.
-# Super Admin does not create FI Ops or FI Approver. Those sit with the FI Admin.
+# Super Admin may staff every portal desk. FI Admin stays on their own institution roles.
 INVITE_TARGETS_BY_CREATOR: dict[ApiKeyRole, frozenset[ApiKeyRole]] = {
     ApiKeyRole.PLATFORM_ADMIN: frozenset(
         {
             ApiKeyRole.PLATFORM_ADMIN,
-            ApiKeyRole.INSTITUTION_ADMIN,
             ApiKeyRole.BTI_OPS,
-            ApiKeyRole.SHARIAH_OFFICER,
             ApiKeyRole.BTI_FINANCE,
+            ApiKeyRole.INSTITUTION_ADMIN,
+            ApiKeyRole.INSTITUTION_OPS,
+            ApiKeyRole.FI_APPROVER,
+            ApiKeyRole.SHARIAH_OFFICER,
             ApiKeyRole.RECONCILER,
         }
     ),
@@ -173,13 +175,7 @@ def assert_may_invite(request: Request, target_role: ApiKeyRole) -> None:
     actor_name = actor.value if actor else "none"
     raise HTTPException(
         status_code=403,
-        detail=(
-            f"Not allowed to invite {target_role.value}. "
-            "FI Operations and FI Approver are invited by the FI Administrator."
-            if actor == ApiKeyRole.PLATFORM_ADMIN
-            and target_role in {ApiKeyRole.INSTITUTION_OPS, ApiKeyRole.FI_APPROVER}
-            else f"Not allowed to invite {target_role.value} (role={actor_name})."
-        ),
+        detail=f"Not allowed to invite {target_role.value} (role={actor_name}).",
     )
 
 

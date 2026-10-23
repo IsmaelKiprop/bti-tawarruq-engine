@@ -13,28 +13,30 @@ export type OpsRole =
   | "read_only"
   | "agent_dealer";
 
-/** Roles selectable when creating a portal login (not api_client). */
+/** Display order for invite and catalogue. Values stay API codes; labels are what the UI shows. */
 export const PORTAL_ROLE_OPTIONS: { value: OpsRole; label: string; btiOnly?: boolean }[] = [
-  { value: "platform_admin", label: "BTI Platform Super Admin", btiOnly: true },
-  { value: "bti_ops", label: "BTI Tawarruq Operations", btiOnly: true },
-  { value: "bti_finance", label: "BTI Finance / Billing", btiOnly: true },
-  { value: "institution_admin", label: "FI Administrator" },
-  { value: "institution_ops", label: "FI Operations Officer" },
-  { value: "fi_approver", label: "FI Approver (maker-checker)" },
-  { value: "shariah_officer", label: "Shariah / Audit (read-only)" },
-  { value: "reconciler", label: "Reconciliation Officer" },
+  { value: "platform_admin", label: "Super Admin", btiOnly: true },
+  { value: "bti_ops", label: "BTI Ops", btiOnly: true },
+  { value: "bti_finance", label: "BTI Finance", btiOnly: true },
+  { value: "institution_admin", label: "FI Admin" },
+  { value: "institution_ops", label: "FI Operations" },
+  { value: "fi_approver", label: "FI Approver" },
+  { value: "shariah_officer", label: "Shariah / Audit" },
+  { value: "reconciler", label: "Reconciliation" },
   { value: "read_only", label: "Read only" },
-  { value: "agent_dealer", label: "Agent dealer (Kenya float desk)" },
+  { value: "agent_dealer", label: "Agent dealer" },
 ];
 
-/** Who may invite whom. read_only and agent_dealer stay off the invite form. */
+/** Who may invite whom. Read only and Agent dealer stay off the invite form. */
 export const INVITE_TARGETS_BY_CREATOR: Record<string, OpsRole[]> = {
   platform_admin: [
     "platform_admin",
-    "institution_admin",
     "bti_ops",
-    "shariah_officer",
     "bti_finance",
+    "institution_admin",
+    "institution_ops",
+    "fi_approver",
+    "shariah_officer",
     "reconciler",
   ],
   institution_admin: [
@@ -48,17 +50,27 @@ export const INVITE_TARGETS_BY_CREATOR: Record<string, OpsRole[]> = {
 
 const PLATFORM_SCOPED_INVITE_ROLES: OpsRole[] = ["platform_admin", "bti_ops", "bti_finance"];
 
+export function roleLabel(role?: string | null): string {
+  if (!role) return "Operator";
+  const named = PORTAL_ROLE_OPTIONS.find((opt) => opt.value === role);
+  if (named) return named.label;
+  return getRoleProfile(role).label;
+}
+
 export function inviteRoleOptions(creatorRole?: string | null) {
   const allowed = INVITE_TARGETS_BY_CREATOR[creatorRole || ""];
-  const values = allowed
-    ? allowed
-    : Array.from(
-        new Set([
+  const values = new Set(
+    allowed
+      ? allowed
+      : [
           ...INVITE_TARGETS_BY_CREATOR.platform_admin,
           ...INVITE_TARGETS_BY_CREATOR.institution_admin,
-        ]),
-      );
-  return PORTAL_ROLE_OPTIONS.filter((opt) => values.includes(opt.value));
+        ],
+  );
+  return PORTAL_ROLE_OPTIONS.filter((opt) => values.has(opt.value)).map((opt) => ({
+    value: opt.value,
+    label: opt.label,
+  }));
 }
 
 export function defaultInviteRole(creatorRole?: string | null): OpsRole {
@@ -90,7 +102,7 @@ export type RoleProfile = {
 
 const ROLE_PROFILES: Record<string, RoleProfile> = {
   platform_admin: {
-    label: "BTI Super Admin",
+    label: "Super Admin",
     scope: "platform",
     workspaceFallback: "All institutions",
     navDescription: "Platform configuration and tenant lifecycle",
@@ -100,7 +112,7 @@ const ROLE_PROFILES: Record<string, RoleProfile> = {
     homePath: "/institutions",
   },
   bti_ops: {
-    label: "BTI Operations",
+    label: "BTI Ops",
     scope: "platform",
     workspaceFallback: "All institutions (ops)",
     navDescription: "Cross-tenant workflow monitoring and exceptions",
@@ -120,7 +132,7 @@ const ROLE_PROFILES: Record<string, RoleProfile> = {
     homePath: "/billing",
   },
   institution_admin: {
-    label: "FI Administrator",
+    label: "FI Admin",
     scope: "institution",
     workspaceFallback: "Your institution",
     navDescription: "Institution users, config, and ops desks",

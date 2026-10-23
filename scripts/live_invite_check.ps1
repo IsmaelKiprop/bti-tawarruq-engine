@@ -73,21 +73,21 @@ $inst = Invoke-Api GET "/institutions" $null $adminToken
 $institutionId = $inst.json[0].id
 Record "list-institutions" ($institutionId -ne $null) $institutionId
 
-$denyOps = Invoke-Api POST "/ops/auth/users" @{
-    email = "deny.ops.$stamp@bank.local"
-    full_name = "Should Fail Ops"
+$allowOps = Invoke-Api POST "/ops/auth/users" @{
+    email = "live.ops.$stamp@bank.local"
+    full_name = "Live FI Ops"
     role = "institution_ops"
     institution_id = $institutionId
 } $adminToken
-Record "super-admin-cannot-invite-fi-ops" ($denyOps.status -eq 403) $denyOps.status
+Record "super-admin-can-invite-fi-ops" ($allowOps.status -eq 201) $allowOps.status
 
-$denyAppr = Invoke-Api POST "/ops/auth/users" @{
-    email = "deny.appr.$stamp@bank.local"
-    full_name = "Should Fail Approver"
+$allowAppr = Invoke-Api POST "/ops/auth/users" @{
+    email = "live.appr.$stamp@bank.local"
+    full_name = "Live FI Approver"
     role = "fi_approver"
     institution_id = $institutionId
 } $adminToken
-Record "super-admin-cannot-invite-fi-approver" ($denyAppr.status -eq 403) $denyAppr.status
+Record "super-admin-can-invite-fi-approver" ($allowAppr.status -eq 201) $allowAppr.status
 
 $fiEmail = "live.fi.$stamp@bank.local"
 $fiCreate = Invoke-Api POST "/ops/auth/users" @{

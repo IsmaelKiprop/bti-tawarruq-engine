@@ -102,7 +102,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "A temporary password is generated and emailed via SMTP when configured.",
       "They must change it on first sign-in before desks open. Activate or deactivate from the list.",
     ],
-    note: "Super Admin invites Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon — not FI Ops or FI Approver. FI Admin invites FI Admin, FI Ops, FI Approver, Shariah, Recon. API keys are Super Admin only.",
+    note: "Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, FI Operations, FI Approver, Shariah / Audit, and Reconciliation. FI Admin may invite the FI desk roles for their institution. API keys are Super Admin only.",
   },
   "/integrations": {
     title: "What integrations are",
@@ -233,7 +233,7 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
     title: "How access works",
     intro: "Invite by email. SMTP delivers the temporary password; first login forces a change.",
     steps: [
-      { n: 1, title: "Pick the role", body: "Only roles your login is allowed to create. Super Admin does not invite FI Ops or FI Approver." },
+      { n: 1, title: "Pick the role", body: "Choose the named role your login may create. Super Admin sees every desk role. FI Admin sees FI desk roles only." },
       { n: 2, title: "Invite", body: "Password is emailed (or shown once if SMTP is off)." },
       { n: 3, title: "They sign in", body: "Forced password change, then the desks." },
     ],

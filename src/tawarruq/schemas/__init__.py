@@ -208,9 +208,10 @@ class OpsUserCreate(BaseModel):
     role: str = Field(
         'institution_admin',
         description=(
-            'Allowed values depend on the caller. Super Admin: platform_admin, institution_admin, '
-            'bti_ops, shariah_officer, bti_finance, reconciler. FI Admin: institution_admin, '
-            'institution_ops, fi_approver, shariah_officer, reconciler.'
+            'Use the API value. Super Admin may invite: Super Admin (platform_admin), BTI Ops (bti_ops), '
+            'BTI Finance (bti_finance), FI Admin (institution_admin), FI Operations (institution_ops), '
+            'FI Approver (fi_approver), Shariah / Audit (shariah_officer), Reconciliation (reconciler). '
+            'FI Admin may invite: FI Admin, FI Operations, FI Approver, Shariah / Audit, Reconciliation.'
         ),
     )
     institution_id: str | None = None

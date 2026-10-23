@@ -180,7 +180,7 @@ POST   /api/v1/ops/auth/users/{id}/reset-password
 DELETE /api/v1/ops/auth/users/{id}
 ```
 
-Requires `manage_credentials` **and** the invite rules (`INVITE_TARGETS_BY_CREATOR` in `rbac.py`). Super Admin cannot invite FI Ops or FI Approver. FI Admin cannot invite BTI-internal roles.
+Requires `manage_credentials` **and** the invite rules (`INVITE_TARGETS_BY_CREATOR` in `rbac.py`). Super Admin may invite every desk role except Read only, Agent dealer, and API client. FI Admin cannot invite BTI-internal roles.
 
 **Invite flow:** create generates a temporary password, sets `must_change_password=true`, emails it via SMTP when `SMTP_HOST` is set (local copy under `CUSTOMER_MAIL_DIR/ops_invites/`). When SMTP succeeds, `temporary_password` is omitted from the API response. When SMTP is off or fails, the password is returned once for out-of-band share. Reset-password uses the same delivery. Deactivated users (`active=false`) cannot log in.
 
@@ -490,7 +490,7 @@ python -m pytest tests/test_controls.py tests/test_rbac.py tests/test_ops_login.
 
 `tests/test_controls.py` covers: Super Admin cannot create applications; queue + self-approve blocked; amount cap; tenant suspend; billing + recon; BTI ops retry; TOTP round-trip.
 
-`tests/test_invite_matrix.py` and `tests/test_ops_login.py` cover who may invite whom: Super Admin invites FI Admin then FI Admin invites FI Ops; Super Admin cannot invite FI Ops or FI Approver; FI Admin cannot invite BTI roles or create API keys; FI Ops cannot invite anyone.
+`tests/test_invite_matrix.py` and `tests/test_ops_login.py` cover who may invite whom: Super Admin may invite FI Admin, FI Operations, and FI Approver; FI Admin cannot invite BTI roles or create API keys; FI Ops cannot invite anyone.
 
 Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it false so they execute immediately.
 

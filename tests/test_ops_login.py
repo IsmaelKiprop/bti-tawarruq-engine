@@ -310,12 +310,12 @@ def test_invite_user_emails_temp_password_via_smtp(monkeypatch, tmp_path):
         get_settings.cache_clear()
 
 
-def test_super_admin_cannot_invite_fi_ops_or_approver():
+def test_super_admin_can_invite_fi_ops_or_approver():
     client = _client()
     headers, institution_id = _super_admin_headers(client)
 
     for role in ("institution_ops", "fi_approver"):
-        denied = client.post(
+        created = client.post(
             "/api/v1/ops/auth/users",
             headers=headers,
             json={
@@ -325,8 +325,8 @@ def test_super_admin_cannot_invite_fi_ops_or_approver():
                 "institution_id": institution_id,
             },
         )
-        assert denied.status_code == 403, denied.text
-        assert "not allowed to invite" in denied.json()["detail"].lower()
+        assert created.status_code == 201, created.text
+        assert created.json()["role"] == role
 
 
 def test_fi_admin_cannot_invite_bti_roles():
@@ -403,7 +403,7 @@ def test_fi_admin_cannot_create_api_key():
     assert "super admin" in denied.json()["detail"].lower()
 
 
-def test_super_admin_cannot_patch_role_outside_matrix():
+def test_super_admin_cannot_patch_to_machine_role():
     client = _client()
     headers, institution_id = _super_admin_headers(client)
     user_id, _ = _invite_fi_admin(client, headers, institution_id, email="desk.lead@bank.local")
@@ -411,7 +411,7 @@ def test_super_admin_cannot_patch_role_outside_matrix():
     denied = client.patch(
         f"/api/v1/ops/auth/users/{user_id}",
         headers=headers,
-        json={"role": "institution_ops"},
+        json={"role": "api_client"},
     )
     assert denied.status_code == 403, denied.text
     assert "not allowed to invite" in denied.json()["detail"].lower()

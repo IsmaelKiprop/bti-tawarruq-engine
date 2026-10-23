@@ -8,13 +8,15 @@ def test_super_admin_invite_targets():
     actor = ApiKeyRole.PLATFORM_ADMIN
     allowed = {
         ApiKeyRole.PLATFORM_ADMIN,
-        ApiKeyRole.INSTITUTION_ADMIN,
         ApiKeyRole.BTI_OPS,
-        ApiKeyRole.SHARIAH_OFFICER,
         ApiKeyRole.BTI_FINANCE,
+        ApiKeyRole.INSTITUTION_ADMIN,
+        ApiKeyRole.INSTITUTION_OPS,
+        ApiKeyRole.FI_APPROVER,
+        ApiKeyRole.SHARIAH_OFFICER,
         ApiKeyRole.RECONCILER,
     }
-    blocked = {ApiKeyRole.INSTITUTION_OPS, ApiKeyRole.FI_APPROVER, ApiKeyRole.API_CLIENT}
+    blocked = {ApiKeyRole.API_CLIENT, ApiKeyRole.READ_ONLY, ApiKeyRole.AGENT_DEALER}
     assert INVITE_TARGETS_BY_CREATOR[actor] == allowed
     for role in allowed:
         assert may_invite(actor, role)

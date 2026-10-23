@@ -6,9 +6,9 @@ import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageSh
 import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
 import {
   defaultInviteRole,
-  getRoleProfile,
   inviteNeedsInstitution,
   inviteRoleOptions,
+  roleLabel,
 } from "../config/roles";
 import "../components/ui.css";
 
@@ -139,8 +139,8 @@ export function UsersPage() {
         <h2>Invite user</h2>
         <p className="muted" style={{ marginTop: 0 }}>
           {isPlatform
-            ? "Super Admin may invite Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, and Recon. FI Operations and FI Approver are created by the FI Administrator."
-            : "FI Admin may invite FI Admin, FI Operations, FI Approver, Shariah, and Recon for this institution. BTI Super Admin, BTI Ops, and BTI Finance are not available."}
+            ? "Invite Super Admin, BTI Ops, BTI Finance, FI Admin, FI Operations, FI Approver, Shariah / Audit, or Reconciliation. Read only and Agent dealer are not created here."
+            : "Invite FI Admin, FI Operations, FI Approver, Shariah / Audit, or Reconciliation for this institution. Super Admin, BTI Ops, and BTI Finance are not available."}
         </p>
         <form className="grid-2" onSubmit={onInvite}>
           <label>
@@ -220,7 +220,7 @@ export function UsersPage() {
                     <tr key={item.id}>
                       <td>{item.full_name}</td>
                       <td>{item.email}</td>
-                      <td>{getRoleProfile(item.role).label}</td>
+                      <td>{roleLabel(item.role)}</td>
                       <td>{item.approval_limit_amount || "—"}</td>
                       <td>{item.active ? "Yes" : "No"}</td>
                       <td>
