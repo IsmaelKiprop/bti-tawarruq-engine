@@ -57,8 +57,6 @@ With `AUTH_ENABLED=true`, the ops portal uses a login page (not pasted API keys)
 | `shariah@…` | `shariah_officer` |
 | `reconciler@…` | `reconciler` (BTI-wide) |
 | `fi.reconciler@…` | `reconciler` (tenant) |
-| `readonly@…` | `read_only` |
-| `dealer@…` | `agent_dealer` (SEED-DEALER pool) |
 
 ### Environment
 

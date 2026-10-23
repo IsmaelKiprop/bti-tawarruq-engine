@@ -15,9 +15,13 @@ from sqlalchemy.orm import Session
 from tawarruq.config import ENGINE_ROOT, get_settings
 from tawarruq.enums import ApiKeyRole
 from tawarruq.models.institution import Institution
-from tawarruq.models.kenya_flow import AgentDealer
 from tawarruq.services.auth_service import create_api_key, list_api_keys
-from tawarruq.services.ops_user_service import create_ops_user, ensure_bootstrap_admin, get_user_by_email
+from tawarruq.services.ops_user_service import (
+    create_ops_user,
+    delete_ops_user,
+    ensure_bootstrap_admin,
+    get_user_by_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,26 +33,6 @@ class SeededCredential:
     role: str
     secret: str
     created: bool
-
-
-def _ensure_seed_dealer(db: Session, institution: Institution) -> AgentDealer:
-    dealer = db.query(AgentDealer).filter(AgentDealer.code == "SEED-DEALER").first()
-    if dealer:
-        return dealer
-    dealer = AgentDealer(
-        code="SEED-DEALER",
-        business_name="Seed Agent Dealer",
-        mpesa_number="254700000001",
-        mpesa_till_number="123456",
-        float_balance=0,
-        institution_id=institution.id,
-        contact_name="Seed Dealer",
-        contact_phone="254700000001",
-        active=True,
-    )
-    db.add(dealer)
-    db.flush()
-    return dealer
 
 
 def seed_ops_role_catalogue(db: Session) -> list[SeededCredential]:
@@ -124,10 +108,13 @@ def seed_ops_role_catalogue(db: Session) -> list[SeededCredential]:
                 )
             )
 
-    dealer = _ensure_seed_dealer(db, institution)
+    for local in ("readonly", "dealer"):
+        extra = get_user_by_email(db, f"{local}@{domain}")
+        if extra:
+            delete_ops_user(db, extra)
+            logger.info("Removed extra seed login %s", extra.email)
 
     catalogue: list[tuple[str, str, ApiKeyRole, str | None, str | None]] = [
-        # email local-part, full_name, role, institution_id, agent_dealer_id
         ("bti.ops", "BTI Tawarruq Operations", ApiKeyRole.BTI_OPS, None, None),
         ("bti.finance", "BTI Finance Billing", ApiKeyRole.BTI_FINANCE, None, None),
         ("fi.admin", "FI Administrator", ApiKeyRole.INSTITUTION_ADMIN, institution.id, None),
@@ -136,8 +123,6 @@ def seed_ops_role_catalogue(db: Session) -> list[SeededCredential]:
         ("shariah", "Shariah Audit Officer", ApiKeyRole.SHARIAH_OFFICER, institution.id, None),
         ("reconciler", "BTI Reconciliation Officer", ApiKeyRole.RECONCILER, None, None),
         ("fi.reconciler", "FI Reconciliation Officer", ApiKeyRole.RECONCILER, institution.id, None),
-        ("readonly", "Read Only Viewer", ApiKeyRole.READ_ONLY, institution.id, None),
-        ("dealer", "Seed Agent Dealer", ApiKeyRole.AGENT_DEALER, None, dealer.id),
     ]
 
     for local, full_name, role, institution_id, agent_dealer_id in catalogue:

@@ -93,7 +93,6 @@ When `OPS_SEED_USERS=true` (default), missing catalogue users are created. Exist
 | `fi.admin@…` | FI Admin (default tenant) |
 | `fi.ops@…` / `fi.approver@…` | FI Ops / FI Approver |
 | `shariah@…` / `reconciler@…` | Shariah / Recon |
-| `readonly@…` / `dealer@…` | Read-only / Agent dealer |
 
 First login must change the temporary password. Super Admin, BTI Ops, and BTI Finance should enroll TOTP at `/mfa-enroll`.
 

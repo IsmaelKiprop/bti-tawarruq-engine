@@ -439,8 +439,6 @@ Seed emails (domain = `OPS_SEED_EMAIL_DOMAIN`):
 | `shariah@…` | `shariah_officer` |
 | `reconciler@…` | `reconciler` (BTI-wide) |
 | `fi.reconciler@…` | `reconciler` (tenant) |
-| `readonly@…` | `read_only` |
-| `dealer@…` | `agent_dealer` |
 | `seed-api-client` key | `api_client` |
 
 Re-seed anytime: `python -m tawarruq.cli seed-ops-users`. Existing emails are left untouched.
