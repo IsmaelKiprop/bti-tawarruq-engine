@@ -957,7 +957,13 @@ export const api = {
   getAudit: (entityId: string) => request<AuditEvent[]>(`/audit?entity_id=${entityId}`),
 
   listInstitutions: () => request<Institution[]>("/institutions"),
-  createInstitution: (body: { name: string; code: string; bsas_mode?: string }) =>
+  createInstitution: (body: {
+    name: string;
+    code: string;
+    bsas_mode?: string;
+    approval_limit_amount?: string | null;
+    approval_steps?: string;
+  }) =>
     request<Institution>("/institutions", {
       method: "POST",
       body: JSON.stringify(body),

@@ -8,6 +8,15 @@ class InstitutionCreate(BaseModel):
     name: str = Field(..., description='Institution display name', examples=['Demo Islamic Bank'])
     code: str = Field(..., description='Unique institution code', examples=['DIB001'])
     bsas_mode: str = Field('manual_bridge', description='Default BSAS backend: mock | manual_bridge | live', examples=['mock'])
+    approval_limit_amount: Decimal | None = Field(
+        None,
+        description='Bank or SACCO cap for queued deals. Null means no institution cap.',
+        examples=['500000.00'],
+    )
+    approval_steps: str = Field(
+        'murabaha,liquidation,disbursement',
+        description='Comma-separated maker-checker steps: murabaha, liquidation, disbursement. Remove a step to run it immediately.',
+    )
 
 class InstitutionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

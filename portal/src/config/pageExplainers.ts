@@ -19,6 +19,9 @@ export const APPROVAL_LIMIT_FIELD =
 export const INSTITUTION_LIMIT_FIELD =
   "Bank or SACCO cap for queued deals. The engine uses the lower of this and the approver's personal limit. Blank means no institution cap.";
 
+export const MAKER_CHECKER_STEPS_FIELD =
+  "Which actions wait for an FI Approver. Default: murabaha, liquidation, disbursement. Remove a word to run that step immediately.";
+
 export const APPROVAL_LIMIT_DASHBOARD =
   "Approval limit is the maximum deal amount a person may approve. FI Operations starts Murabaha, liquidation, or disbursement. That step queues. FI Approver must approve it. If the deal is larger than their limit, the approve is rejected. There are two places for it: the user (Users) and the institution (Institutions). The engine uses the lower of the two. Leave the user field blank and they inherit the institution limit only. Leave both blank and there is no amount cap. Set a user limit when inviting FI Approver.";
 
@@ -93,14 +96,15 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   },
   "/institutions": {
     title: "What an institution is",
-    lead: "A client bank or SACCO on Buruuj's engine. Buruuj Fintech is the operator, not a row here. Customers, users, and deals are scoped to an institution.",
-    dealTitle: "How a deal uses it",
+    lead: "A client bank or SACCO on Buruuj's engine. Buruuj Fintech is the operator and is not a row here. Customers, users, and deals stay on that bank's book.",
+    dealTitle: "What you set when you register",
     dealSteps: [
-      "Register the bank with a name, unique code, and Malaysia desk mode.",
-      "Open Integrations for its partner credentials, then create its admin on Users.",
-      "Every application and commodity leg then stays on that tenant.",
+      "Name and code identify the bank on certificates, APIs, and audit.",
+      "Malaysia desk mode is the default for palm-oil trades. Kenya float uses Integrations, not this field.",
+      "Maker-checker steps decide which deal actions wait for an FI Approver: murabaha (sale to customer), liquidation (spot sale), disbursement (payout). Default is all three. Remove a word if that step should run immediately.",
+      "Approval limit is the bank-wide cap for those queued deals. Leave blank for no institution cap. An FI Approver also has a personal limit on Users. The engine uses the lower of the two.",
     ],
-    note: "DEFAULT is the demo book and cannot be deleted. Kenya float uses Integrations, not the Malaysia desk field.",
+    note: "DEFAULT is the demo book. You can rename it. You cannot delete it. After create, open Integrations, then invite FI Admin on Users.",
   },
   "/users": {
     title: "What a user is",
@@ -232,12 +236,13 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
   },
   "/institutions": {
     title: "How onboarding works",
-    intro: "Create the tenant before any customer or deal.",
+    intro: "Create the tenant before any customer or deal. Dual control and the amount cap are set on this page.",
     steps: [
-      { n: 1, title: "Register the bank", body: "Name, code, Malaysia desk mode. Optional approval limit is the institution cap for queued deals." },
-      { n: 2, title: "Integrations", body: "Kenya partner credentials." },
-      { n: 3, title: "Users", body: "Institution admin, then ops." },
+      { n: 1, title: "Register the bank", body: "Name, code, Malaysia desk, maker-checker steps, and optional approval limit." },
+      { n: 2, title: "Integrations", body: "Kenya partner credentials for that bank only." },
+      { n: 3, title: "Users", body: "Invite FI Admin, then FI Operations and FI Approver. Set a personal approval limit on the approver if they should sit below the bank cap." },
     ],
+    note: "FI Operations queues the listed steps. FI Approver decides on Approvals. The initiator cannot approve their own item.",
   },
   "/users": {
     title: "How access works",

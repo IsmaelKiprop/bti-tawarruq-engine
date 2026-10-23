@@ -80,7 +80,18 @@ def create_institution(
     if payload.bsas_mode not in valid_modes:
         raise HTTPException(status_code=400, detail=f"bsas_mode must be one of: {', '.join(valid_modes)}")
 
-    institution = Institution(name=payload.name, code=payload.code, bsas_mode=payload.bsas_mode)
+    step_parts = [part.strip().lower() for part in (payload.approval_steps or "").split(",") if part.strip()]
+    unknown_steps = [part for part in step_parts if part not in institution_service.VALID_APPROVAL_STEPS]
+    if unknown_steps:
+        raise HTTPException(status_code=400, detail=f"Unknown approval steps: {', '.join(unknown_steps)}")
+
+    institution = Institution(
+        name=payload.name,
+        code=payload.code,
+        bsas_mode=payload.bsas_mode,
+        approval_limit_amount=payload.approval_limit_amount,
+        approval_steps=",".join(step_parts) or "murabaha,liquidation,disbursement",
+    )
     db.add(institution)
     db.flush()
     log_audit(

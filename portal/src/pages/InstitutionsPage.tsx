@@ -5,8 +5,16 @@ import { useAuth } from "../auth/AuthContext";
 import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
 import { BSAS_MODE_ORDER, getBsasMode } from "../config/institutions";
-import { HOW_IT_WORKS, INSTITUTION_LIMIT_FIELD, PAGE_EXPLAINS } from "../config/pageExplainers";
+import { HOW_IT_WORKS, INSTITUTION_LIMIT_FIELD, MAKER_CHECKER_STEPS_FIELD, PAGE_EXPLAINS } from "../config/pageExplainers";
 import "../components/ui.css";
+
+function formatApprovalSteps(raw?: string | null) {
+  const parts = (raw || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(", ") : "None (runs immediately)";
+}
 
 function BsasModeField({
   value,
@@ -44,6 +52,8 @@ export function InstitutionsPage() {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [bsasMode, setBsasMode] = useState("manual_bridge");
+  const [createLimit, setCreateLimit] = useState("");
+  const [createSteps, setCreateSteps] = useState("murabaha,liquidation,disbursement");
   const [busy, setBusy] = useState(false);
 
   const [editing, setEditing] = useState<Institution | null>(null);
@@ -102,11 +112,15 @@ export function InstitutionsPage() {
         name: name.trim(),
         code: code.trim().toUpperCase(),
         bsas_mode: bsasMode,
+        approval_limit_amount: createLimit.trim() || null,
+        approval_steps: createSteps.trim() || "murabaha,liquidation,disbursement",
       });
       setCreatedId(created.id);
       setMessage(`${created.name} (${created.code}) registered. Next: configure integrations and create ops users.`);
       setName("");
       setCode("");
+      setCreateLimit("");
+      setCreateSteps("murabaha,liquidation,disbursement");
       setInstitutions(await api.listInstitutions());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create institution");
@@ -175,8 +189,9 @@ export function InstitutionsPage() {
             <>
               <h2>Update {editing.name}</h2>
               <p className="muted">
-                Change how this bank appears, or its default Malaysia desk. The code{" "}
-                <code>{editing.code}</code> stays the same because deals and users already point to it.
+                Change how this bank appears, its Malaysia desk, dual-control steps, or amount cap. The
+                code <code>{editing.code}</code> stays the same because deals and users already point to
+                it.
               </p>
               <form className="stack-form" onSubmit={onUpdate}>
                 <label>
@@ -192,11 +207,11 @@ export function InstitutionsPage() {
                     <option value="suspended">Suspended</option>
                   </select>
                 </label>
-                <label>
-                  Maker-checker steps
-                  <input value={editSteps} onChange={(event) => setEditSteps(event.target.value)} />
-                  <span className="meta">Comma-separated: murabaha, liquidation, disbursement</span>
-                </label>
+                  <label>
+                    Maker-checker steps
+                    <input value={editSteps} onChange={(event) => setEditSteps(event.target.value)} />
+                    <span className="meta">{MAKER_CHECKER_STEPS_FIELD}</span>
+                  </label>
                 <label>
                   Approval limit
                   <input value={editLimit} onChange={(event) => setEditLimit(event.target.value)} placeholder="Unlimited if blank" />
@@ -205,6 +220,7 @@ export function InstitutionsPage() {
                 <label>
                   Billing fee (bps)
                   <input value={editFeeBps} onChange={(event) => setEditFeeBps(event.target.value)} />
+                  <span className="meta">Buruuj usage fee in basis points. 25 means 0.25 percent.</span>
                 </label>
                 <div className="actions">
                   <button className="btn btn-primary btn-sm" type="submit" disabled={busyId === editing.id}>
@@ -220,8 +236,9 @@ export function InstitutionsPage() {
             <>
               <h2>Register institution</h2>
               <p className="muted">
-                Add a client bank or SACCO. Buruuj Fintech is the operator and is not registered here.
-                After create, set Integrations, then issue that institution's admin on Users.
+                Add a client bank or SACCO. Set dual control and the bank-wide amount cap here so testers
+                know which steps wait for an FI Approver. After create, open Integrations, then invite FI
+                Admin on Users.
               </p>
               {!canManage ? (
                 <Alert tone="error">Only platform admins can register institutions.</Alert>
@@ -250,6 +267,24 @@ export function InstitutionsPage() {
                     </span>
                   </label>
                   <BsasModeField value={bsasMode} onChange={setBsasMode} />
+                  <label>
+                    Maker-checker steps
+                    <input
+                      value={createSteps}
+                      onChange={(e) => setCreateSteps(e.target.value)}
+                      placeholder="murabaha,liquidation,disbursement"
+                    />
+                    <span className="meta">{MAKER_CHECKER_STEPS_FIELD}</span>
+                  </label>
+                  <label>
+                    Approval limit (optional)
+                    <input
+                      value={createLimit}
+                      onChange={(e) => setCreateLimit(e.target.value)}
+                      placeholder="e.g. 500000"
+                    />
+                    <span className="meta">{INSTITUTION_LIMIT_FIELD}</span>
+                  </label>
                   <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
                     {busy ? "Creating…" : "Create institution"}
                   </button>
@@ -260,19 +295,33 @@ export function InstitutionsPage() {
         </section>
 
         <section className="panel">
-          <h2>What this page is for</h2>
+          <h2>Dual control on this book</h2>
           <p className="muted">
-            An institution is one client book: its customers, users, Kenya float deals, and Malaysia
-            commodity deals. Switch it on the dashboard to see only that bank.
+            Maker-checker steps are the deal actions that wait for a second person. FI Operations starts
+            the step. It queues. FI Approver opens Approvals and approves or rejects. The same person
+            cannot do both.
           </p>
-          <ol className="flow-list numbered">
-            <li>Register the bank here with a name, code, and Malaysia desk mode.</li>
-            <li>Open Integrations for M-Pesa, MNO, or Bursa credentials for that bank only.</li>
-            <li>Create an Institution admin on Users so their staff stay inside this book.</li>
-            <li>Send the temporary password securely. They must change it on first login.</li>
-            <li>DEFAULT is the built-in demo book. You can rename it. You cannot delete it.</li>
-            <li>Delete a bank only when it should leave the platform and its deals can go with it.</li>
-          </ol>
+          <ul className="meta-list">
+            <li>
+              <strong>murabaha.</strong> Sale of the commodity to the customer.
+            </li>
+            <li>
+              <strong>liquidation.</strong> Independent spot sale after wakala.
+            </li>
+            <li>
+              <strong>disbursement.</strong> Paying out after the sale confirms.
+            </li>
+          </ul>
+          <p className="meta">
+            Keep all three for full dual control. Remove a word if that step should execute as soon as
+            FI Operations clicks it. API keys and the mobile app skip the queue.
+          </p>
+          <h3>Approval limit</h3>
+          <p className="muted">
+            This is the bank-wide cap. An FI Approver can also have a personal cap on Users. The engine
+            uses the lower of the two. Example: bank 500000, approver 100000. They can approve up to
+            100000. Leave both blank for no amount cap.
+          </p>
           <h3>Malaysia desk modes</h3>
           <ul className="meta-list">
             {BSAS_MODE_ORDER.map((id) => {
@@ -321,6 +370,8 @@ export function InstitutionsPage() {
                     <th>Name</th>
                     <th>Code</th>
                     <th>Malaysia desk</th>
+                    <th>Maker-checker</th>
+                    <th>Approval limit</th>
                     <th>Status</th>
                     <th>Created</th>
                     <th>Actions</th>
@@ -341,6 +392,8 @@ export function InstitutionsPage() {
                           <code>{item.code}</code>
                         </td>
                         <td data-label="Malaysia desk">{getBsasMode(item.bsas_mode).label}</td>
+                        <td data-label="Maker-checker">{formatApprovalSteps(item.approval_steps)}</td>
+                        <td data-label="Approval limit">{item.approval_limit_amount || "No cap"}</td>
                         <td data-label="Status">{item.active === false ? "Suspended" : "Active"}</td>
                         <td data-label="Created">{new Date(item.created_at).toLocaleString()}</td>
                         <td data-label="Actions">
