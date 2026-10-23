@@ -1,79 +1,180 @@
 # Buruuj Tawarruq Engine
 
-Multi-tenant **Tawarruq-as-a-Service** platform for Buruuj Fintech: Malaysia BSAS commodity flows, Kenya MNO airtime/float financing, **Amanah** AI orchestration, Shariah-compliant audit logging, and customer-facing mobile apps.
+Multi-tenant **Tawarruq-as-a-Service** for Buruuj Fintech. One engine and one ops portal serve banks, SACCOs, and MFIs:
+
+- **Kenya** — MNO float / airtime Tawarruq (eight sealed steps)
+- **Malaysia** — BSAS / Eiger commodity Murabaha (mock, manual bridge, or live)
+- **Sedania AS SIDQ** — bank financing (wakeel + muqassah + CASA, or Rasul, or physical delivery)
+- **SACCO execute** — inbound CBS facility; Buruuj trades and returns certificates; the SACCO pays the member
+
+Plus **Amanah** orchestration, append-only Shariah audit, maker-checker, billing, reconciliation, and the **Buruuj Lend** mobile app.
+
+Public surfaces: ops portal (`ops.buruujfintech.com` / local `:5173`), API (`api.buruujfintech.com` / local `:8000`). End customers are **not** portal users — they stay on FI channels and the customer journey APIs.
 
 ## What is implemented
 
 | Area | Status |
 |------|--------|
-| **Malaysia Tawarruq** | 3-leg BSAS flow (mock / manual_bridge / live), business steps 7–12, Shariah audit |
-| **Sedania AS SIDQ financing** | Approved wakeel + muqassah + CASA, AAOIFI Rasul, or physical delivery (qabd hakiki) |
 | **Kenya float Tawarruq** | Eight-step flow: apply → purchase → possession → Murabaha → Wakala → independent sale → clear → pay / repay |
+| **Malaysia Tawarruq** | 3-leg BSAS / Eiger (`mock` / `manual_bridge` / `live`), desk packets, e-certificate paste |
+| **Sedania AS SIDQ** | Approved wakeel + muqassah + CASA, AAOIFI Rasul, or physical delivery (`qabd hakiki`) |
+| **SACCO execute** | `POST /tawarruq/execute` + HMAC; vaulted certificates; webhook `tawarruq.certificates_ready` |
 | **No-Inah guardrail** | Blocks financier self-liquidation and originating MNO pool buybacks |
-| **Shariah audit ledger** | Append-only hash chain, ORM immutability, Python microservice + regulatory export |
-| **Live integrations** | M-Pesa (Daraja B2C/STK), Safaricom/Airtel airtime, Airtel Money disbursement, broker OTC API |
-| **Multi-tenant** | Per-institution credentials, API keys, webhooks, integration profiles |
-| **Amanah worker** | Auto-advances Kenya/Malaysia legs after eligibility or offer acceptance |
-| **Ops portal** | Dashboard, Sedania/Kenya/Malaysia desks, Users, Approvals, Billing, Reconciliation, MFA |
-| **Users & controls** | Catalogue RBAC, who-may-invite rules, Super Admin API keys, maker-checker, amount limits, tenant suspend, TOTP, usage invoices |
-| **Expo mobile app** | Timiza-style Shariah lending app (`mobile/` · Buruuj Lend) |
-| **Tests** | pytest: Kenya/Malaysia flows, Shariah, No-Inah, RBAC, maker-checker, billing, auth |
+| **Shariah audit** | Append-only hash chain, ORM immutability, optional Python mirror, CSV / pack export |
+| **Live integrations** | M-Pesa Daraja (B2C + STK), Safaricom / Airtel airtime, Airtel Money, broker OTC |
+| **Multi-tenant** | Institutions, per-tenant credentials, webhooks, Super Admin–issued API keys |
+| **Users & controls** | RBAC, who-may-invite rules, maker-checker, amount limits, tenant suspend, TOTP, invoices, recon |
+| **Ops portal** | Role-aware nav: desks, Users, Webhooks, Approvals, Billing, Reconciliation, MFA |
+| **Amanah worker** | Auto-advances Kenya / Malaysia legs after eligibility or offer acceptance |
+| **Expo mobile** | Buruuj Lend (`mobile/`) — email MFA, FI invite / approve, customer journey |
+| **Tests** | pytest: flows, Shariah, No-Inah, RBAC, invites, maker-checker, billing, auth |
 
-## Architecture overview
+## Architecture
 
 ```
-[Expo Mobile App] ──► [Tawarruq Engine API :8000]
+[Expo Mobile App] ──► [Tawarruq Engine API :8000] ◄── [Ops portal :5173]
                               │
          ┌────────────────────┼────────────────────┐
          │                    │                    │
-    [Amanah Worker]    [MNO / M-Pesa / Broker]   [Shariah Audit Service :8001]
+    [Amanah Worker]    [MNO / M-Pesa / Broker]   [Shariah Audit :8001]
          │                    │                    │
     Leg orchestration    Live partner APIs     Append-only ledger mirror
 ```
 
+Auth when `AUTH_ENABLED=true`:
+
+| Identity | How it authenticates |
+|----------|----------------------|
+| Portal human | Email + password → `Authorization: Bearer` session. Privileged roles enroll TOTP. |
+| Machine client | `X-API-Key` (prefer role `api_client`) |
+| SACCO execute | API key + `X-BTI-Timestamp` + `X-BTI-Signature` (HMAC) |
+| Partner callback | `X-Callback-Token` when configured (Daraja / MNO) |
+
+Local lab can set `AUTH_ENABLED=false` so unauthenticated mock flows still run. **Production must set `AUTH_ENABLED=true`.**
+
+## Users, invites, and API keys
+
+Only **Super Admin** (`platform_admin`) and **FI Admin** (`institution_admin`) may invite portal users. The same map applies to `PATCH` role. Extra engine roles (`read_only`, `agent_dealer`) stay off the invite form. FI API Client is a machine identity, not a portal invite.
+
+| Caller | May invite | Must not invite |
+|--------|------------|-----------------|
+| Super Admin | Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon | FI Ops, FI Approver |
+| FI Admin (own tenant) | FI Admin, FI Ops, FI Approver, Shariah, Recon | Super Admin, BTI Ops, BTI Finance |
+| Everyone else | — | Anyone |
+
+| Role | Engine code | Typical home |
+|------|-------------|--------------|
+| BTI Super Admin | `platform_admin` | Institutions (no trade execution) |
+| BTI Operations | `bti_ops` | Kenya / Malaysia / Ops Monitor |
+| BTI Finance | `bti_finance` | Billing |
+| FI Administrator | `institution_admin` | Dashboard, Users |
+| FI Operations | `institution_ops` | Kenya / Malaysia desks |
+| FI Approver | `fi_approver` | Approvals |
+| Shariah / Audit | `shariah_officer` | Shariah |
+| Reconciliation | `reconciler` | Reconciliation |
+| Agent dealer | `agent_dealer` | Float desk only |
+| Institution API Client | `api_client` | Machine key — not a portal login |
+
+**API keys:** Super Admin only, on **Webhooks** (`POST /api/v1/institutions/{id}/api-keys`). Prefer `api_client`. FI Admin cannot create keys — request BTI to onboard. Copy the key and HMAC secret once.
+
+**Invite flow:** `POST /api/v1/ops/auth/users` generates a temporary password, emails it when `SMTP_HOST` is set, and forces a change on first login. Super Admin must send `institution_id` when inviting a tenant role.
+
+Full catalogue: [docs/USERS_ACCESS_CONTROLS.md](docs/USERS_ACCESS_CONTROLS.md) and [docs/BTI_Tawarruq_Users_ver_001.docx](docs/BTI_Tawarruq_Users_ver_001.docx).
+
+### Seeded test logins
+
+When `OPS_SEED_USERS=true` (default), missing catalogue users are created. Existing emails are never overwritten. Secrets for **new** accounts go to `data/ops_seed_credentials.txt` (gitignored).
+
+| Email (domain = `OPS_SEED_EMAIL_DOMAIN`) | Role |
+|------------------------------------------|------|
+| `OPS_BOOTSTRAP_ADMIN_EMAIL` | Super Admin |
+| `bti.ops@…` | BTI Ops |
+| `bti.finance@…` | BTI Finance |
+| `fi.admin@…` | FI Admin (default tenant) |
+| `fi.ops@…` / `fi.approver@…` | FI Ops / FI Approver |
+| `shariah@…` / `reconciler@…` | Shariah / Recon |
+| `readonly@…` / `dealer@…` | Read-only / Agent dealer |
+
+First login must change the temporary password. Super Admin, BTI Ops, and BTI Finance should enroll TOTP at `/mfa-enroll`.
+
+## Maker-checker
+
+When `AUTH_ENABLED=true`, Murabaha, liquidation, and disbursement can queue for an FI Approver (`202`) instead of executing immediately. The initiator cannot approve their own item. Amount cap is `min(institution limit, approver limit)` when both are set.
+
+Immediate execution when auth is off, the caller is `api_client` or a mobile session, or the step is omitted from `institution.approval_steps`.
+
+Portal: FI Ops runs the desk; FI Approver works **Approvals**. Super Admin cannot initiate or approve trades.
+
+## Product flows
+
+### Kenya (eight steps)
+
+Possession **must** be sealed before Murabaha. Wakala **must** be recorded before liquidation. No-Inah blocks sale back to the financier or originating MNO pool.
+
+1. Apply and eligibility — `POST /kenya/customers`, `.../applications`, `.../eligibility`
+2. Float purchase (Leg 1) — MNO or Agent Dealer
+3. Constructive possession
+4. Murabahah: offer, accept, contract, sign, Leg 2 transfer
+5. Wakala
+6. Independent spot sale (Leg 3)
+7. Clearing
+8. Wallet disbursement and repayments
+
+Mock one-click: `POST /kenya/applications/{id}/run-full-flow` when `KENYA_INTEGRATION_MODE=mock`. Customer tracker: `GET /customer/applications/{ref}/journey`. See [docs/KENYA_FLOW.md](docs/KENYA_FLOW.md).
+
 ### Sedania bank financing (AS SIDQ)
 
-Matches the BTI Advisory deck. Portal: **Sedania Financing**. API: `POST /sedania/financing`.
+Portal: **Sedania Financing**. The bank buys telecommunication airtime. SASC is appointed independently. The bank credits CASA. Buruuj is the rail, not the wakeel.
 
-1. Customer signs the financing contract and enters the CMP
-2. Customer may appoint SEDANIA As Salam Capital independently as wakeel (approved) or Rasul (AAOIFI)
-3. Bank purchases telecommunication airtime on AS SIDQ (Purchase Order, Commodity Invoice)
-4. Qabd hukmi via Delivery Order
-5. Murabahah deferred sale and Trading e-Cert
-6. SASC sells to random purchasers, unless the customer keeps the commodity
-7. Approved flow only: muqassah set-off
-8. Bank credits CASA, or SASC arranges physical delivery after full settlement
+| Variant | `flow_variant` | After the independent sale |
+|---------|----------------|----------------------------|
+| Approved | `approved_wakeel` | Muqassah, then CASA |
+| AAOIFI | `aaoifi_rasul` | CASA (no muqassah) |
 
-See [docs/SEDANIA_FINANCING.md](docs/SEDANIA_FINANCING.md).
+`delivery_mode=physical` keeps the commodity with the customer; after full settlement SASC arranges `qabd hakiki`. Documents: Purchase Order, Commodity Invoice, Delivery Order, Trading e-Cert. See [docs/SEDANIA_FINANCING.md](docs/SEDANIA_FINANCING.md).
 
-### Kenya flow (canonical 8 steps)
+### SACCO execute
 
-The customer tracker, Kenya Ops, and Swagger all use this order. Possession **must** be sealed before Murabaha. Wakala **must** be recorded before liquidation.
+`POST /api/v1/tawarruq/execute` (`customer_id`, `amount`, `tenor`) signed with API key + HMAC. Buruuj stamps Wa'd / Wakalah, trades on AS SIDQ, vaults certificates for 7 years, and webhooks `tawarruq.certificates_ready`. **Buruuj never pays SACCO principal.** See [docs/SACCO_EXECUTE.md](docs/SACCO_EXECUTE.md).
 
-1. Facility application and eligibility (`POST /kenya/customers`, `.../applications`, `.../eligibility`)
-2. Float purchase, Leg 1 (`POST /kenya/transactions` then `.../purchase` or `.../agent-dealer-purchase`)
-3. Constructive possession (`POST /kenya/transactions/{id}/possession`)
-4. Murabahah deferred sale: offer, accept, contract, sign, Leg 2 transfer
-5. Agency activation / Wakala (`POST /kenya/applications/{id}/wakala`)
-6. Spot sale to an independent broker, No-Inah enforced (`POST .../liquidate`)
-7. Clearing and settlement (`POST .../complete-settlement`)
-8. Wallet disbursement and repayments (`POST /kenya/disbursements`, `POST /kenya/repayments/{id}/collect`)
+HMAC: `X-BTI-Signature` = `HMAC-SHA256(hmac_secret, "{timestamp}.{raw_body}")` with `X-BTI-Timestamp` (unix seconds).
 
-See [docs/KENYA_FLOW.md](docs/KENYA_FLOW.md) for API and mobile mapping. Swagger: `http://localhost:8000/docs`.
+### Malaysia (BSAS / Eiger)
 
-### Shariah audit
+| Mode | Use |
+|------|-----|
+| `mock` | Local / CI — `POST /malaysia/applications/{id}/run-full-flow` |
+| `manual_bridge` | Pre-live Suq Al-Sila' — desk packet + paste e-certificate |
+| `live` + `MALAYSIA_COMMODITY_DESK=bsas\|eiger` | After partner connectivity |
 
-Immutable append-only ledger with SHA-256 payload hashes and hash-chain tamper detection. State machine blocks phase skips (e.g. liquidation without sealed possession).
+See [docs/MALAYSIA_FLOW.md](docs/MALAYSIA_FLOW.md).
 
-- In-process ledger + ORM guards (no UPDATE/DELETE on audit rows)
-- Optional mirror to **Python** microservice: `shariah-audit-service/app.py`
-- Export: `GET /api/v1/kenya/shariah-audit/export?format=csv|json`
+## Ops portal
 
-See [docs/SHARIAH_AUDIT.md](docs/SHARIAH_AUDIT.md).
+```powershell
+cd portal
+npm install
+npm run dev
+```
+
+Vite proxies `/api` to `http://127.0.0.1:8000`. Nav is permission-based.
+
+| Page | Who |
+|------|-----|
+| `/institutions` | Super Admin — tenants, suspend, approval steps, fee bps |
+| `/users` | Super Admin, FI Admin — invites (filtered by caller) |
+| `/webhooks` | Super Admin issues keys; FI Admin registers callbacks and requests BTI for a key |
+| `/integrations` | Super Admin, FI Admin — Daraja / MNO secrets |
+| `/kenya` `/malaysia` `/sedania` | BTI Ops, FI Admin, FI Ops |
+| `/approvals` | FI Approver, FI Admin |
+| `/billing` | Super Admin, BTI Finance |
+| `/reconciliation` | Super Admin, Reconciler |
+| `/shariah` | Super Admin, BTI Ops, FI Admin, Shariah |
+| `/agent-dealers` | Agent dealer (ops can view; only the dealer tops up) |
 
 ## Quick start
 
-### Local development (SQLite)
+### Local (SQLite)
 
 ```powershell
 cd bti-tawarruq-engine
@@ -81,8 +182,8 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 copy .env.example .env
-# For local dev without partner credentials:
-#   KENYA_INTEGRATION_MODE=mock
+# KENYA_INTEGRATION_MODE=mock
+# AUTH_ENABLED=true   # required to test invites and keys
 
 python -m tawarruq.cli init-db
 python -m tawarruq.cli serve --reload
@@ -91,185 +192,173 @@ python -m tawarruq.cli serve --reload
 | Service | URL |
 |---------|-----|
 | Swagger | http://localhost:8000/docs |
+| ReDoc | http://localhost:8000/redoc |
 | Health | http://localhost:8000/health |
-| Ops portal | http://localhost:5173 (see below) |
-| Shariah audit service | http://localhost:8001/health (optional) |
+| Ops portal | http://localhost:5173 |
+| Shariah audit (optional) | http://localhost:8001/health |
 
-### Ops portal
+### Swagger testing (`AUTH_ENABLED=true`)
 
-```powershell
-cd portal
-npm install
-npm run dev
-```
+1. Open http://localhost:8000/docs
+2. **Production Ops → `POST /ops/auth/login`** (bootstrap email / password from `.env`)
+3. If `must_change_password`, call **`POST /ops/auth/change-password`**, then copy the new `access_token`
+4. **Authorize → BearerAuth** — paste the token only (no `Bearer ` prefix)
+5. `GET /institutions` — copy an `id`
+6. Super Admin: `POST /ops/auth/users` with `role: institution_admin` and that `institution_id`. `institution_ops` / `fi_approver` must 403
+7. Log in as that FI Admin, Authorize, invite `institution_ops` or `fi_approver`
+8. Super Admin: `POST /institutions/{id}/api-keys` with `role: api_client`. The same call as FI Admin must 403
 
-Kenya demo: open **Kenya MNO Flow** — runs eligibility → full mock flow when `KENYA_INTEGRATION_MODE=mock`.
+Step-by-step: [docs/LOCAL_TEST.md](docs/LOCAL_TEST.md). Live script: `powershell -File scripts/live_invite_check.ps1`.
 
-### Expo mobile app
-
-```powershell
-cd mobile
-npm install
-
-# Discover LAN IP: ipconfig  →  IPv4 Address
-$env:EXPO_PUBLIC_API_URL="http://<your-lan-ip>:8000/api/v1"
-npx expo start
-```
-
-Engine must listen on all interfaces for a physical device:
-
-```powershell
-python -m tawarruq.cli serve --host 0.0.0.0 --port 8000
-```
-
-In the app: **Settings** → paste the LAN URL → **Test** → **Get financing**.
-
-See [mobile/README.md](mobile/README.md). Smoke-test without a phone:
-
-```powershell
-python scripts/test_mobile_api_flow.py
-```
-
-### Docker Compose (PostgreSQL + Shariah service)
+### Docker Compose (PostgreSQL)
 
 ```powershell
 docker compose up --build
 ```
 
-Runs: Postgres, API (`:8000`), Shariah audit (`:8001`), portal (`:5173`).
+API `:8000`, Postgres `:5432`, Shariah audit `:8001`, portal image on `:15173`. For local portal against compose API, run `npm run dev` in `portal/` (proxies to `:8000`).
 
-### Shariah audit service (standalone)
+Set `AUTH_ENABLED=true` in compose. Alembic through `011` (controls, billing, MFA). SQLite `init_db` also adds missing columns; Postgres datetime columns use `TIMESTAMP`.
+
+### Mobile
 
 ```powershell
-$env:SHARIAH_AUDIT_DATABASE_URL="sqlite:///./data/shariah_audit.db"
-python shariah-audit-service/app.py
+cd mobile
+npm install
+$env:EXPO_PUBLIC_API_URL="http://<your-lan-ip>:8000/api/v1"
+npx expo start
 ```
 
-Set `SHARIAH_AUDIT_SERVICE_URL=http://localhost:8001` in `.env` so the engine mirrors audit entries.
+Engine must listen on `0.0.0.0`. See [mobile/README.md](mobile/README.md). Smoke: `python scripts/test_mobile_api_flow.py`.
 
 ## Key API surfaces
 
-### Malaysia (BSAS)
+Prefix all paths with `/api/v1`.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/applications` | Create financing application |
-| POST | `/api/v1/applications/{id}/offer` | Generate offer |
-| POST | `/api/v1/applications/{id}/accept` | Accept offer |
-| POST | `/api/v1/transactions` | Start 3-leg transaction (`mode`: mock / manual_bridge / live) |
-| POST | `/api/v1/transactions/{id}/legs/{purchase\|transfer\|sale}` | Execute leg |
-| GET | `/api/v1/applications/{id}/shariah-audit` | Shariah trail |
+### Auth and users
 
-### Kenya MNO
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/ops/auth/login` | `{ email, password }` → `access_token` |
+| POST | `/ops/auth/change-password` | Required when `must_change_password` |
+| POST | `/ops/auth/mfa` / `/mfa/enroll` / `/mfa/confirm` | Privileged TOTP |
+| GET | `/ops/auth/me` | Role and permissions |
+| GET/POST | `/ops/auth/users` | Invite — Super Admin / FI Admin only |
+| PATCH | `/ops/auth/users/{id}` | Role change uses the same invite rules |
+| POST | `/institutions/{id}/api-keys` | Super Admin only |
+
+### Kenya
 
 | Method | Path | Step |
 |--------|------|------|
-| POST | `/api/v1/kenya/customers` | Register customer |
-| POST | `/api/v1/kenya/applications` | Financing request |
-| POST | `/api/v1/kenya/applications/{id}/eligibility` | Eligibility check |
-| POST | `/api/v1/kenya/transactions` | Start MNO transaction |
-| POST | `/api/v1/kenya/transactions/{id}/purchase` | Leg 1 purchase |
-| POST | `/api/v1/kenya/transactions/{id}/possession` | Verify possession |
-| GET | `/api/v1/kenya/applications/{id}/offer` | Offer summary |
-| POST | `/api/v1/kenya/applications/{id}/offer` | Generate offer |
-| POST | `/api/v1/kenya/applications/{id}/accept` | Accept offer |
-| POST | `/api/v1/kenya/applications/{id}/murabaha` | Create contract |
-| POST | `/api/v1/kenya/applications/{id}/murabaha/sign` | Customer signature |
-| POST | `/api/v1/kenya/transactions/{id}/transfer` | Leg 2 transfer |
-| POST | `/api/v1/kenya/applications/{id}/wakala` | Wakala consent |
-| POST | `/api/v1/kenya/transactions/{id}/liquidate` | Leg 3 liquidation |
-| POST | `/api/v1/kenya/applications/{id}/complete-settlement` | Liquidate + disburse + schedule |
-| GET | `/api/v1/kenya/applications/{id}/repayments` | Repayment schedule |
-| POST | `/api/v1/kenya/repayments/{id}/collect` | Collect installment (STK) |
-| GET | `/api/v1/kenya/applications/{id}/shariah-audit/verify` | Integrity check |
-| GET | `/api/v1/kenya/shariah-audit/export` | Regulatory export |
-| POST | `/api/v1/kenya/applications/{id}/run-full-flow` | Mock one-click demo |
+| POST | `/kenya/customers` | Register |
+| POST | `/kenya/applications` | Financing request |
+| POST | `/kenya/applications/{id}/eligibility` | Eligibility |
+| POST | `/kenya/transactions` then `.../purchase` | Leg 1 |
+| POST | `/kenya/transactions/{id}/possession` | Possession |
+| POST | `/kenya/applications/{id}/offer` → `.../accept` → `.../murabaha` | Murabaha |
+| POST | `/kenya/applications/{id}/wakala` | Wakala |
+| POST | `/kenya/transactions/{id}/liquidate` | Leg 3 |
+| POST | `/kenya/applications/{id}/complete-settlement` | Clear + pay |
+| POST | `/kenya/applications/{id}/run-full-flow` | Mock demo |
+| GET | `/kenya/shariah-audit/export` | Regulatory pack |
 
-### Platform
+### Sedania / SACCO
 
-| Method | Path | Description |
-|--------|------|-------------|
-| PUT | `/api/v1/institutions/{id}/integrations` | Per-tenant Daraja/MNO credentials |
-| POST | `/api/v1/webhooks` | Outbound event webhooks |
-| POST | `/api/v1/ops/auth/users` | Invite portal user. Super Admin / FI Admin only; role depends on caller |
-| POST | `/api/v1/institutions/{id}/api-keys` | Tenant API keys — Super Admin only (`AUTH_ENABLED=true`) |
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/sedania/financing` | Bank CMP on AS SIDQ |
+| GET | `/sedania/financing/{id}/documents/{kind}` | Trade pack |
+| POST | `/sedania/financing/{id}/settle` | Then optional `.../physical-delivery` |
+| POST | `/tawarruq/execute` | SACCO inbound (HMAC) |
+| GET | `/tawarruq/certificates/{id}` | Vaulted certificate |
 
-### Who may invite whom
+### Malaysia
 
-Only Super Admin and FI Admin can create portal users. The same rules apply when changing a user’s role. `read_only` and `agent_dealer` stay off the invite form.
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/applications` → `.../offer` → `.../accept` | Application |
+| POST | `/transactions` | `mode`: mock / manual_bridge / live |
+| POST | `/transactions/{id}/legs/{purchase\|transfer\|sale}` | Legs |
+| POST | `/malaysia/applications/{id}/run-full-flow` | Mock E2E |
+| POST | `/manual-bridge/transactions/{id}/advance` | Desk packet |
 
-| Caller | May invite | Must not invite |
-|--------|------------|-----------------|
-| Super Admin | Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon | FI Ops, FI Approver |
-| FI Admin (own tenant) | FI Admin, FI Ops, FI Approver, Shariah, Recon | Super Admin, BTI Ops, BTI Finance |
-| Everyone else | — | Anyone |
+### Controls
 
-API keys are not portal invites. Super Admin issues them on **Webhooks** (`POST /institutions/{id}/api-keys`, prefer `api_client`). FI Admin cannot create keys — request BTI to onboard.
+| Method | Path | Notes |
+|--------|------|-------|
+| PUT | `/institutions/{id}/integrations` | Daraja / MNO secrets |
+| POST | `/webhooks` | Outbound callbacks |
+| GET/POST | `/ops/approvals` | Maker-checker |
+| GET/POST | `/ops/billing/invoices` | Usage invoices |
+| GET/POST | `/ops/reconciliation` | Settlement match |
+| GET | `/audit/export` | Operational CSV (`export_data`) |
+| GET | `/health` | Flags including `auth_enabled`, `database_ok` |
+| GET | `/metrics` | Prometheus (public scrape) |
 
-**Swagger** (`http://localhost:8000/docs`, `AUTH_ENABLED=true`): `POST /ops/auth/login` → copy `access_token` → **Authorize** → BearerAuth (no `Bearer ` prefix). Change password first if `must_change_password` is true. Then try the invite and key endpoints above. Walkthrough: [docs/LOCAL_TEST.md](docs/LOCAL_TEST.md). Full roles: [docs/USERS_ACCESS_CONTROLS.md](docs/USERS_ACCESS_CONTROLS.md).
-| GET | `/api/v1/audit/export` | Operational audit CSV (`export_data`) |
-| GET/POST | `/api/v1/ops/approvals` | Maker-checker queue, approve, reject |
-| GET/POST | `/api/v1/ops/billing/invoices` | Usage invoices (volume × fee bps) |
-| GET/POST | `/api/v1/ops/reconciliation` | Scan trades vs disbursements |
+## Configuration
+
+Copy `.env.example` to `.env`.
+
+| Variable | Purpose |
+|----------|---------|
+| `AUTH_ENABLED` | Enforce RBAC. Production: `true` |
+| `OPS_SESSION_SECRET` | Sign portal sessions |
+| `OPS_BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | First Super Admin |
+| `OPS_SEED_USERS` / `OPS_SEED_PASSWORD` / `OPS_SEED_EMAIL_DOMAIN` | Catalogue seed |
+| `SMTP_HOST` / `SMTP_FROM` | Invite email |
+| `KENYA_INTEGRATION_MODE` | `mock` or `live` |
+| `DATABASE_URL` | SQLite default; PostgreSQL in production |
+| `PUBLIC_API_BASE_URL` | Per-institution callback URLs |
+| `SHARIAH_AUDIT_SERVICE_URL` | Optional audit mirror |
+| `MALAYSIA_COMMODITY_DESK` | `bsas` or `eiger` when live |
+| `INTEGRATION_ENCRYPTION_KEY` | Encrypt partner secrets at rest |
+
+Partner keys (Daraja, MNO, Airtel, broker): [INTEGRATIONS.md](INTEGRATIONS.md).
+
+## Tests
+
+```powershell
+$env:PYTHONPATH="src"
+python -m pytest tests/test_invite_matrix.py tests/test_ops_login.py tests/test_rbac.py tests/test_controls.py -q
+pytest -v
+```
+
+Mock Kenya mode; Shariah mirror is disabled in `tests/conftest.py`. Demo with the API running: `python scripts/demo_flow.py`.
 
 ## Project layout
 
 ```
 bti-tawarruq-engine/
 ├── src/tawarruq/           # FastAPI engine + services
-│   ├── api/                # Route modules (kenya, callbacks, …)
-│   ├── amanah/             # Background worker + Kenya orchestrator
-│   ├── integrations/       # Daraja, MNO airtime, Airtel Money, broker OTC
-│   └── services/           # Flow, Shariah ledger, No-Inah, wallet, …
-├── shariah-audit-service/  # Python append-only audit microservice
-├── mobile/                 # Expo React Native customer app
+│   ├── api/                # Routes, OpenAPI, middleware
+│   ├── amanah/             # Background worker
+│   ├── integrations/       # Daraja, MNO, Airtel, broker, Sedania
+│   └── services/           # RBAC, invites, flows, billing, recon
 ├── portal/                 # Vite ops portal
-├── alembic/                # DB migrations (through 011 controls/billing/MFA)
-├── tests/                  # pytest suite (flows, RBAC, maker-checker)
-├── docs/                   # Flow, users/access, and local test guides
-├── scripts/                # Demo and smoke scripts
-├── assets/                 # Brand assets
-└── INTEGRATIONS.md         # Live partner setup guide
+├── mobile/                 # Expo Buruuj Lend
+├── shariah-audit-service/  # Append-only ledger mirror
+├── alembic/                # Migrations (through 011)
+├── tests/                  # pytest
+├── docs/                   # Flow and access guides
+├── scripts/                # Demo, seed docx, live invite check
+└── INTEGRATIONS.md
 ```
-
-## Tests
-
-```powershell
-pytest -v
-```
-
-Tests use `KENYA_INTEGRATION_MODE=mock` and disable the Shariah audit mirror automatically (`tests/conftest.py`).
-
-Optional demo script (API must be running):
-
-```powershell
-python scripts/demo_flow.py
-```
-
-## Configuration
-
-Copy `.env.example` to `.env`. Important variables:
-
-| Variable | Purpose |
-|----------|---------|
-| `KENYA_INTEGRATION_MODE` | `mock` (sync dev) or `live` (partner APIs + callbacks) |
-| `DATABASE_URL` | SQLite default; use PostgreSQL in production |
-| `SHARIAH_AUDIT_SERVICE_URL` | Mirror audit entries to isolated service |
-| `BROKER_LIQUIDATION_API_URL` | Independent OTC broker liquidation API |
-| `AUTH_ENABLED` | Enforce RBAC (portal sessions + API keys). Production: `true` |
-| `PUBLIC_API_BASE_URL` | Build per-institution callback URLs |
-
-Full list: `.env.example` and [INTEGRATIONS.md](INTEGRATIONS.md).
 
 ## Documentation
 
-- [docs/USERS_ACCESS_CONTROLS.md](docs/USERS_ACCESS_CONTROLS.md) — Roles, maker-checker, billing, recon, MFA, APIs
-- [docs/BTI_Tawarruq_Users_ver_001.docx](docs/BTI_Tawarruq_Users_ver_001.docx) — Stakeholder users catalogue
-- [docs/KENYA_FLOW.md](docs/KENYA_FLOW.md) — Kenya eight-step flow, No-Inah, mobile mapping
-- [docs/SHARIAH_AUDIT.md](docs/SHARIAH_AUDIT.md) — Ledger, hash chain, export, microservice
-- [INTEGRATIONS.md](INTEGRATIONS.md) — Daraja, MNO, Airtel, broker, multi-tenant callbacks
-- [docs/PRODUCTION_OPS.md](docs/PRODUCTION_OPS.md) — Seed emails, monitoring, Prometheus, CI/CD deploy
-- [docs/LOCAL_TEST.md](docs/LOCAL_TEST.md) — Local run, Swagger walkthrough, mobile, Docker
+| Doc | Contents |
+|-----|----------|
+| [docs/USERS_ACCESS_CONTROLS.md](docs/USERS_ACCESS_CONTROLS.md) | Roles, invites, keys, maker-checker, billing, recon, MFA |
+| [docs/BTI_Tawarruq_Users_ver_001.docx](docs/BTI_Tawarruq_Users_ver_001.docx) | Stakeholder catalogue (`python scripts/build_users_doc.py`) |
+| [docs/KENYA_FLOW.md](docs/KENYA_FLOW.md) | Kenya eight steps, No-Inah, mobile mapping |
+| [docs/MALAYSIA_FLOW.md](docs/MALAYSIA_FLOW.md) | BSAS / Eiger modes |
+| [docs/SEDANIA_FINANCING.md](docs/SEDANIA_FINANCING.md) | Bank CASA / physical delivery |
+| [docs/SACCO_EXECUTE.md](docs/SACCO_EXECUTE.md) | Inbound CBS execute |
+| [docs/SHARIAH_AUDIT.md](docs/SHARIAH_AUDIT.md) | Ledger, hash chain, export |
+| [docs/LOCAL_TEST.md](docs/LOCAL_TEST.md) | Swagger walkthrough, Kenya / Malaysia / invites |
+| [docs/PRODUCTION_OPS.md](docs/PRODUCTION_OPS.md) | Seed emails, monitoring, CI/CD |
+| [INTEGRATIONS.md](INTEGRATIONS.md) | Daraja / MNO / broker credentials |
 
 ## License
 
