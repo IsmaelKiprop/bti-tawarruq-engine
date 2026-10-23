@@ -15,7 +15,7 @@ Multi-tenant **Tawarruq-as-a-Service** platform for Buruuj Fintech: Malaysia BSA
 | **Multi-tenant** | Per-institution credentials, API keys, webhooks, integration profiles |
 | **Amanah worker** | Auto-advances Kenya/Malaysia legs after eligibility or offer acceptance |
 | **Ops portal** | Dashboard, Sedania/Kenya/Malaysia desks, Users, Approvals, Billing, Reconciliation, MFA |
-| **Users & controls** | Catalogue RBAC, maker-checker, amount limits, tenant suspend, TOTP, usage invoices |
+| **Users & controls** | Catalogue RBAC, who-may-invite rules, Super Admin API keys, maker-checker, amount limits, tenant suspend, TOTP, usage invoices |
 | **Expo mobile app** | Timiza-style Shariah lending app (`mobile/` · Buruuj Lend) |
 | **Tests** | pytest: Kenya/Malaysia flows, Shariah, No-Inah, RBAC, maker-checker, billing, auth |
 
@@ -191,8 +191,22 @@ Set `SHARIAH_AUDIT_SERVICE_URL=http://localhost:8001` in `.env` so the engine mi
 |--------|------|-------------|
 | PUT | `/api/v1/institutions/{id}/integrations` | Per-tenant Daraja/MNO credentials |
 | POST | `/api/v1/webhooks` | Outbound event webhooks |
-| POST | `/api/v1/ops/auth/users` | Invite portal user (Super Admin / FI Admin; role depends on caller) |
+| POST | `/api/v1/ops/auth/users` | Invite portal user. Super Admin / FI Admin only; role depends on caller |
 | POST | `/api/v1/institutions/{id}/api-keys` | Tenant API keys — Super Admin only (`AUTH_ENABLED=true`) |
+
+### Who may invite whom
+
+Only Super Admin and FI Admin can create portal users. The same rules apply when changing a user’s role. `read_only` and `agent_dealer` stay off the invite form.
+
+| Caller | May invite | Must not invite |
+|--------|------------|-----------------|
+| Super Admin | Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon | FI Ops, FI Approver |
+| FI Admin (own tenant) | FI Admin, FI Ops, FI Approver, Shariah, Recon | Super Admin, BTI Ops, BTI Finance |
+| Everyone else | — | Anyone |
+
+API keys are not portal invites. Super Admin issues them on **Webhooks** (`POST /institutions/{id}/api-keys`, prefer `api_client`). FI Admin cannot create keys — request BTI to onboard.
+
+**Swagger** (`http://localhost:8000/docs`, `AUTH_ENABLED=true`): `POST /ops/auth/login` → copy `access_token` → **Authorize** → BearerAuth (no `Bearer ` prefix). Change password first if `must_change_password` is true. Then try the invite and key endpoints above. Walkthrough: [docs/LOCAL_TEST.md](docs/LOCAL_TEST.md). Full roles: [docs/USERS_ACCESS_CONTROLS.md](docs/USERS_ACCESS_CONTROLS.md).
 | GET | `/api/v1/audit/export` | Operational audit CSV (`export_data`) |
 | GET/POST | `/api/v1/ops/approvals` | Maker-checker queue, approve, reject |
 | GET/POST | `/api/v1/ops/billing/invoices` | Usage invoices (volume × fee bps) |
