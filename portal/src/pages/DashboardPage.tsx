@@ -4,7 +4,7 @@ import { api, fetchHealth, type OpsMetrics } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, LoadingPanel, PageShell } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
+import { APPROVAL_LIMIT_DASHBOARD, HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
 import { NAV_ITEMS } from "../config/navigation";
 import { canSeeNavItem, getHomePath, getRoleProfile } from "../config/roles";
 import "../components/ui.css";
@@ -125,6 +125,15 @@ export function DashboardPage() {
           ))}
         </div>
       </section>
+
+      {user?.role !== "agent_dealer" ? (
+        <section className="panel">
+          <h2>What an approval limit is</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            {APPROVAL_LIMIT_DASHBOARD}
+          </p>
+        </section>
+      ) : null}
 
       {loading ? (
         <LoadingPanel rows={4} />

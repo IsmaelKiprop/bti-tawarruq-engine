@@ -48,8 +48,10 @@ export function ApprovalsPage() {
       <header className="page-header">
         <h1>Maker-checker approvals</h1>
         <p className="muted">
-          FI Approvers authorize Murabaha, liquidation, and disbursement. You cannot approve a request you
-          initiated, and amount limits on the user or institution are enforced.
+          FI Operations queues Murabaha, liquidation, or disbursement. FI Approver must approve it. You cannot
+          approve a request you initiated. Approval limit is the maximum deal amount you may authorize. The
+          engine uses the lower of your personal limit and the institution limit. If the deal is larger, the
+          approve is rejected.
         </p>
       </header>
       {error ? <Alert tone="error">{error}</Alert> : null}

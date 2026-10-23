@@ -3,7 +3,7 @@ import { api, type Institution, type OpsUserRecord } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
+import { APPROVAL_LIMIT_FIELD, HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
 import {
   defaultInviteRole,
   inviteNeedsInstitution,
@@ -186,6 +186,7 @@ export function UsersPage() {
               onChange={(e) => setApprovalLimit(e.target.value)}
               placeholder="e.g. 500000"
             />
+            <span className="meta">{APPROVAL_LIMIT_FIELD}</span>
           </label>
           <button className="btn btn-primary" type="submit" disabled={busy}>
             {busy ? "Inviting…" : "Invite user"}

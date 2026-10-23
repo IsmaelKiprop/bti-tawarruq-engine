@@ -5,7 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
 import { BSAS_MODE_ORDER, getBsasMode } from "../config/institutions";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
+import { HOW_IT_WORKS, INSTITUTION_LIMIT_FIELD, PAGE_EXPLAINS } from "../config/pageExplainers";
 import "../components/ui.css";
 
 function BsasModeField({
@@ -200,6 +200,7 @@ export function InstitutionsPage() {
                 <label>
                   Approval limit
                   <input value={editLimit} onChange={(event) => setEditLimit(event.target.value)} placeholder="Unlimited if blank" />
+                  <span className="meta">{INSTITUTION_LIMIT_FIELD}</span>
                 </label>
                 <label>
                   Billing fee (bps)

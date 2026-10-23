@@ -13,6 +13,15 @@ export type HowItWorksContent = {
   note?: string;
 };
 
+export const APPROVAL_LIMIT_FIELD =
+  "Maximum deal amount this person may approve. FI Operations queues Murabaha, liquidation, or disbursement. FI Approver must approve it. If the deal is larger than this limit, approve is rejected. The engine uses the lower of this amount and the institution limit. Leave blank to inherit the institution cap only. Set this when inviting FI Approver.";
+
+export const INSTITUTION_LIMIT_FIELD =
+  "Bank or SACCO cap for queued deals. The engine uses the lower of this and the approver's personal limit. Blank means no institution cap.";
+
+export const APPROVAL_LIMIT_DASHBOARD =
+  "Approval limit is the maximum deal amount a person may approve. FI Operations starts Murabaha, liquidation, or disbursement. That step queues. FI Approver must approve it. If the deal is larger than their limit, the approve is rejected. There are two places for it: the user (Users) and the institution (Institutions). The engine uses the lower of the two. Leave the user field blank and they inherit the institution limit only. Leave both blank and there is no amount cap. Set a user limit when inviting FI Approver.";
+
 export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   "/": {
     title: "What this dashboard is",
@@ -24,7 +33,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Open an active journey, or jump to Sedania Financing, Kenya Ops, or Malaysia Manual Bridge.",
       "Setup pages (institutions, users, integrations) must exist before a live deal.",
     ],
-    note: "Book Murabaha here is a 5% preview until each offer locks on the application.",
+    note: "Book Murabaha here is a 5% preview until each offer locks on the application. Approval limit is the maximum deal amount an FI Approver may authorize. The engine uses the lower of the user limit and the institution limit.",
   },
   "/sedania": {
     title: "What Sedania Financing is",
@@ -101,6 +110,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Invite with the narrowest role that still lets them work.",
       "A temporary password is generated and emailed via SMTP when configured.",
       "They must change it on first sign-in before desks open. Activate or deactivate from the list.",
+      "Approval limit is the maximum deal amount that person may approve. Set it on FI Approver. The engine uses the lower of this and the institution limit.",
     ],
     note: "Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, FI Operations, FI Approver, Shariah / Audit, and Reconciliation. FI Admin may invite the FI desk roles for their institution. API keys are Super Admin only.",
   },
@@ -224,7 +234,7 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
     title: "How onboarding works",
     intro: "Create the tenant before any customer or deal.",
     steps: [
-      { n: 1, title: "Register the bank", body: "Name, code, Malaysia desk mode." },
+      { n: 1, title: "Register the bank", body: "Name, code, Malaysia desk mode. Optional approval limit is the institution cap for queued deals." },
       { n: 2, title: "Integrations", body: "Kenya partner credentials." },
       { n: 3, title: "Users", body: "Institution admin, then ops." },
     ],
@@ -234,7 +244,7 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
     intro: "Invite by email. SMTP delivers the temporary password; first login forces a change.",
     steps: [
       { n: 1, title: "Pick the role", body: "Choose the named role your login may create. Super Admin sees every desk role. FI Admin sees FI desk roles only." },
-      { n: 2, title: "Invite", body: "Password is emailed (or shown once if SMTP is off)." },
+      { n: 2, title: "Invite", body: "Password is emailed (or shown once if SMTP is off). Set approval limit when inviting FI Approver: max deal they may authorize. Blank inherits the institution cap." },
       { n: 3, title: "They sign in", body: "Forced password change, then the desks." },
     ],
   },
