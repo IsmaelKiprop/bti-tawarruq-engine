@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "tawarruq_sidebar_collapsed";
-const MOBILE_BREAKPOINT = 1024;
+/** Drawer + hamburger below this width. Keep in sync with layout.css. */
+export const MOBILE_BREAKPOINT = 1024;
 
 export function useSidebar() {
   const [collapsed, setCollapsed] = useState(() => {

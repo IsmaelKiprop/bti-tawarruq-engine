@@ -193,6 +193,39 @@
   }
 }
 
+@media (max-width: 1024px) {
+  .panel {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .info-grid,
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-shell,
+  .page-shell-wide {
+    width: 100%;
+  }
+
+  .actions-row,
+  .actions {
+    align-items: stretch;
+  }
+
+  .actions-row .btn,
+  .actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
 label {
   display: grid;
   gap: 0.35rem;

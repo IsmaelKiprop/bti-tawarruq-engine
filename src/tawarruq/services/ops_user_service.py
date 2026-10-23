@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 from typing import Any
@@ -18,6 +19,8 @@ from tawarruq.enums import ApiKeyRole
 from tawarruq.models.kenya_flow import AgentDealer
 from tawarruq.models.ops_user import OpsUser
 from tawarruq.services.rbac import PLATFORM_SCOPED_ROLES, PORTAL_ASSIGNABLE_ROLES
+
+logger = logging.getLogger(__name__)
 
 TOKEN_TTL_SECONDS = 60 * 60 * 12  # 12 hours
 MFA_CHALLENGE_TTL_SECONDS = 60 * 5
@@ -55,6 +58,67 @@ def verify_password(password: str, password_hash: str) -> bool:
 def generate_temporary_password(length: int = 12) -> str:
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$"
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def deliver_ops_invite_email(
+    *,
+    user: OpsUser,
+    temporary_password: str,
+    kind: str = "invite",
+) -> dict[str, Any]:
+    """Email a temporary password via SMTP (and always file a local copy).
+
+    When SMTP is configured and the send succeeds, the temporary password is
+    withheld from API responses (``expose_password=False``). When SMTP is off
+    or fails, the password is returned so the admin can share it out of band.
+    """
+    settings = get_settings()
+    portal = (settings.portal_public_url or "http://127.0.0.1:5173").rstrip("/")
+    is_reset = kind == "reset"
+    subject = (
+        "BTI Tawarruq ops — password reset"
+        if is_reset
+        else "You are invited to the BTI Tawarruq ops portal"
+    )
+    action = "Your password was reset by an administrator." if is_reset else "You have been invited to the BTI Tawarruq ops portal."
+    body = (
+        f"Assalamu alaikum {user.full_name},\n\n"
+        f"{action}\n\n"
+        f"Portal: {portal}\n"
+        f"Email: {user.email}\n"
+        f"Temporary password: {temporary_password}\n\n"
+        "On first sign-in you must change this password before you can use the portal.\n"
+        "Do not share this password. If you did not expect this email, contact your administrator.\n\n"
+        "Buruuj Fintech — BTI Tawarruq Engine\n"
+    )
+
+    mail_path: str | None = None
+    try:
+        mail_dir = settings.customer_mail_path / "ops_invites"
+        mail_dir.mkdir(parents=True, exist_ok=True)
+        safe = user.email.replace("@", "_at_").replace(".", "_")
+        path = mail_dir / f"{safe}.txt"
+        path.write_text(f"To: {user.email}\nSubject: {subject}\n\n{body}", encoding="utf-8")
+        mail_path = str(path)
+    except Exception:
+        logger.exception("Could not file ops invite mail for %s", user.email)
+
+    smtp_sent = False
+    if settings.smtp_host:
+        try:
+            from tawarruq.services.customer_notify_service import _send_smtp
+
+            smtp_sent = bool(_send_smtp(user.email, subject, body))
+        except Exception:
+            logger.exception("SMTP send failed for ops invite to %s", user.email)
+
+    return {
+        "smtp_sent": smtp_sent,
+        "mail_path": mail_path,
+        # Never echo the password in the API when SMTP delivered it.
+        "expose_password": not smtp_sent,
+        "kind": kind,
+    }
 
 
 def create_session_token(user: OpsUser) -> str:

@@ -98,11 +98,11 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
     lead: "A portal login. Platform admin is Buruuj and sees all institutions. Other roles stay on one bank or SACCO.",
     dealTitle: "How a deal uses it",
     dealSteps: [
-      "Pick the narrowest role that still lets them work.",
-      "Copy the temporary password once and send it on a secure channel.",
-      "They must change it before they can open Kenya Ops or Malaysia.",
+      "Invite with the narrowest role that still lets them work.",
+      "A temporary password is generated and emailed via SMTP when configured.",
+      "They must change it on first sign-in before desks open. Activate or deactivate from the list.",
     ],
-    note: "Portal people use email login. API keys on Webhooks are for machines.",
+    note: "FI Admin invites FI staff. Only Super Admin invites BTI-internal roles. API keys on Webhooks are for machines.",
   },
   "/integrations": {
     title: "What integrations are",
@@ -231,10 +231,10 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
   },
   "/users": {
     title: "How access works",
-    intro: "Issue a login, hand over the temporary password, they change it.",
+    intro: "Invite by email. SMTP delivers the temporary password; first login forces a change.",
     steps: [
-      { n: 1, title: "Pick the role", body: "Platform admin is Buruuj only." },
-      { n: 2, title: "Create the user", body: "Copy the password once." },
+      { n: 1, title: "Pick the role", body: "BTI-internal roles are Super Admin only." },
+      { n: 2, title: "Invite", body: "Password is emailed (or shown once if SMTP is off)." },
       { n: 3, title: "They sign in", body: "Forced password change, then the desks." },
     ],
   },

@@ -1068,7 +1068,14 @@ export const api = {
     approval_limit_amount?: string | null;
     temporary_password?: string;
   }) =>
-    request<OpsUserRecord & { temporary_password: string }>("/ops/auth/users", {
+    request<
+      OpsUserRecord & {
+        temporary_password?: string | null;
+        smtp_sent?: boolean;
+        mail_path?: string | null;
+        invite_message?: string;
+      }
+    >("/ops/auth/users", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -1092,8 +1099,11 @@ export const api = {
       email: string;
       full_name?: string;
       role?: string;
-      temporary_password: string;
+      temporary_password?: string | null;
       must_change_password: boolean;
+      smtp_sent?: boolean;
+      mail_path?: string | null;
+      invite_message?: string;
     }>(`/ops/auth/users/${userId}/reset-password`, {
       method: "POST",
       body: JSON.stringify(temporary_password ? { temporary_password } : {}),

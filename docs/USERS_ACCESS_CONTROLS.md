@@ -158,17 +158,19 @@ POST /api/v1/institutions/{id}/api-keys
 
 `api_client` skips maker-checker so core-banking integrations execute immediately under the FI’s own dual-control.
 
-### Users API
+### Users API (invite)
 
 ```
 GET    /api/v1/ops/auth/users
-POST   /api/v1/ops/auth/users            { email, role, institution_id?, approval_limit_amount? }
-PATCH  /api/v1/ops/auth/users/{id}
+POST   /api/v1/ops/auth/users            { email, full_name, role, institution_id?, approval_limit_amount? }
+PATCH  /api/v1/ops/auth/users/{id}       { active?, … }   # activate / deactivate
 POST   /api/v1/ops/auth/users/{id}/reset-password
 DELETE /api/v1/ops/auth/users/{id}
 ```
 
 Requires `manage_credentials`. Super Admin may create BTI-internal roles. FI Admin may create tenant roles only.
+
+**Invite flow:** create generates a temporary password, sets `must_change_password=true`, emails it via SMTP when `SMTP_HOST` is set (local copy under `CUSTOMER_MAIL_DIR/ops_invites/`). When SMTP succeeds, `temporary_password` is omitted from the API response. When SMTP is off or fails, the password is returned once for out-of-band share. Reset-password uses the same delivery. Deactivated users (`active=false`) cannot log in.
 
 ---
 

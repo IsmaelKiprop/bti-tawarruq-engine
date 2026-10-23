@@ -10,8 +10,9 @@ export default defineConfig({
     // Allow reverse-proxied public hostnames (e.g. ops.buruujfintech.com)
     allowedHosts: true,
     proxy: {
-      "/api": process.env.VITE_PROXY_TARGET || "http://api:8000",
-      "/health": process.env.VITE_PROXY_TARGET || "http://api:8000",
+      // Local default; Docker Compose sets VITE_PROXY_TARGET=http://api:8000
+      "/api": process.env.VITE_PROXY_TARGET || "http://127.0.0.1:8000",
+      "/health": process.env.VITE_PROXY_TARGET || "http://127.0.0.1:8000",
     },
   },
 });

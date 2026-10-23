@@ -215,7 +215,10 @@ class OpsUserCreate(BaseModel):
     institution_id: str | None = None
     agent_dealer_id: str | None = Field(None, description='Required when role is agent_dealer. Binds this login to one float pool.')
     approval_limit_amount: Decimal | None = Field(None, description='Max amount this approver may authorize. Null inherits the institution limit.')
-    temporary_password: str | None = Field(None, description='Optional; generated if omitted. Shown once to admin to share.')
+    temporary_password: str | None = Field(
+        None,
+        description='Optional; auto-generated if omitted. Emailed via SMTP when configured.',
+    )
 
 class OpsUserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -248,7 +251,13 @@ class OpsUserUpdate(BaseModel):
     approval_limit_amount: Decimal | None = None
 
 class OpsUserCreatedRead(OpsUserRead):
-    temporary_password: str = Field(..., description='Share securely; not shown again')
+    temporary_password: str | None = Field(
+        None,
+        description='Present only when SMTP did not deliver; share securely. Null when emailed.',
+    )
+    smtp_sent: bool = False
+    mail_path: str | None = None
+    invite_message: str = ''
 
 class OpsUserPasswordResetRequest(BaseModel):
     temporary_password: str | None = Field(None, description='Optional admin-chosen password. Leave empty to auto-generate.')
@@ -258,8 +267,14 @@ class OpsUserPasswordResetRead(BaseModel):
     email: str
     full_name: str | None = None
     role: str | None = None
-    temporary_password: str = Field(..., description='Share securely; not shown again')
+    temporary_password: str | None = Field(
+        None,
+        description='Present only when SMTP did not deliver; share securely. Null when emailed.',
+    )
     must_change_password: bool = True
+    smtp_sent: bool = False
+    mail_path: str | None = None
+    invite_message: str = ''
 
 class OpsMetricsRead(BaseModel):
     timestamp: str

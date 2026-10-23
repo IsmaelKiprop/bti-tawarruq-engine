@@ -273,9 +273,9 @@ function HealthBadge() {
   const label = online === null ? "Checking" : online ? "Engine live" : "Engine offline";
 
   return (
-    <span className={`health-badge${online === false ? " is-offline" : ""}`} title="Engine status">
+    <span className={`health-badge${online === false ? " is-offline" : ""}`} title={label}>
       <span className={`health-dot${online === false ? " offline" : ""}`} />
-      {label}
+      <span className="health-label">{label}</span>
     </span>
   );
 }

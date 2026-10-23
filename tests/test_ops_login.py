@@ -205,3 +205,70 @@ def test_shariah_officer_can_change_own_password():
         json={"email": "shariah@bank.local", "password": "OfficerPass!22"},
     )
     assert relogin.status_code == 200
+
+
+def test_invite_user_emails_temp_password_via_smtp(monkeypatch, tmp_path):
+    """When SMTP is configured, invite emails the password and withholds it from the API."""
+    os.environ["SMTP_HOST"] = "smtp.test.local"
+    os.environ["SMTP_FROM"] = "ops@test.local"
+    os.environ["CUSTOMER_MAIL_DIR"] = str(tmp_path / "mail")
+    get_settings.cache_clear()
+
+    sent: list[tuple[str, str, str]] = []
+
+    def _fake_smtp(to_email: str, subject: str, body: str, attachments=None):
+        sent.append((to_email, subject, body))
+        return True
+
+    monkeypatch.setattr(
+        "tawarruq.services.customer_notify_service._send_smtp",
+        _fake_smtp,
+    )
+
+    try:
+        client = _client()
+        login = client.post(
+            "/api/v1/ops/auth/login",
+            json={"email": "admin@bti.local", "password": "ChangeMeNow!123"},
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        headers = {
+            "Authorization": f"Bearer {client.post('/api/v1/ops/auth/change-password', headers=headers, json={'current_password': 'ChangeMeNow!123', 'new_password': 'NewSecurePass!99'}).json()['access_token']}"
+        }
+        institution_id = client.get("/api/v1/institutions", headers=headers).json()[0]["id"]
+
+        created = client.post(
+            "/api/v1/ops/auth/users",
+            headers=headers,
+            json={
+                "email": "invited@bank.local",
+                "full_name": "Invited Ops",
+                "role": "institution_ops",
+                "institution_id": institution_id,
+            },
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert body["smtp_sent"] is True
+        assert body["temporary_password"] is None
+        assert body["must_change_password"] is True
+        assert "emailed" in body["invite_message"].lower()
+        assert len(sent) == 1
+        assert sent[0][0] == "invited@bank.local"
+        assert "Temporary password:" in sent[0][2]
+        assert "change this password" in sent[0][2].lower()
+
+        # Extract password from the emailed body so we can prove login + force change.
+        line = next(l for l in sent[0][2].splitlines() if l.startswith("Temporary password:"))
+        temp = line.split(":", 1)[1].strip()
+        ops_login = client.post(
+            "/api/v1/ops/auth/login",
+            json={"email": "invited@bank.local", "password": temp},
+        )
+        assert ops_login.status_code == 200
+        assert ops_login.json()["must_change_password"] is True
+    finally:
+        os.environ.pop("SMTP_HOST", None)
+        os.environ.pop("SMTP_FROM", None)
+        os.environ.pop("CUSTOMER_MAIL_DIR", None)
+        get_settings.cache_clear()

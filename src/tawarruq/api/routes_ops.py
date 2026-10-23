@@ -35,6 +35,7 @@ from tawarruq.services.ops_user_service import (
     create_session_token,
     decode_mfa_challenge_token,
     delete_ops_user,
+    deliver_ops_invite_email,
     list_ops_users,
     reset_ops_password,
     update_ops_user,
@@ -256,7 +257,7 @@ def get_ops_users(request: Request, db: Session = Depends(get_db)) -> list[OpsUs
     "/ops/auth/users",
     response_model=OpsUserCreatedRead,
     status_code=201,
-    summary="Admin creates ops user with temporary password",
+    summary="Invite ops user: create account, email temporary password via SMTP",
 )
 def create_ops_user_endpoint(
     payload: OpsUserCreate, request: Request, db: Session = Depends(get_db)
@@ -294,6 +295,17 @@ def create_ops_user_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    delivery = deliver_ops_invite_email(user=user, temporary_password=temp, kind="invite")
+    if delivery["smtp_sent"]:
+        invite_message = (
+            f"Invite emailed to {user.email}. They must change the temporary password on first login."
+        )
+    else:
+        invite_message = (
+            "User created. SMTP did not send — copy the temporary password below and share it securely. "
+            "They must change it on first login."
+        )
+
     return OpsUserCreatedRead(
         id=user.id,
         email=user.email,
@@ -306,7 +318,10 @@ def create_ops_user_endpoint(
         approval_limit_amount=user.approval_limit_amount,
         mfa_enabled=user.mfa_enabled,
         created_at=user.created_at,
-        temporary_password=temp,
+        temporary_password=temp if delivery["expose_password"] else None,
+        smtp_sent=bool(delivery["smtp_sent"]),
+        mail_path=delivery.get("mail_path"),
+        invite_message=invite_message,
     )
 
 
@@ -374,7 +389,7 @@ def update_ops_user_endpoint(
 @router.post(
     "/ops/auth/users/{user_id}/reset-password",
     response_model=OpsUserPasswordResetRead,
-    summary="Issue a new temporary password. User must change it on next login.",
+    summary="Issue a new temporary password, email it via SMTP, force change on next login",
 )
 def reset_ops_user_password(
     user_id: str,
@@ -393,12 +408,27 @@ def reset_ops_user_password(
         db.refresh(target)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    delivery = deliver_ops_invite_email(user=target, temporary_password=temp, kind="reset")
+    if delivery["smtp_sent"]:
+        invite_message = (
+            f"Temporary password emailed to {target.email}. They must change it on next login."
+        )
+    else:
+        invite_message = (
+            "Password reset. SMTP did not send — copy the temporary password below and share it securely."
+        )
+
     return OpsUserPasswordResetRead(
         id=target.id,
         email=target.email,
         full_name=target.full_name,
         role=target.role,
-        temporary_password=temp,
+        temporary_password=temp if delivery["expose_password"] else None,
+        must_change_password=True,
+        smtp_sent=bool(delivery["smtp_sent"]),
+        mail_path=delivery.get("mail_path"),
+        invite_message=invite_message,
     )
 
 

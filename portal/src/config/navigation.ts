@@ -81,7 +81,13 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Kenya track: float / airtime",
     items: [
       { to: "/kenya", label: "Kenya Ops", Icon: IconKenya, hint: "Run the eight steps in order", permission: "write_ops" },
-      { to: "/agent-dealers", label: "Agent Dealers", Icon: IconKenya, hint: "Step 2 float pool. Dealer adds float." },
+      {
+        to: "/agent-dealers",
+        label: "Agent Dealers",
+        Icon: IconKenya,
+        hint: "Step 2 float pool. Dealer adds float.",
+        roles: ["bti_ops", "institution_admin", "institution_ops", "agent_dealer"],
+      },
       { to: "/customers", label: "Customers", Icon: IconUsers, hint: "Step 1 records and journey links", permission: "write_ops" },
       {
         to: "/mobile-lend",
