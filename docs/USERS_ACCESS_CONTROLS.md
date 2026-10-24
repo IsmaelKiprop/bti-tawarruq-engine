@@ -531,4 +531,4 @@ Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it 
 - [SHARIAH_AUDIT.md](SHARIAH_AUDIT.md) — append-only ledger
 - [PRODUCTION_OPS.md](PRODUCTION_OPS.md) — monitoring, Prometheus, CI/CD
 - [LOCAL_TEST.md](LOCAL_TEST.md) — local Swagger walkthrough
-- [INTEGRATIONS.md](../INTEGRATIONS.md) — Daraja / MNO / broker credentials
+- [INTEGRATIONS.md](INTEGRATIONS.md) — Daraja / MNO / broker credentials

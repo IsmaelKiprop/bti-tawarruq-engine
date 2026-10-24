@@ -101,6 +101,10 @@ def create_institution(
         actor=AuditActor.HUMAN,
         action="institution.created",
         details=f"code={payload.code}, mode={payload.bsas_mode}",
+        institution_id=institution.id,
+        actor_user_id=getattr(request.state, "ops_user_id", None),
+        group_id=getattr(request.state, "audit_group_id", None),
+        action_group="institutions",
     )
     db.commit()
     db.refresh(institution)
@@ -632,9 +636,15 @@ def get_audit_trail(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ) -> list[AuditEventRead]:
-    if not entity_id and not institution_id and not entity_type and not actor:
-        raise HTTPException(status_code=400, detail="Provide at least one filter (entity_id, institution_id, etc.)")
+    from tawarruq.services.rbac import can_cross_tenant
+
     scoped_institution = tenant_filter_institution_id(request, institution_id)
+    # Tenant users may open a blank feed for their own institution.
+    if not entity_id and not scoped_institution and not entity_type and not actor and not can_cross_tenant(request):
+        raise HTTPException(status_code=400, detail="Provide at least one filter (entity_id, institution_id, etc.)")
+    if not entity_id and not scoped_institution and not entity_type and not actor and can_cross_tenant(request):
+        # Super Admin / BTI cross-tenant: allow unfiltered feed (prefer /ops/audit for grouping).
+        pass
     return query_audit_events(
         db,
         entity_id=entity_id,

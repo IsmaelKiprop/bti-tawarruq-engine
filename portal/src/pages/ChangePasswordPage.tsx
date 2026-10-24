@@ -4,7 +4,6 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert } from "../components/PageShell";
 import { getHomePath } from "../config/roles";
-import "../components/ui.css";
 
 export function ChangePasswordPage() {
   const { authEnabled, loading, user, applyLoginResponse, logout } = useAuth();

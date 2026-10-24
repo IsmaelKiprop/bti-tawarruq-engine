@@ -1,6 +1,5 @@
 import { useRef } from "react";
 import type { Certificate } from "../api/client";
-import "./BsasCertificateModal.css";
 
 interface Props {
   certificate: Certificate;

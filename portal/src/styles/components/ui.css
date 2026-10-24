@@ -1,5 +1,3 @@
-@import "./guide.css";
-
 .page-shell {
   display: flex;
   flex-direction: column;
@@ -465,7 +463,7 @@ textarea,
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(7, 13, 22, 0.45);
+  background: color-mix(in srgb, var(--bti-charcoal) 55%, transparent);
   display: grid;
   place-items: center;
   padding: 1rem;

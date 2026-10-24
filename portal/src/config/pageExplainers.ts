@@ -61,6 +61,64 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
     ],
     note: "A red counter means work is waiting, not that a trade has settled.",
   },
+  "/kenya": {
+    title: "What Kenya Ops is",
+    lead: "The Kenya workbench for the eight float steps: apply, buy float, seal possession, Murabaha, Wakala, independent sale, clear, then pay and collect. The commodity is prepaid airtime / mobile money float, not cash credit.",
+    dealTitle: "How a deal uses it",
+    dealSteps: [
+      "Pick a customer from the book, then create a case. Do not register the same person again.",
+      "Run only the next action the case names. Possession before Murabaha. Wakala before liquidation.",
+      "When a dealer is active, Leg 1 drains the Agent Dealer pool; otherwise it uses the MNO path.",
+      "Disburse only after the independent sale and clearing. The customer still owes the Murabaha.",
+    ],
+    note: "No-Inah rejects a broker that is the originating MNO or dealer pool. Amount on the case is float cost the institution must possess.",
+  },
+  "/malaysia": {
+    title: "What Malaysia Manual Bridge is",
+    lead: "The Malaysia workbench for the twelve Suq Al-Sila' steps. The commodity is crude palm oil (ACPO), not cash. Until Buruuj is admitted to BSAS, this page writes a desk packet for Ops and you paste the e-certificate.",
+    dealTitle: "How a deal uses it",
+    dealSteps: [
+      "Pick the onboarded customer, lock the Murabaha offer, then instruct Leg 1 buy.",
+      "Copy the Bursa packet, paste the Islamic Services Receipt, and advance only the next unanswered leg.",
+      "After bank ownership, sell to the customer (Leg 2), record Wakala, then sell independently (Leg 3).",
+      "Disburse only when all three legs are confirmed. The customer repays Murabaha, not the palm oil.",
+    ],
+    note: "Mock E2E skips live Bursa for local testing. Bid is cost. Murabaha is cost plus profit.",
+  },
+  "/applications": {
+    title: "What an application is",
+    lead: "An application is the financing request — step 1 of both Tawarruq tracks. It is not a cash loan. Kenya uses float. Malaysia uses crude palm oil on Suq Al-Sila'.",
+    dealTitle: "How a deal uses it",
+    dealSteps: [
+      "Pick the customer already on Customers. Do not register the same person again.",
+      "Capture bid or facility amount, profit rate, term, and purpose. The engine records the Wa'd.",
+      "Generate and accept the Murabaha offer. That locks cost plus disclosed profit.",
+      "Finish commodity legs on Kenya Ops or Malaysia Manual Bridge, not only on this list.",
+    ],
+    note: "List Murabaha is a 5% preview until the offer locks on the detail page. The customer still owes the Murabaha, not the float or the palm oil.",
+  },
+  "/applications/new": {
+    title: "What New application does",
+    lead: "Where a Tawarruq journey begins: pick the onboarded customer, set cost and profit, then lock the Murabaha offer.",
+    dealTitle: "How a deal uses it",
+    dealSteps: [
+      "Select the customer already on the books. Do not register the same person again.",
+      "Set amount, profit rate, term, and purpose. The live tape is the Murabaha the customer will owe.",
+      "Accept the offer, then open the Malaysia desk packet or continue on Kenya Ops.",
+    ],
+    note: "Amount is commodity cost, not a cash loan. KES deals show the Kenya 98% spot preview. MYR deals do not.",
+  },
+  "/approvals": {
+    title: "What maker-checker approvals are",
+    lead: "Dual control for queued commodity steps. FI Operations starts Murabaha, liquidation, or disbursement. FI Approver must approve it.",
+    dealTitle: "How a deal uses it",
+    dealSteps: [
+      "FI Operations queues a step that the institution marked for maker-checker.",
+      "FI Approver decides approve or reject. You cannot approve a request you initiated.",
+      "Approval limit is the maximum deal amount you may authorize. The engine uses the lower of your personal limit and the institution limit.",
+    ],
+    note: "If the deal is larger than the effective limit, approve is rejected.",
+  },
   "/customer": {
     title: "What the customer journey is",
     lead: "The same steps the customer sees. Kenya has eight. Malaysia has twelve. Certificates sit on the completed legs.",
@@ -96,27 +154,41 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   },
   "/institutions": {
     title: "What an institution is",
-    lead: "A client bank or SACCO on Buruuj's engine. Buruuj Fintech is the operator and is not a row here. Customers, users, and deals stay on that bank's book.",
+    lead: "A client bank or SACCO on Buruuj's engine. Buruuj Fintech is the operator and is not a row here. The directory is lean; open Manage for profile, controls, and audit.",
     dealTitle: "What you set when you register",
     dealSteps: [
       "Name and code identify the bank on certificates, APIs, and audit.",
       "Malaysia desk mode is the default for palm-oil trades. Kenya float uses Integrations, not this field.",
       "Maker-checker steps decide which deal actions wait for an FI Approver: murabaha (sale to customer), liquidation (spot sale), disbursement (payout). Default is all three. Remove a word if that step should run immediately.",
       "Approval limit is the bank-wide cap for those queued deals. Leave blank for no institution cap. An FI Approver also has a personal limit on Users. The engine uses the lower of the two.",
+      "Use Manage for edits, suspend/activate, billing fee, Integrations, Users, and the tenant audit trail.",
     ],
-    note: "DEFAULT is the demo book. You can rename it. You cannot delete it. After create, open Integrations, then invite FI Admin on Users.",
+    note: "DEFAULT is the demo book. You can rename it. You cannot delete it. After create, open Manage → Integrations, then invite FI Admin on Users.",
   },
   "/users": {
     title: "What a user is",
-    lead: "A portal login. Platform admin is Buruuj and sees all institutions. Other roles stay on one bank or SACCO.",
+    lead: "A portal login. Platform admin is Buruuj and sees all institutions. Other roles stay on one bank or SACCO. The directory is lean; open Manage for profile, HR, and audit.",
     dealTitle: "How a deal uses it",
     dealSteps: [
       "Invite with the narrowest role that still lets them work.",
       "A temporary password is generated and emailed via SMTP when configured.",
-      "They must change it on first sign-in before desks open. Activate or deactivate from the list.",
+      "They must change it on first sign-in before desks open. Activate, deactivate, and HR edits live on the manage page.",
       "Approval limit is the maximum deal amount that person may approve. Set it on FI Approver. The engine uses the lower of this and the institution limit.",
+      "Staff set their own name and HR fields on Settings. Admins can override the same fields on User management.",
     ],
     note: "Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, FI Operations, FI Approver, Shariah / Audit, and Reconciliation. FI Admin may invite the FI desk roles for their institution. API keys are Super Admin only.",
+  },
+  "/settings": {
+    title: "What settings cover",
+    lead: "Your own portal account: profile/HR record, password, MFA, theme, and shortcuts for desks you can open.",
+    dealTitle: "How you use it",
+    dealSteps: [
+      "Keep display name and HR fields current so admins see the same staff record on Users → Manage.",
+      "Change password after an invite or whenever policy requires.",
+      "Enable authenticator or email MFA; privileged Buruuj roles should keep MFA on.",
+      "Use role workspace links for institutions, users, billing, and ops when your permissions allow.",
+    ],
+    note: "Process explainers for desks live under Documentation, not on Settings.",
   },
   "/integrations": {
     title: "What integrations are",
@@ -207,6 +279,54 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
       { n: 3, title: "Open the case", body: "Applications list, Kenya Ops, or Malaysia." },
     ],
   },
+  "/kenya": {
+    title: "How Kenya Ops works",
+    intro: "One case, eight steps, in order. Float is the commodity.",
+    steps: [
+      { n: 1, title: "Create the case", body: "Customer from the book, facility amount, term, profit." },
+      { n: 2, title: "Buy float", body: "Dealer pool when active, otherwise MNO." },
+      { n: 3, title: "Seal possession", body: "Required before Murabaha." },
+      { n: 4, title: "Murabaha then Wakala", body: "Sell to customer, then appoint the wakeel." },
+      { n: 5, title: "Independent sale", body: "No-Inah. Then clear, disburse, collect." },
+    ],
+  },
+  "/malaysia": {
+    title: "How the Malaysia bridge works",
+    intro: "Twelve steps. Packet out, e-certificate in, then the next leg.",
+    steps: [
+      { n: 1, title: "Start the desk", body: "Customer, bid, profit, Murabaha offer." },
+      { n: 2, title: "Leg 1", body: "Send the packet. Paste the Islamic Services Receipt." },
+      { n: 3, title: "Sale and Wakala", body: "Leg 2 to the customer, then wakeel appointment." },
+      { n: 4, title: "Leg 3 and disburse", body: "Independent BSAS sale, then payout." },
+    ],
+  },
+  "/applications": {
+    title: "How applications work",
+    intro: "This book is the customer side. Commodity legs live on the desks.",
+    steps: [
+      { n: 1, title: "Find the request", body: "Open a row for cost, profit, Murabaha, and status." },
+      { n: 2, title: "Lock the offer", body: "Accept on detail. List Murabaha is only a preview until then." },
+      { n: 3, title: "Open the desk", body: "Kenya Ops or Malaysia Manual Bridge for the legs." },
+    ],
+  },
+  "/applications/new": {
+    title: "How New application works",
+    intro: "Pick the customer, set cost and term, lock the offer.",
+    steps: [
+      { n: 1, title: "Select the customer", body: "Same record as Customers." },
+      { n: 2, title: "Set the facility", body: "Amount is commodity cost. Term is instalments." },
+      { n: 3, title: "Create", body: "Then accept the offer and open the right desk." },
+    ],
+  },
+  "/approvals": {
+    title: "How maker-checker works",
+    intro: "Queue, dual control, then execute.",
+    steps: [
+      { n: 1, title: "Ops queues", body: "Murabaha, liquidation, or disbursement when dual control is on." },
+      { n: 2, title: "Approver decides", body: "Cannot approve own request. Limit caps the deal size." },
+      { n: 3, title: "Engine runs", body: "Approved steps execute. Rejected steps stay blocked." },
+    ],
+  },
   "/customer": {
     title: "How the tracker works",
     intro: "Lookup, then follow only the active step.",
@@ -236,21 +356,31 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
   },
   "/institutions": {
     title: "How onboarding works",
-    intro: "Create the tenant before any customer or deal. Dual control and the amount cap are set on this page.",
+    intro: "Create the tenant before any customer or deal. Register is collapsed on the directory; open Manage for dual control, fees, and audit.",
     steps: [
-      { n: 1, title: "Register the bank", body: "Name, code, Malaysia desk, maker-checker steps, and optional approval limit." },
-      { n: 2, title: "Integrations", body: "Kenya partner credentials for that bank only." },
-      { n: 3, title: "Users", body: "Invite FI Admin, then FI Operations and FI Approver. Set a personal approval limit on the approver if they should sit below the bank cap." },
+      { n: 1, title: "Register the bank", body: "Use Register institution for name, code, Malaysia desk, maker-checker steps, and optional approval limit." },
+      { n: 2, title: "Manage", body: "Edit profile, suspend, set billing fee, and review the tenant audit trail." },
+      { n: 3, title: "Integrations & users", body: "From Manage, open Integrations for Kenya partners, then invite FI Admin on Users." },
     ],
     note: "FI Operations queues the listed steps. FI Approver decides on Approvals. The initiator cannot approve their own item.",
   },
   "/users": {
     title: "How access works",
-    intro: "Invite by email. SMTP delivers the temporary password; first login forces a change.",
+    intro: "Invite by email. SMTP delivers the temporary password; first login forces a change. Manage opens the admin profile, HR, and audit trail.",
     steps: [
       { n: 1, title: "Pick the role", body: "Choose the named role your login may create. Super Admin sees every desk role. FI Admin sees FI desk roles only." },
       { n: 2, title: "Invite", body: "Password is emailed (or shown once if SMTP is off). Set approval limit when inviting FI Approver: max deal they may authorize. Blank inherits the institution cap." },
-      { n: 3, title: "They sign in", body: "Forced password change, then the desks." },
+      { n: 3, title: "Manage", body: "Use the manage icon for activate/deactivate, resend invite, HR fields, and the audit trail for that login." },
+      { n: 4, title: "They sign in", body: "Forced password change, then they complete profile/HR on Settings." },
+    ],
+  },
+  "/settings": {
+    title: "How settings work",
+    intro: "Self-service for the signed-in login. Admins still govern roles and access from Users.",
+    steps: [
+      { n: 1, title: "Profile & HR", body: "Update name, job title, department, employee number, phone, and office." },
+      { n: 2, title: "Security", body: "Change password and enable MFA (authenticator or email)." },
+      { n: 3, title: "Shortcuts", body: "Open desks your role can reach without hunting the sidebar." },
     ],
   },
   "/integrations": {

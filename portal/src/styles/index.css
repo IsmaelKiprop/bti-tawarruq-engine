@@ -1,0 +1,48 @@
+/* Portal styles entry — Tailwind first, then legacy component CSS under styles/. */
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./base.css";
+@import "./components/ui.css";
+@import "./components/layout.css";
+@import "./components/guide.css";
+@import "./pages/CustomerJourneyPage.css";
+@import "./pages/SettingsPage.css";
+@import "./pages/AuditTrailPage.css";
+@import "./certificates/BtiKenyaCertificate.css";
+@import "./certificates/BsasCertificateModal.css";
+
+/*
+ * Map BTI design tokens into Tailwind utilities.
+ * Prefer these classes for new UI; keep legacy .panel / .btn until migrated.
+ */
+@theme inline {
+  --font-sans: var(--font-family);
+  --font-brand: var(--font-family);
+  --radius-sm: var(--radius);
+
+  --color-bti-gold: var(--bti-gold);
+  --color-bti-charcoal: var(--bti-charcoal);
+  --color-bti-white: var(--bti-white);
+  --color-bti-metallic: var(--bti-metallic-gold);
+  --color-bti-secondary-gold: var(--bti-secondary-gold);
+  --color-bti-mustard: var(--bti-mustard);
+
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-surface-elevated: var(--color-surface-elevated);
+  --color-foreground: var(--color-foreground);
+  --color-muted: var(--color-muted);
+  --color-border: var(--color-border);
+  --color-primary: var(--color-primary);
+  --color-primary-foreground: var(--color-primary-foreground);
+  --color-accent: var(--color-accent);
+  --color-accent-foreground: var(--color-accent-foreground);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-foreground: var(--color-secondary-foreground);
+  --color-destructive: var(--color-destructive);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-info: var(--color-info);
+  --color-sidebar: var(--color-sidebar);
+  --color-navbar: var(--color-navbar);
+}

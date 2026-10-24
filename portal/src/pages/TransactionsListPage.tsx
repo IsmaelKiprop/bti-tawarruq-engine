@@ -2,10 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Transaction } from "../api/client";
 import { DealTape } from "../components/DealTape";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
-import "../components/ui.css";
 
 export function TransactionsListPage() {
   const [items, setItems] = useState<Transaction[]>([]);
@@ -24,8 +21,6 @@ export function TransactionsListPage() {
 
   return (
     <PageShell wide>
-      <PageExplain content={PAGE_EXPLAINS["/transactions"]} />
-      <HowItWorks content={HOW_IT_WORKS["/transactions"]} />
       {error ? <Alert tone="error">{error}</Alert> : null}
       {preview ? (
         <DealTape

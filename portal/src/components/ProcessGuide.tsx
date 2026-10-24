@@ -10,7 +10,6 @@ import {
   RESPONSIBILITY_SPLIT,
   getPageGuide,
 } from "../config/processModel";
-import "./guide.css";
 
 const GUIDE_STORAGE_KEY = "bti.portal.guides.collapsed";
 
@@ -124,7 +123,6 @@ export function StepCallout({
   title,
   actors,
   mode,
-  children,
 }: {
   stepLabel?: string;
   title: string;
@@ -132,6 +130,7 @@ export function StepCallout({
   mode?: FlowStep["mode"];
   children?: ReactNode;
 }) {
+  // Children (long process copy) are ignored — desk docs live under Documentation.
   return (
     <div className="step-callout">
       <div className="step-callout-head">
@@ -140,7 +139,6 @@ export function StepCallout({
         <ActorChips actors={actors} />
         {mode ? <span className={`mode-tag mode-${mode}`}>{MODE_LABEL[mode]}</span> : null}
       </div>
-      {children ? <p>{children}</p> : null}
     </div>
   );
 }

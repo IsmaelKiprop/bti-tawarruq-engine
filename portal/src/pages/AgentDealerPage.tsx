@@ -2,11 +2,8 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, AgentDealer } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { PoolTape } from "../components/DealTape";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
 import { isDealerRole } from "../config/roles";
-import "../components/ui.css";
 
 type View = "list" | "detail" | "create";
 
@@ -191,10 +188,6 @@ export function AgentDealerPage() {
   return (
     <PageShell wide>
       <div className="page-grid">
-        <div className="span-2">
-          <PageExplain content={PAGE_EXPLAINS["/agent-dealers"]} />
-        </div>
-        <HowItWorks content={HOW_IT_WORKS["/agent-dealers"]} />
         <section className="panel">
           <h2>{dealerDesk ? "Your pool" : "Live pool"}</h2>
           <PoolTape
@@ -207,11 +200,6 @@ export function AgentDealerPage() {
           <div className="panel-header">
             <div>
               <h2>{dealerDesk ? "Your dealer desk" : "M-Pesa Agent Dealers"}</h2>
-              <p className="muted">
-                  {dealerDesk
-                  ? "Keep your business details current and add float here. Kenya step 2 draws from this pool. You do not see the customer journey."
-                  : "Float pool providers for Kenya step 2. Only the dealer login can add float."}
-              </p>
             </div>
             {!dealerDesk ? (
               <button className="btn btn-primary btn-sm" onClick={() => { setView("create"); setSelected(null); }}>

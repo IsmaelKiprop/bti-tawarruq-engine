@@ -34,7 +34,6 @@ init_db()
 
 app = FastAPI(title="Buruuj Shariah Audit Service", version="1.0.0")
 
-
 class ShariahEntryRequest(BaseModel):
     step_id: str
     entity_type: str

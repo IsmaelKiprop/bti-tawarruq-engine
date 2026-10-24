@@ -24,17 +24,22 @@ coverage.xml
 .env.*.local
 !.env.example
 
-# Local databases and runtime artifacts
+# Local databases and runtime artifacts (dev / test only — not production source)
 *.db
 *.sqlite
 *.sqlite3
 data/*
 !data/.gitkeep
 src/data/
+# Seeded secrets and outbound mail dumps written at runtime
+data/ops_seed_credentials.txt
+data/customer_mail/
+data/manual_bridge/
 
 # Node
 node_modules/
 portal/dist/
+portal/.vite/
 mobile/.expo/
 mobile/dist/
 *.tsbuildinfo

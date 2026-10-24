@@ -45,10 +45,17 @@ export interface SessionUser {
   institution_id: string | null;
   institution_name?: string | null;
   agent_dealer_id?: string | null;
+  user_id?: string | null;
   must_change_password: boolean;
   permissions: string[];
   mfa_enroll_required?: boolean;
   mfa_enabled?: boolean;
+  mfa_method?: "totp" | "email" | null;
+  job_title?: string | null;
+  department?: string | null;
+  employee_number?: string | null;
+  phone?: string | null;
+  office?: string | null;
 }
 
 export function getStoredSessionUser(): SessionUser | null {
@@ -200,10 +207,38 @@ export interface Transaction {
 
 export interface AuditEvent {
   id: string;
+  entity_type?: string;
+  entity_id?: string;
   actor: string;
   action: string;
   details: string | null;
+  evidence_ref?: string | null;
   timestamp: string;
+  institution_id?: string | null;
+  actor_user_id?: string | null;
+  group_id?: string | null;
+  action_group?: string | null;
+  http_method?: string | null;
+  http_path?: string | null;
+  http_status?: number | null;
+}
+
+export interface AuditGroup {
+  group_id: string;
+  action_group: string;
+  institution_id?: string | null;
+  actor_user_id?: string | null;
+  actor?: string | null;
+  started_at?: string | null;
+  ended_at?: string | null;
+  events: AuditEvent[];
+}
+
+export interface AuditFeed {
+  scope_institution_id?: string | null;
+  cross_tenant: boolean;
+  groups: AuditGroup[];
+  events: AuditEvent[];
 }
 
 export interface ShariahAuditEntry {
@@ -368,6 +403,12 @@ export interface AuthContext {
   auth_method?: string | null;
   mfa_enabled?: boolean;
   mfa_enroll_required?: boolean;
+  mfa_method?: "totp" | "email" | null;
+  job_title?: string | null;
+  department?: string | null;
+  employee_number?: string | null;
+  phone?: string | null;
+  office?: string | null;
 }
 
 export interface OpsMetrics {
@@ -391,6 +432,17 @@ export interface OpsMetrics {
   http_latency_ms_avg: number;
   http_by_status: Record<string, number>;
   http_top_paths: Record<string, number>;
+  applications_open?: number;
+  applications_completed?: number;
+  applications_failed?: number;
+  transactions_open?: number;
+  pending_approvals?: number;
+  book_amount_requested?: number;
+  disbursed_volume?: number;
+  completion_rate_pct?: number;
+  projected_30d_volume?: number;
+  projected_open_book?: number;
+  week_disbursed_volume?: number;
 }
 
 export interface LoginResponse {
@@ -408,6 +460,8 @@ export interface LoginResponse {
   mfa_token?: string | null;
   mfa_enroll_required?: boolean;
   mfa_enabled?: boolean;
+  mfa_method?: "totp" | "email" | null;
+  mfa_dev_code?: string | null;
 }
 
 export interface PendingApproval {
@@ -470,8 +524,32 @@ export interface OpsUserRecord {
   active: boolean;
   approval_limit_amount?: string | null;
   mfa_enabled?: boolean;
+  job_title?: string | null;
+  department?: string | null;
+  employee_number?: string | null;
+  phone?: string | null;
+  office?: string | null;
   created_at: string;
+  updated_at?: string | null;
 }
+
+export type OpsUserProfilePatch = {
+  full_name?: string | null;
+  job_title?: string | null;
+  department?: string | null;
+  employee_number?: string | null;
+  phone?: string | null;
+  office?: string | null;
+};
+
+export type OpsUserAdminPatch = OpsUserProfilePatch & {
+  email?: string | null;
+  role?: string | null;
+  institution_id?: string | null;
+  agent_dealer_id?: string | null;
+  active?: boolean | null;
+  approval_limit_amount?: string | null;
+};
 
 export interface KenyaOpsCase {
   application_id: string;
@@ -955,8 +1033,27 @@ export const api = {
   advanceManualBridge: (transactionId: string) =>
     request<Transaction>(`/manual-bridge/transactions/${transactionId}/advance`, { method: "POST" }),
   getAudit: (entityId: string) => request<AuditEvent[]>(`/audit?entity_id=${entityId}`),
+  getOpsAuditFeed: (params?: {
+    institution_id?: string;
+    action_group?: string;
+    actor_user_id?: string;
+    group_id?: string;
+    limit?: number;
+    grouped?: boolean;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.institution_id) q.set("institution_id", params.institution_id);
+    if (params?.action_group) q.set("action_group", params.action_group);
+    if (params?.actor_user_id) q.set("actor_user_id", params.actor_user_id);
+    if (params?.group_id) q.set("group_id", params.group_id);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.grouped != null) q.set("grouped", String(params.grouped));
+    const qs = q.toString();
+    return request<AuditFeed>(`/ops/audit${qs ? `?${qs}` : ""}`);
+  },
 
   listInstitutions: () => request<Institution[]>("/institutions"),
+  getInstitution: (institutionId: string) => request<Institution>(`/institutions/${institutionId}`),
   createInstitution: (body: {
     name: string;
     code: string;
@@ -998,6 +1095,8 @@ export const api = {
     }),
 
   getAuthContext: () => request<AuthContext>("/ops/auth/me"),
+  updateOwnProfile: (body: OpsUserProfilePatch) =>
+    request<AuthContext>("/ops/auth/me", { method: "PATCH", body: JSON.stringify(body) }),
   getOpsMetrics: () => request<OpsMetrics>("/ops/metrics"),
 
   login: (email: string, password: string) =>
@@ -1012,12 +1111,37 @@ export const api = {
       body: JSON.stringify({ mfa_token, code }),
     }),
 
-  enrollMfa: () => request<{ secret: string; otpauth_url: string; email: string }>("/ops/auth/mfa/enroll", { method: "POST" }),
+  enrollMfa: () =>
+    request<{ secret: string; otpauth_url: string; email: string; method?: string }>("/ops/auth/mfa/enroll", {
+      method: "POST",
+    }),
 
   confirmMfa: (code: string) =>
     request<LoginResponse>("/ops/auth/mfa/confirm", {
       method: "POST",
       body: JSON.stringify({ code }),
+    }),
+
+  sendEmailMfa: () =>
+    request<{ email: string; smtp_sent: boolean; mail_path: string; dev_code?: string | null; method: string }>(
+      "/ops/auth/mfa/email/send",
+      { method: "POST" },
+    ),
+
+  confirmEmailMfa: (code: string) =>
+    request<LoginResponse>("/ops/auth/mfa/email/confirm", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
+
+  enableEmailMfa: () => request<LoginResponse>("/ops/auth/mfa/email/enable", { method: "POST" }),
+
+  enableTotpMfa: () => request<LoginResponse>("/ops/auth/mfa/enable", { method: "POST" }),
+
+  disableMfa: (password: string) =>
+    request<LoginResponse>("/ops/auth/mfa/disable", {
+      method: "POST",
+      body: JSON.stringify({ password }),
     }),
 
   listApprovals: (status = "pending") =>
@@ -1064,6 +1188,7 @@ export const api = {
     }),
 
   listOpsUsers: () => request<OpsUserRecord[]>("/ops/auth/users"),
+  getOpsUser: (userId: string) => request<OpsUserRecord>(`/ops/auth/users/${userId}`),
 
   createOpsUser: (body: {
     email: string;
@@ -1086,18 +1211,8 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  updateOpsUser: (
-    userId: string,
-    body: {
-      full_name?: string;
-      email?: string;
-      role?: string;
-      institution_id?: string | null;
-      agent_dealer_id?: string | null;
-      active?: boolean;
-      approval_limit_amount?: string | null;
-    },
-  ) => request<OpsUserRecord>(`/ops/auth/users/${userId}`, { method: "PATCH", body: JSON.stringify(body) }),
+  updateOpsUser: (userId: string, body: OpsUserAdminPatch) =>
+    request<OpsUserRecord>(`/ops/auth/users/${userId}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   resetOpsUserPassword: (userId: string, temporary_password?: string) =>
     request<{

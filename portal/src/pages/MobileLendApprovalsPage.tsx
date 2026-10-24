@@ -1,10 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, Institution } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
-import "../components/ui.css";
 
 type MobileAccountRow = {
   id: string;
@@ -154,12 +151,7 @@ export function MobileLendApprovalsPage() {
     <PageShell>
       <header className="page-header">
         <h1>Mobile Lend approvals</h1>
-        <p className="muted">
-          Invite members and activate Buruuj Lend accounts before they can borrow.
-        </p>
       </header>
-      <PageExplain content={PAGE_EXPLAINS["/mobile-lend"] || PAGE_EXPLAINS["/customers"]} />
-      <HowItWorks content={HOW_IT_WORKS["/mobile-lend"] || HOW_IT_WORKS["/customers"]} />
 
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
@@ -167,9 +159,6 @@ export function MobileLendApprovalsPage() {
       {canInvite ? (
         <form className="card stack gap-md" onSubmit={sendInvite}>
           <h2>Invite by email</h2>
-          <p className="muted">
-            Customer registers with that email, claims the invite code, then you activate (unless auto-activate is on).
-          </p>
           <div className="grid-2">
             <label>
               Institution

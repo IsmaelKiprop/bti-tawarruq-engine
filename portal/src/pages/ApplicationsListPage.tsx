@@ -2,12 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, Application } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { ApplicationExplain } from "../components/ApplicationExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
-import { APPLICATION_STEP_GUIDE, previewApplicationDeal } from "../config/applicationOps";
+import { previewApplicationDeal } from "../config/applicationOps";
 import { getRoleProfile } from "../config/roles";
 import { displayCustomerName, formatMoney, formatWorkflowLabel } from "../lib/display";
-import "../components/ui.css";
 
 export function ApplicationsListPage() {
   const { user, authEnabled } = useAuth();
@@ -52,40 +50,10 @@ export function ApplicationsListPage() {
   return (
     <PageShell wide>
       <div className="page-grid">
-        <div className="span-2">
-          <ApplicationExplain />
-        </div>
-        <section className="panel span-2">
-          <h2>How applications work</h2>
-          <p className="muted">
-            This book is the customer side. Open a row for the locked offer, or start a new request
-            from a customer already on Customers. Murabaha on this list is a 5% preview until the
-            offer locks on the detail page.
-          </p>
-          <ol className="flow-list numbered">
-            {APPLICATION_STEP_GUIDE.map((step) => (
-              <li key={step.n}>
-                <strong>
-                  {step.n}. {step.title}.
-                </strong>{" "}
-                {step.body}
-              </li>
-            ))}
-          </ol>
-          <p className="meta">
-            Amount is commodity cost. Murabaha is cost plus profit. The customer repays that total,
-            not the float or the palm oil.
-          </p>
-        </section>
       <section className="panel span-2">
         <div className="table-toolbar">
           <div>
             <h2>All applications</h2>
-            <p className="muted">
-              {profile.scope === "platform"
-                ? "Financing requests across institutions. Amount is cost. Murabaha is what the customer owes."
-                : "Financing requests for this institution. Amount is cost. Murabaha is what the customer owes."}
-            </p>
           </div>
           {canWrite ? (
             <Link className="btn btn-primary btn-sm" to="/applications/new">

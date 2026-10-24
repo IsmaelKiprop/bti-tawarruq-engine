@@ -1,63 +1,89 @@
 /**
- * Buruuj Fintech brand theme.
- * Navy + gold sampled from the official logo lockup.
- * Portal CSS variables in styles/tokens.css must stay in sync with this file.
+ * BTI / Buruuj platform brand theme (single source of truth).
+ * Keep `styles/tokens.css` in sync with the values below.
+ *
+ * Primary palette
+ * - BTI Gold: #D4A017
+ * - Deep Charcoal / Black: #1C1917
+ * - Pure White: #FFFFFF
+ *
+ * Accent & executive tones
+ * - Metallic Gold: #D4AF37
+ * - Secondary Gold: #C5A059
+ * - Primary Mustard: #C2A44D
+ *
+ * Typeface: Book Antiqua
  */
+export const brandPalette = {
+  btiGold: "#D4A017",
+  charcoal: "#1C1917",
+  white: "#FFFFFF",
+  metallicGold: "#D4AF37",
+  secondaryGold: "#C5A059",
+  mustard: "#C2A44D",
+} as const;
+
 export const theme = {
   radius: "5px",
-  fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
+  fontFamily: '"Book Antiqua", "Palatino Linotype", Palatino, "Times New Roman", serif',
   brand: {
-    navy: "#0B1F3A",
-    navyDeep: "#071526",
-    gold: "#C9A227",
-    goldBright: "#D4AF37",
-    goldSoft: "#E8C96A",
+    gold: brandPalette.btiGold,
+    charcoal: brandPalette.charcoal,
+    white: brandPalette.white,
+    metallicGold: brandPalette.metallicGold,
+    secondaryGold: brandPalette.secondaryGold,
+    mustard: brandPalette.mustard,
+    /** @deprecated use charcoal — kept for older call sites */
+    navy: brandPalette.charcoal,
+    navyDeep: brandPalette.charcoal,
+    goldBright: brandPalette.metallicGold,
+    goldSoft: brandPalette.secondaryGold,
   },
   light: {
-    background: "#F3F5F8",
-    surface: "#FFFFFF",
-    surfaceElevated: "#FFFFFF",
-    foreground: "#0B1F3A",
-    muted: "#5C6B7A",
-    border: "#D8DEE6",
-    primary: "#0B1F3A",
-    primaryForeground: "#FFFFFF",
-    accent: "#C9A227",
-    accentForeground: "#0B1F3A",
-    secondary: "#EEF2F6",
-    secondaryForeground: "#1E3348",
+    background: brandPalette.white,
+    surface: brandPalette.white,
+    surfaceElevated: "#FAF8F4",
+    foreground: brandPalette.charcoal,
+    muted: "#6B6560",
+    border: "#E5DFD3",
+    primary: brandPalette.btiGold,
+    primaryForeground: brandPalette.charcoal,
+    accent: brandPalette.metallicGold,
+    accentForeground: brandPalette.charcoal,
+    secondary: "#F3EEE4",
+    secondaryForeground: brandPalette.charcoal,
     destructive: "#B42318",
     success: "#1F6B4A",
-    warning: "#B45309",
-    info: "#1D4E8C",
-    focus: "#C9A227",
-    sidebar: "#FFFFFF",
-    navbar: "#FFFFFF",
-    scrollbarTrack: "#F3F5F8",
-    scrollbarThumb: "#C5CDD8",
+    warning: brandPalette.mustard,
+    info: brandPalette.secondaryGold,
+    focus: brandPalette.metallicGold,
+    sidebar: brandPalette.white,
+    navbar: brandPalette.white,
+    scrollbarTrack: "#F3EEE4",
+    scrollbarThumb: brandPalette.secondaryGold,
   },
   dark: {
-    background: "#070D16",
-    surface: "#0F1824",
-    surfaceElevated: "#162233",
-    foreground: "#F2F4F7",
-    muted: "#9AA8B8",
-    border: "#243247",
-    primary: "#D4AF37",
-    primaryForeground: "#0B1F3A",
-    accent: "#E8C96A",
-    accentForeground: "#0B1F3A",
-    secondary: "#162233",
-    secondaryForeground: "#E5EAF0",
+    background: brandPalette.charcoal,
+    surface: "#26211E",
+    surfaceElevated: "#2F2A26",
+    foreground: brandPalette.white,
+    muted: "#A39E97",
+    border: "#3D3732",
+    primary: brandPalette.btiGold,
+    primaryForeground: brandPalette.charcoal,
+    accent: brandPalette.metallicGold,
+    accentForeground: brandPalette.charcoal,
+    secondary: "#2F2A26",
+    secondaryForeground: brandPalette.white,
     destructive: "#F97066",
     success: "#3DCF8E",
-    warning: "#F5B84C",
-    info: "#6BA3E0",
-    focus: "#E8C96A",
-    sidebar: "#0F1824",
-    navbar: "#0F1824",
-    scrollbarTrack: "#070D16",
-    scrollbarThumb: "#334155",
+    warning: brandPalette.mustard,
+    info: brandPalette.secondaryGold,
+    focus: brandPalette.metallicGold,
+    sidebar: "#26211E",
+    navbar: "#26211E",
+    scrollbarTrack: brandPalette.charcoal,
+    scrollbarThumb: brandPalette.mustard,
   },
 } as const;
 

@@ -1,13 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, Application, AuthContext, OpsMetrics } from "../api/client";
-import { BookTape } from "../components/DealTape";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
-import { Alert, LoadingPanel, PageShell } from "../components/PageShell";
+import { Alert, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
+import { IconExternal, IconMonitor } from "../components/icons";
 import { previewApplicationDeal } from "../config/applicationOps";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
 import { displayCustomerName, formatMoney, formatWorkflowLabel } from "../lib/display";
-import "../components/ui.css";
+
+const pillClass =
+  "inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-elevated px-2 py-0.5 text-[0.7rem] uppercase tracking-wide text-muted";
+const kpiClass =
+  "rounded-sm border border-border bg-surface px-3 py-2.5 flex flex-col gap-0.5 min-h-[4.75rem]";
+const panelClass = "rounded-sm border border-border bg-surface p-3 flex flex-col gap-2.5 min-w-0";
+
+function rankEntries(map: Record<string, number> | undefined, limit = 6) {
+  if (!map) return [];
+  return Object.entries(map)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+}
+
+function errorRate(metrics: OpsMetrics) {
+  if (!metrics.http_requests_total) return 0;
+  return (metrics.http_errors_total / metrics.http_requests_total) * 100;
+}
 
 export function OpsMonitorPage() {
   const [metrics, setMetrics] = useState<OpsMetrics | null>(null);
@@ -15,12 +30,14 @@ export function OpsMonitorPage() {
   const [activeApps, setActiveApps] = useState<Application[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    let active = true;
+    let alive = true;
 
-    async function load() {
-      setLoading(true);
+    async function load(isRefresh: boolean) {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
       setError("");
       try {
         const [metricsData, authData, allApps] = await Promise.all([
@@ -28,234 +45,350 @@ export function OpsMonitorPage() {
           api.getAuthContext(),
           api.listApplications().catch(() => [] as Application[]),
         ]);
-        if (!active) return;
+        if (!alive) return;
         setMetrics(metricsData);
         setAuth(authData);
-        setActiveApps(allApps.filter((a) => ["in_progress", "offer_accepted", "eligibility_pending"].includes(a.status)));
+        setActiveApps(
+          allApps.filter((a) =>
+            ["in_progress", "offer_accepted", "eligibility_pending"].includes(a.status),
+          ),
+        );
       } catch (err) {
-        if (active) {
+        if (alive) {
           setError(err instanceof Error ? err.message : "Failed to load ops metrics");
         }
       } finally {
-        if (active) setLoading(false);
+        if (!alive) return;
+        setLoading(false);
+        setRefreshing(false);
       }
     }
 
-    load();
-    const timer = window.setInterval(load, 30000);
+    void load(false);
+    const timer = window.setInterval(() => void load(true), 30_000);
     return () => {
-      active = false;
+      alive = false;
       window.clearInterval(timer);
     };
   }, []);
 
+  const appStatuses = useMemo(() => rankEntries(metrics?.applications_by_status), [metrics]);
+  const txnStatuses = useMemo(() => rankEntries(metrics?.transactions_by_status), [metrics]);
+  const topPaths = useMemo(() => rankEntries(metrics?.http_top_paths, 8), [metrics]);
+  const httpStatuses = useMemo(() => rankEntries(metrics?.http_by_status, 6), [metrics]);
+
+  const maxApp = Math.max(1, ...appStatuses.map(([, n]) => n));
+  const maxTxn = Math.max(1, ...txnStatuses.map(([, n]) => n));
+  const maxPath = Math.max(1, ...topPaths.map(([, n]) => n));
+  const maxHttp = Math.max(1, ...httpStatuses.map(([, n]) => n));
+
+  const bridgeAlert = (metrics?.manual_bridge_pending ?? 0) > 0;
+  const errorAlert = (metrics?.http_errors_total ?? 0) > 0;
+  const latencyHot = (metrics?.http_latency_ms_avg ?? 0) >= 500;
+  const errPct = metrics ? errorRate(metrics) : 0;
+
   return (
     <PageShell wide>
-      <PageExplain content={PAGE_EXPLAINS["/ops"]} />
-      <HowItWorks content={HOW_IT_WORKS["/ops"]} />
-      <BookTape
-        items={activeApps.map((app) => ({
-          amount: app.amount_requested,
-          termMonths: app.term_months,
-          currency: app.currency,
-        }))}
-        title="Active journey numbers"
-      />
-      {error && <Alert tone="error">{error}</Alert>}
-
-      {auth && (
-        <section className="panel">
-          <h2>Auth context</h2>
-          <ul className="status-list">
-            <StatusRow label="Auth enabled" ok={auth.auth_enabled} okText="Yes" noText="No (dev mode)" />
-            <StatusRow label="Role" value={auth.role ?? "none"} />
-            <StatusRow
-              label="Platform admin"
-              ok={auth.is_platform_admin}
-              okText="Yes"
-              noText="No"
-            />
-            <StatusRow label="Permissions" value={auth.permissions.join(", ") || "all (dev)"} />
-          </ul>
-        </section>
-      )}
-
-      {loading ? (
-        <LoadingPanel rows={6} />
-      ) : metrics ? (
-        <>
-          <section className="stat-cards">
-            <StatCard label="Applications" value={metrics.applications_total} hint="In scope" />
-            <StatCard label="Transactions" value={metrics.transactions_total} hint="In scope" />
-            <StatCard
-              label="Manual bridge"
-              value={metrics.manual_bridge_pending}
-              hint="Pending e-certificates"
-              tone={metrics.manual_bridge_pending > 0 ? "destructive" : undefined}
-            />
-            <StatCard label="HTTP errors" value={metrics.http_errors_total} hint="Since process start" />
-          </section>
-
-          <div className="dashboard-grid">
-            <section className="panel">
-              <h2>Applications by status</h2>
-              <KeyValueList data={metrics.applications_by_status} empty="No applications yet" />
-            </section>
-            <section className="panel">
-              <h2>Transactions by status</h2>
-              <KeyValueList data={metrics.transactions_by_status} empty="No transactions yet" />
-            </section>
-            <section className="panel">
-              <h2>Platform counters</h2>
-              <ul className="status-list">
-                <StatusRow label="Institutions" value={String(metrics.institutions_total)} />
-                <StatusRow label="Active webhooks" value={String(metrics.active_webhooks)} />
-                <StatusRow label="Active API keys" value={String(metrics.active_api_keys)} />
-                <StatusRow label="Audit events today" value={String(metrics.audit_events_today)} />
-              </ul>
-            </section>
-            <section className="panel">
-              <h2>HTTP telemetry</h2>
-              <ul className="status-list">
-                <StatusRow label="Requests" value={String(metrics.http_requests_total)} />
-                <StatusRow label="Avg latency" value={`${metrics.http_latency_ms_avg} ms`} />
-                <StatusRow label="Kenya mode" value={metrics.kenya_integration_mode} />
-                <StatusRow
-                  label="Amanah writes"
-                  ok={metrics.amanah_write_enabled}
-                  okText="Enabled"
-                  noText="Disabled"
-                />
-              </ul>
-            </section>
-            <section className="panel span-2">
-              <h2>Active Journeys</h2>
-              <p className="muted" style={{ marginBottom: "0.75rem" }}>
-                Applications in progress. Amount is cost. Murabaha is the 5% preview until the offer locks.
-              </p>
-              {activeApps.length === 0 ? (
-                <p className="muted">No active journeys right now.</p>
-              ) : (
-                <div className="table-wrap">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Customer</th>
-                        <th>Ref</th>
-                        <th>Cost / Murabaha</th>
-                        <th>Status</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeApps.map((app) => (
-                        <tr key={app.id}>
-                          <td data-label="Customer">{displayCustomerName(app)}</td>
-                          <td data-label="Ref" className="mono" style={{ fontSize: "0.75rem" }}>{app.customer_ref}</td>
-                          <td data-label="Cost / Murabaha">
-                            {(() => {
-                              const deal = previewApplicationDeal({
-                                amount: app.amount_requested,
-                                termMonths: app.term_months,
-                              });
-                              return (
-                                <>
-                                  <div>{formatMoney(app.currency, deal.cost)}</div>
-                                  <div className="meta">Murabaha {formatMoney(app.currency, deal.total)}</div>
-                                </>
-                              );
-                            })()}
-                          </td>
-                          <td data-label="Status">
-                            <span className={`badge ${app.status === "in_progress" ? "info" : "warning"}`}>
-                              {formatWorkflowLabel(app.status, app.current_phase)}
-                            </span>
-                          </td>
-                          <td>
-                            <Link className="btn btn-secondary btn-sm" to={`/customer/${app.customer_ref}`} target="_blank">
-                              Journey
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-
-            <section className="panel span-2">
-              <h2>Top paths</h2>
-              <KeyValueList data={metrics.http_top_paths} empty="No requests recorded yet" />
-              <p className="muted meta">
-                Prometheus scrape: <code>/metrics</code> · Last updated {new Date(metrics.timestamp).toLocaleString()}
-              </p>
-            </section>
+      <section className="flex flex-col gap-3">
+        <header className="grid gap-3 rounded-sm border border-border bg-surface p-3 sm:grid-cols-[1fr_auto] lg:items-center">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <IconMonitor size={16} className="text-muted" />
+              <h2 className="m-0 text-lg font-semibold tracking-tight text-foreground">Ops Monitor</h2>
+            </div>
+            <p className="m-0 mt-0.5 text-sm text-muted">
+              Engine telemetry and live desks
+              {metrics?.timestamp ? ` · ${new Date(metrics.timestamp).toLocaleString()}` : null}
+              {refreshing ? " · refreshing" : null}
+            </p>
           </div>
-        </>
-      ) : null}
+          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+            <span className={`${pillClass} border-success/40 text-success`}>
+              <span className="size-1.5 rounded-full bg-success" aria-hidden />
+              Live · 30s
+            </span>
+            {auth ? (
+              <>
+                <span className={pillClass}>{auth.role ?? "none"}</span>
+                <span className={pillClass}>
+                  {auth.auth_enabled ? "Auth on" : "Auth off"}
+                </span>
+                {auth.is_platform_admin ? <span className={pillClass}>Platform</span> : null}
+              </>
+            ) : null}
+            {metrics ? (
+              <span className={pillClass}>{metrics.kenya_integration_mode}</span>
+            ) : null}
+            <Link className="btn btn-secondary btn-sm" to="/kenya">
+              Kenya
+            </Link>
+            <Link className="btn btn-secondary btn-sm" to="/malaysia">
+              Malaysia
+            </Link>
+            <Link className="btn btn-secondary btn-sm" to="/approvals">
+              Approvals
+            </Link>
+          </div>
+        </header>
+
+        {error ? <Alert tone="error">{error}</Alert> : null}
+
+        {loading && !metrics ? (
+          <LoadingPanel rows={8} />
+        ) : metrics ? (
+          <>
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <Kpi
+                label="Manual bridge"
+                value={metrics.manual_bridge_pending}
+                hint="Pending e-certificates"
+                tone={bridgeAlert ? "alert" : undefined}
+                to="/malaysia"
+              />
+              <Kpi
+                label="HTTP errors"
+                value={metrics.http_errors_total}
+                hint={`${errPct.toFixed(2)}% of requests`}
+                tone={errorAlert ? "alert" : undefined}
+              />
+              <Kpi
+                label="Avg latency"
+                value={`${Math.round(metrics.http_latency_ms_avg)} ms`}
+                hint={latencyHot ? "Elevated" : "Since process start"}
+                tone={latencyHot ? "warn" : undefined}
+              />
+              <Kpi
+                label="Approvals queue"
+                value={metrics.pending_approvals ?? 0}
+                hint="Maker-checker waiting"
+                to="/approvals"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+              <Kpi label="Applications" value={metrics.applications_total} hint={`${metrics.applications_open ?? 0} open`} compact />
+              <Kpi label="Transactions" value={metrics.transactions_total} hint={`${metrics.transactions_open ?? 0} in flight`} compact />
+              <Kpi label="Institutions" value={metrics.institutions_total} hint="In directory" compact />
+              <Kpi label="API keys" value={metrics.active_api_keys} hint="Active" compact />
+              <Kpi label="Webhooks" value={metrics.active_webhooks} hint="Active" compact />
+              <Kpi label="Audit today" value={metrics.audit_events_today} hint="Events logged" compact />
+            </div>
+
+            <div className="grid gap-2 lg:grid-cols-3">
+              <section className={panelClass}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="m-0 text-sm font-semibold">Application mix</h3>
+                  <Link className="text-xs text-primary hover:underline" to="/applications">
+                    View
+                  </Link>
+                </div>
+                <Distribution rows={appStatuses} max={maxApp} empty="No applications yet" bar="bg-primary" />
+              </section>
+
+              <section className={panelClass}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="m-0 text-sm font-semibold">Transaction mix</h3>
+                  <Link className="text-xs text-primary hover:underline" to="/transactions">
+                    View
+                  </Link>
+                </div>
+                <Distribution rows={txnStatuses} max={maxTxn} empty="No transactions yet" bar="bg-accent" />
+              </section>
+
+              <section className={panelClass}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="m-0 text-sm font-semibold">HTTP status</h3>
+                  <span className="text-xs tabular-nums text-muted">{metrics.http_requests_total} req</span>
+                </div>
+                <Distribution rows={httpStatuses} max={maxHttp} empty="No requests yet" bar="bg-foreground/70" />
+                <div className="mt-auto grid grid-cols-2 gap-1.5 border-t border-border pt-2">
+                  <MiniStat
+                    label="Amanah writes"
+                    value={metrics.amanah_write_enabled ? "On" : "Off"}
+                    ok={metrics.amanah_write_enabled}
+                  />
+                  <MiniStat label="Auth" value={metrics.auth_enabled ? "On" : "Off"} ok={metrics.auth_enabled} />
+                </div>
+              </section>
+            </div>
+
+            <div className="grid gap-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <section className={panelClass}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="m-0 text-sm font-semibold">Active journeys</h3>
+                  <span className="text-xs tabular-nums text-muted">{activeApps.length} open</span>
+                </div>
+                {activeApps.length === 0 ? (
+                  <p className="m-0 text-sm text-muted">No applications in progress right now.</p>
+                ) : (
+                  <div className="table-wrap -mx-1">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Customer</th>
+                          <th>Ref</th>
+                          <th>Cost / Murabaha</th>
+                          <th>Status</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeApps.map((app) => {
+                          const deal = previewApplicationDeal({
+                            amount: app.amount_requested,
+                            termMonths: app.term_months,
+                          });
+                          return (
+                            <tr key={app.id}>
+                              <td data-label="Customer">{displayCustomerName(app)}</td>
+                              <td data-label="Ref" className="mono text-xs">
+                                {app.customer_ref}
+                              </td>
+                              <td data-label="Cost / Murabaha">
+                                <div className="tabular-nums">{formatMoney(app.currency, deal.cost)}</div>
+                                <div className="meta">Murabaha {formatMoney(app.currency, deal.total)}</div>
+                              </td>
+                              <td data-label="Status">
+                                <span className={statusBadgeClass(app.status)}>
+                                  {formatWorkflowLabel(app.status, app.current_phase)}
+                                </span>
+                              </td>
+                              <td>
+                                <Link
+                                  className="btn btn-secondary btn-sm inline-flex items-center gap-1"
+                                  to={`/customer/${encodeURIComponent(app.customer_ref)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Journey
+                                  <IconExternal size={12} />
+                                </Link>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+
+              <section className={panelClass}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="m-0 text-sm font-semibold">Top paths</h3>
+                  <span className="text-xs text-muted">
+                    Prometheus <code className="text-[0.7rem]">/metrics</code>
+                  </span>
+                </div>
+                {topPaths.length === 0 ? (
+                  <p className="m-0 text-sm text-muted">No requests recorded yet.</p>
+                ) : (
+                  <ul className="m-0 flex list-none flex-col gap-2 p-0">
+                    {topPaths.map(([path, count]) => (
+                      <li key={path}>
+                        <div className="mb-1 flex justify-between gap-2 text-xs">
+                          <span className="truncate font-mono text-muted" title={path}>
+                            {path}
+                          </span>
+                          <strong className="shrink-0 tabular-nums">{count}</strong>
+                        </div>
+                        <div className="h-1 overflow-hidden rounded-sm bg-border/60">
+                          <span
+                            className="block h-full rounded-sm bg-primary/80"
+                            style={{ width: `${(count / maxPath) * 100}%` }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+          </>
+        ) : null}
+      </section>
     </PageShell>
   );
 }
 
-function StatCard({
+function Kpi({
   label,
   value,
   hint,
   tone,
+  compact,
+  to,
 }: {
   label: string;
   value: string | number;
   hint: string;
-  tone?: "destructive";
+  tone?: "alert" | "warn";
+  compact?: boolean;
+  to?: string;
 }) {
-  return (
-    <article className={`stat-card${tone ? ` tone-${tone}` : ""}`}>
-      <span className="stat-card-label">{label}</span>
-      <strong className="stat-card-value">{value}</strong>
-      <span className="stat-card-hint">{hint}</span>
+  const toneClass =
+    tone === "alert"
+      ? "border-destructive/40 bg-destructive/5"
+      : tone === "warn"
+        ? "border-warning/50 bg-warning/10"
+        : "";
+  const valueClass =
+    tone === "alert" ? "text-destructive" : tone === "warn" ? "text-warning" : "text-foreground";
+
+  const body = (
+    <article className={`${kpiClass} ${toneClass} ${compact ? "min-h-[4rem]" : ""}`}>
+      <span className="text-[0.7rem] uppercase tracking-wide text-muted">{label}</span>
+      <strong className={`font-semibold tabular-nums leading-none ${compact ? "text-lg" : "text-2xl"} ${valueClass}`}>
+        {value}
+      </strong>
+      <small className="text-xs text-muted">{hint}</small>
     </article>
   );
-}
 
-function StatusRow({
-  label,
-  ok,
-  okText = "Yes",
-  noText = "No",
-  value,
-}: {
-  label: string;
-  ok?: boolean;
-  okText?: string;
-  noText?: string;
-  value?: string;
-}) {
+  if (!to) return body;
   return (
-    <li className="status-row">
-      <span>{label}</span>
-      {value !== undefined ? (
-        <span className="meta">{value}</span>
-      ) : (
-        <span className={`badge ${ok ? "success" : "warning"}`}>{ok ? okText : noText}</span>
-      )}
-    </li>
+    <Link to={to} className="block no-underline text-inherit hover:opacity-90 focus-visible:outline-none">
+      {body}
+    </Link>
   );
 }
 
-function KeyValueList({ data, empty }: { data: Record<string, number>; empty: string }) {
-  const entries = Object.entries(data);
-  if (entries.length === 0) {
-    return <p className="muted">{empty}</p>;
+function Distribution({
+  rows,
+  max,
+  empty,
+  bar,
+}: {
+  rows: [string, number][];
+  max: number;
+  empty: string;
+  bar: string;
+}) {
+  if (rows.length === 0) {
+    return <p className="m-0 text-sm text-muted">{empty}</p>;
   }
   return (
-    <ul className="status-list">
-      {entries.map(([key, count]) => (
-        <li key={key} className="status-row">
-          <span>{key}</span>
-          <span className="badge">{count}</span>
+    <ul className="m-0 flex list-none flex-col gap-2 p-0">
+      {rows.map(([key, count]) => (
+        <li key={key}>
+          <div className="mb-1 flex justify-between gap-2 text-xs">
+            <span className="truncate text-muted">{key}</span>
+            <strong className="tabular-nums">{count}</strong>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-sm bg-border/60">
+            <span className={`block h-full rounded-sm ${bar}`} style={{ width: `${(count / max) * 100}%` }} />
+          </div>
         </li>
       ))}
     </ul>
+  );
+}
+
+function MiniStat({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
+  return (
+    <div className="rounded-sm border border-border/70 bg-surface-elevated px-2 py-1.5">
+      <span className="block text-[0.65rem] uppercase tracking-wide text-muted">{label}</span>
+      <strong className={`text-sm tabular-nums ${ok === false ? "text-warning" : ""}`}>{value}</strong>
+    </div>
   );
 }

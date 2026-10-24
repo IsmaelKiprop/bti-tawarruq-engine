@@ -17,7 +17,9 @@ from sqlalchemy.orm import Session
 from tawarruq.config import get_settings
 from tawarruq.enums import ApiKeyRole
 from tawarruq.models.kenya_flow import AgentDealer
+from tawarruq.enums import AuditActor
 from tawarruq.models.ops_user import OpsUser
+from tawarruq.services.audit_service import log_audit
 from tawarruq.services.rbac import PLATFORM_SCOPED_ROLES, PORTAL_ASSIGNABLE_ROLES
 
 logger = logging.getLogger(__name__)
@@ -186,6 +188,7 @@ def begin_mfa_enroll(user: OpsUser) -> tuple[str, str]:
 
     secret = generate_totp_secret()
     user.mfa_secret = secret
+    user.mfa_method = "totp"
     user.mfa_enabled = False
     return secret, otpauth_url(secret, user.email)
 
@@ -197,7 +200,110 @@ def confirm_mfa_enroll(user: OpsUser, code: str) -> None:
         raise ValueError("Start MFA enrollment first")
     if not verify_totp(user.mfa_secret, code):
         raise ValueError("Invalid authenticator code")
+    user.mfa_method = "totp"
     user.mfa_enabled = True
+
+
+EMAIL_OTP_TTL_SECONDS = 10 * 60
+_email_otp_store: dict[str, tuple[str, float]] = {}
+
+
+def _hash_otp(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+def issue_email_otp(user: OpsUser, *, purpose: str = "login") -> dict[str, Any]:
+    """Generate a 6-digit email code, file a local copy, and SMTP-send when configured."""
+    from pathlib import Path
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    _email_otp_store[user.id] = (_hash_otp(code), time.time() + EMAIL_OTP_TTL_SECONDS)
+
+    settings = get_settings()
+    subject = "Buruuj Ops portal verification code"
+    body = (
+        f"Hello {user.full_name},\n\n"
+        f"Your one-time code for {purpose} is: {code}\n\n"
+        f"It expires in {EMAIL_OTP_TTL_SECONDS // 60} minutes.\n"
+        "If you did not request this, ignore this message.\n"
+    )
+    mail_dir = Path(settings.customer_mail_dir) / "ops_mfa"
+    mail_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d%H%M%S")
+    safe = user.email.replace("@", "_at_").replace(".", "_")
+    path = mail_dir / f"mfa_{safe}_{stamp}.txt"
+    path.write_text(f"To: {user.email}\nSubject: {subject}\n\n{body}\n", encoding="utf-8")
+
+    smtp_sent = False
+    if settings.smtp_host:
+        try:
+            from tawarruq.services.customer_notify_service import _send_smtp
+
+            smtp_sent = bool(_send_smtp(user.email, subject, body))
+        except Exception:
+            logger.exception("SMTP send failed for ops MFA to %s", user.email)
+
+    return {
+        "smtp_sent": smtp_sent,
+        "mail_path": str(path),
+        "dev_code": None if settings.smtp_host else code,
+        "email": user.email,
+    }
+
+
+def verify_email_otp(user: OpsUser, code: str) -> bool:
+    entry = _email_otp_store.get(user.id)
+    if not entry:
+        return False
+    digest, expires = entry
+    if time.time() > expires:
+        _email_otp_store.pop(user.id, None)
+        return False
+    if not hmac.compare_digest(digest, _hash_otp(code.strip())):
+        return False
+    _email_otp_store.pop(user.id, None)
+    return True
+
+
+def confirm_email_mfa_enroll(user: OpsUser, code: str) -> None:
+    if not verify_email_otp(user, code):
+        raise ValueError("Invalid or expired email code")
+    user.mfa_secret = None
+    user.mfa_method = "email"
+    user.mfa_enabled = True
+
+
+def enable_email_mfa(user: OpsUser) -> None:
+    """Turn on email MFA without an enrollment challenge — codes are gated at login."""
+    user.mfa_secret = None
+    user.mfa_method = "email"
+    user.mfa_enabled = True
+    _email_otp_store.pop(user.id, None)
+
+
+def enable_totp_mfa(user: OpsUser) -> None:
+    """Finish authenticator setup after the secret was issued — verification happens at login."""
+    if not user.mfa_secret:
+        raise ValueError("Start authenticator enrollment first")
+    user.mfa_method = "totp"
+    user.mfa_enabled = True
+
+
+def disable_mfa(user: OpsUser, *, password: str) -> None:
+    if not verify_password(password, user.password_hash):
+        raise ValueError("Current password is incorrect")
+    user.mfa_enabled = False
+    user.mfa_secret = None
+    user.mfa_method = None
+    _email_otp_store.pop(user.id, None)
+
+
+def user_mfa_method(user: OpsUser) -> str | None:
+    if not user.mfa_enabled:
+        return None
+    if user.mfa_method in ("totp", "email"):
+        return user.mfa_method
+    return "totp" if user.mfa_secret else "email"
 
 
 def get_user_by_email(db: Session, email: str) -> OpsUser | None:
@@ -275,6 +381,17 @@ def create_ops_user(
     )
     db.add(user)
     db.flush()
+    log_audit(
+        db,
+        entity_type="ops_user",
+        entity_id=user.id,
+        actor=AuditActor.HUMAN,
+        action="ops_user.created",
+        details=f"email={user.email}, role={user.role}, by={created_by_id or 'system'}",
+        institution_id=user.institution_id,
+        actor_user_id=created_by_id,
+        action_group="users",
+    )
     return user, temp
 
 
@@ -311,6 +428,15 @@ def _active_platform_admins(db: Session) -> int:
     )
 
 
+def _clean_optional_text(value: str | None, *, max_len: int) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    return cleaned[:max_len]
+
+
 def update_ops_user(
     db: Session,
     user: OpsUser,
@@ -322,8 +448,14 @@ def update_ops_user(
     agent_dealer_id: str | None = None,
     active: bool | None = None,
     approval_limit_amount=_UNSET,
+    job_title=_UNSET,
+    department=_UNSET,
+    employee_number=_UNSET,
+    phone=_UNSET,
+    office=_UNSET,
     actor_id: str | None = None,
     actor_is_platform_admin: bool = False,
+    audit_action: str = "ops_user.updated",
 ) -> OpsUser:
     if email is not None:
         email_norm = email.strip().lower()
@@ -389,7 +521,31 @@ def update_ops_user(
         user.active = active
     if approval_limit_amount is not _UNSET:
         user.approval_limit_amount = approval_limit_amount
+    if job_title is not _UNSET:
+        user.job_title = _clean_optional_text(job_title, max_len=128)
+    if department is not _UNSET:
+        user.department = _clean_optional_text(department, max_len=128)
+    if employee_number is not _UNSET:
+        user.employee_number = _clean_optional_text(employee_number, max_len=64)
+    if phone is not _UNSET:
+        user.phone = _clean_optional_text(phone, max_len=64)
+    if office is not _UNSET:
+        user.office = _clean_optional_text(office, max_len=128)
     db.flush()
+    log_audit(
+        db,
+        entity_type="ops_user",
+        entity_id=user.id,
+        actor=AuditActor.HUMAN,
+        action=audit_action,
+        details=(
+            f"email={user.email}, role={user.role}, active={user.active}, "
+            f"job_title={user.job_title or '—'}, department={user.department or '—'}, by={actor_id or 'system'}"
+        ),
+        institution_id=user.institution_id,
+        actor_user_id=actor_id,
+        action_group="users",
+    )
     return user
 
 
@@ -400,6 +556,16 @@ def reset_ops_password(db: Session, user: OpsUser, *, temporary_password: str | 
     user.password_hash = hash_password(temp)
     user.must_change_password = True
     db.flush()
+    log_audit(
+        db,
+        entity_type="ops_user",
+        entity_id=user.id,
+        actor=AuditActor.HUMAN,
+        action="ops_user.password_reset",
+        details=f"email={user.email}",
+        institution_id=user.institution_id,
+        action_group="users",
+    )
     return temp
 
 
@@ -408,6 +574,17 @@ def delete_ops_user(db: Session, user: OpsUser, *, actor_id: str | None = None) 
         raise ValueError("You cannot delete your own account")
     if user.role == ApiKeyRole.PLATFORM_ADMIN.value and user.active and _active_platform_admins(db) <= 1:
         raise ValueError("Cannot delete the last active platform admin")
+    log_audit(
+        db,
+        entity_type="ops_user",
+        entity_id=user.id,
+        actor=AuditActor.HUMAN,
+        action="ops_user.deleted",
+        details=f"email={user.email}, role={user.role}, by={actor_id or 'system'}",
+        institution_id=user.institution_id,
+        actor_user_id=actor_id,
+        action_group="users",
+    )
     db.delete(user)
     db.flush()
 

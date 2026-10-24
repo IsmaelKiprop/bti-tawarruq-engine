@@ -11,13 +11,10 @@ import {
   Transaction,
 } from "../api/client";
 import { BsasCertificateModal } from "../components/BsasCertificateModal";
-import { CommodityExplain } from "../components/CommodityExplain";
 import { CustomerPicker, type CustomerPickerHandle } from "../components/CustomerPicker";
 import { DealTape, MalaysiaLegTape, MalaysiaSettlementTape } from "../components/DealTape";
 import { Alert, EmptyState, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
-import { ActorChips, StepCallout } from "../components/ProcessGuide";
-import { MALAYSIA_STEP_GUIDE } from "../config/malaysiaOps";
-import "../components/ui.css";
+import { StepCallout } from "../components/ProcessGuide";
 
 const LEG_ACTION: Record<string, "purchase" | "transfer" | "sale"> = {
   "1": "purchase",
@@ -369,9 +366,6 @@ export function MalaysiaManualBridgePage() {
   return (
     <PageShell wide>
       <div className="page-grid">
-        <div className="span-2">
-          <CommodityExplain />
-        </div>
         <section className="panel">
           <h2>Start Malaysia Tawarruq</h2>
           <StepCallout
@@ -447,55 +441,9 @@ export function MalaysiaManualBridgePage() {
         </section>
 
         <section className="panel">
-          <h2>How the handoff works</h2>
-          <p className="muted flow-intro">
-            This is the twelve-step desk. The commodity is crude palm oil on Bursa Suq Al-Sila' (see What
-            the commodity is above). Pick a customer already on Customers, start the desk flow, then run
-            only the next unanswered packet. Do not skip ahead. The numbers on Start update as you type
-            bid, profit rate, and term.
-          </p>
-          <ol className="flow-list numbered">
-            {MALAYSIA_STEP_GUIDE.map((step) => (
-              <li key={step.n}>
-                <strong>
-                  {step.n}. {step.title}.
-                </strong>{" "}
-                {step.body}
-              </li>
-            ))}
-          </ol>
-          <p className="meta">
-            Hard rules: Leg 1 before Leg 2. Customer sale and Wakala before Leg 3. All legs before
-            disbursement. Until Buruuj is admitted, this page writes a desk packet. After onboarding, switch
-            the institution to live and set the Malaysia commodity desk to bsas or eiger.
-          </p>
-          <h3>How the desk packet moves</h3>
-          <ol className="handoff-list">
-            <li>
-              <ActorChips actors={["bti", "amanah"]} />
-              <span>Engine writes a Bursa-shaped desk email and JSON packet for the pending leg.</span>
-            </li>
-            <li>
-              <ActorChips actors={["bank"]} />
-              <span>You copy that packet and send it to BSAS Ops as the Agent purchase instruction.</span>
-            </li>
-            <li>
-              <ActorChips actors={["bursa"]} />
-              <span>
-                Bursa executes on the exchange, applies fees, and returns the Islamic Services Receipt.
-              </span>
-            </li>
-            <li>
-              <ActorChips actors={["bank", "bti"]} />
-              <span>You paste the certificate below; the engine confirms the leg and unlocks the next.</span>
-            </li>
-            <li>
-              <ActorChips actors={["bti", "customer"]} />
-              <span>After Leg 3 the engine disburses and issues the financing certificate.</span>
-            </li>
-          </ol>
-          {inbox && (
-            <div className="info-grid" style={{ marginTop: "1rem" }}>
+          <h2>Desk inbox</h2>
+          {inbox ? (
+            <div className="info-grid">
               <div className="info-item">
                 <span>Inbox</span>
                 <strong className="mono" style={{ fontSize: "0.75rem" }}>
@@ -515,6 +463,8 @@ export function MalaysiaManualBridgePage() {
                 <strong>{inbox.unanswered_request_refs.length}</strong>
               </div>
             </div>
+          ) : (
+            <EmptyState title="Inbox idle" description="Start a desk flow to open the packet inbox." />
           )}
         </section>
 
@@ -529,9 +479,6 @@ export function MalaysiaManualBridgePage() {
           <div className="table-toolbar">
             <div>
               <h2>Bursa desk batch email</h2>
-              <p className="muted">
-                Multi-customer REQUEST FOR LIVE ACCESS format (same shape as the BSAS Ops sample)
-              </p>
             </div>
             <button type="button" className="btn btn-secondary btn-sm" onClick={rebuildBatch} disabled={busy}>
               Rebuild batch

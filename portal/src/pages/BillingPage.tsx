@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, type BillingInvoice, type Institution } from "../api/client";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import "../components/ui.css";
 
 export function BillingPage() {
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]);

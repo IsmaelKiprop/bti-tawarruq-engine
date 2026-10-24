@@ -2,11 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, RepaymentBoardItem } from "../api/client";
 import { RepaymentTape } from "../components/DealTape";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
 import { formatMoney } from "../lib/display";
-import "../components/ui.css";
 
 export function RepaymentsPage() {
   const [items, setItems] = useState<RepaymentBoardItem[]>([]);
@@ -56,14 +53,11 @@ export function RepaymentsPage() {
 
   return (
     <PageShell wide>
-      <PageExplain content={PAGE_EXPLAINS["/repayments"]} />
-      <HowItWorks content={HOW_IT_WORKS["/repayments"]} />
       <RepaymentTape items={items} />
       <section className="panel">
         <div className="panel-header">
           <div>
             <h2>Repayment board</h2>
-            <p className="muted">Collect deferred Murabaha instalments after disbursement</p>
           </div>
           <button type="button" className="btn btn-secondary btn-sm" onClick={load}>
             Refresh

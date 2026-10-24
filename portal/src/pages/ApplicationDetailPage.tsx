@@ -7,7 +7,6 @@ import { Alert, LoadingPanel, PageShell, statusBadgeClass } from "../components/
 import { applicationUsesSpot } from "../config/applicationOps";
 import { getRoleProfile } from "../config/roles";
 import { formatMoney } from "../lib/display";
-import "../components/ui.css";
 
 export function ApplicationDetailPage() {
   const { user, authEnabled } = useAuth();

@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, CustomerJourney, JourneyCertificate } from "../api/client";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { api, Application, CustomerJourney, JourneyCertificate } from "../api/client";
 import type { Certificate } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { BrandLogo } from "../components/BrandLogo";
@@ -8,11 +8,8 @@ import { BsasCertificateModal } from "../components/BsasCertificateModal";
 import { BtiKenyaCertificate } from "../components/BtiKenyaCertificate";
 import { TradeDocumentModal, type TradeDocKind } from "../components/TradeDocumentModal";
 import { DealTape } from "../components/DealTape";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
-import "../components/ui.css";
-import "./CustomerJourneyPage.css";
+import { formatMoney, formatWorkflowLabel } from "../lib/display";
 
 interface MatchedApp {
   application_id: string;
@@ -23,6 +20,11 @@ interface MatchedApp {
   institution: string | null;
   created_at: string | null;
 }
+
+const SAMPLE_REF = "CUST-DEFAULT-2026-0003";
+const pillClass =
+  "inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-elevated px-2 py-0.5 text-[0.7rem] uppercase tracking-wide text-muted";
+const panelClass = "rounded-sm border border-border bg-surface p-3 flex flex-col gap-2.5 min-w-0";
 
 export function CustomerJourneyPage() {
   const { authEnabled, user } = useAuth();
@@ -175,6 +177,7 @@ export function CustomerJourneyPage() {
     />
   ) : (
     <JourneyView
+      embedded={embedded}
       journey={journey}
       loading={loading}
       error={error}
@@ -242,95 +245,345 @@ function LookupView({
   onLookup: (event: FormEvent) => void;
   onSelect: (ref: string) => void;
 }) {
-  return (
-    <div className={embedded ? "customer-lookup customer-lookup-embedded" : "customer-lookup"}>
-      <PageExplain content={PAGE_EXPLAINS["/customer"]} />
-      <HowItWorks content={HOW_IT_WORKS["/customer"]} />
-      <section className="panel">
-        {embedded ? (
-          <div className="panel-header">
-            <div>
-              <p className="customer-kicker">Customer visibility</p>
-              <h2>Look up a journey</h2>
-              <p className="muted">
-                Enter an application reference or phone number to open live status and certificates.
-              </p>
-            </div>
+  if (!embedded) {
+    return (
+      <div className="customer-lookup">
+        <section className="panel">
+          <div className="login-brand login-brand--logo">
+            <BrandLogo variant="lockup" />
+            <p>Track your financing journey</p>
           </div>
-        ) : (
-          <>
-            <div className="login-brand login-brand--logo">
-              <BrandLogo variant="lockup" />
-              <p>Track your financing journey</p>
-            </div>
-            <p className="muted">
-              Enter your application reference or phone number to see live status and certificates.
-            </p>
-          </>
-        )}
-        <form className="form" onSubmit={onLookup}>
-          <label>
+          <p className="muted">
+            Enter your application reference or phone number to see live status and certificates.
+          </p>
+          <LookupForm
+            lookupRef={lookupRef}
+            phone={phone}
+            loading={loading}
+            error={error}
+            setLookupRef={setLookupRef}
+            setPhone={setPhone}
+            onLookup={onLookup}
+            submitLabel="View my journey"
+          />
+          <MatchList matchedApps={matchedApps} onSelect={onSelect} />
+          <div className="customer-sample">
+            <p className="customer-kicker">Sample reference</p>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onSelect(SAMPLE_REF)}>
+              {SAMPLE_REF}
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <WorkspaceLookup
+      lookupRef={lookupRef}
+      phone={phone}
+      loading={loading}
+      error={error}
+      matchedApps={matchedApps}
+      setLookupRef={setLookupRef}
+      setPhone={setPhone}
+      onLookup={onLookup}
+      onSelect={onSelect}
+    />
+  );
+}
+
+function WorkspaceLookup({
+  lookupRef,
+  phone,
+  loading,
+  error,
+  matchedApps,
+  setLookupRef,
+  setPhone,
+  onLookup,
+  onSelect,
+}: {
+  lookupRef: string;
+  phone: string;
+  loading: boolean;
+  error: string;
+  matchedApps: MatchedApp[];
+  setLookupRef: (value: string) => void;
+  setPhone: (value: string) => void;
+  onLookup: (event: FormEvent) => void;
+  onSelect: (ref: string) => void;
+}) {
+  const [recent, setRecent] = useState<Application[]>([]);
+  const [recentLoading, setRecentLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .listApplications()
+      .then((items) => {
+        if (!alive) return;
+        const open = items
+          .filter((a) =>
+            ["in_progress", "offer_accepted", "eligibility_pending", "offer_pending"].includes(a.status),
+          )
+          .slice(0, 8);
+        setRecent(open.length ? open : items.slice(0, 8));
+      })
+      .catch(() => {
+        if (alive) setRecent([]);
+      })
+      .finally(() => {
+        if (alive) setRecentLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return (
+    <section className="flex flex-col gap-3">
+      <header className="grid gap-3 rounded-sm border border-border bg-surface p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+        <div className="min-w-0">
+          <h2 className="m-0 text-lg font-semibold tracking-tight text-foreground">Customer Journey</h2>
+          <p className="m-0 mt-0.5 text-sm text-muted">Live tracker, accept/sign actions, and certificates</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+          <span className={pillClass}>Workspace</span>
+          <Link className="btn btn-secondary btn-sm" to="/customers">
+            Customers
+          </Link>
+          <Link className="btn btn-secondary btn-sm" to="/applications">
+            Applications
+          </Link>
+          <Link className="btn btn-secondary btn-sm" to="/kenya">
+            Kenya Ops
+          </Link>
+        </div>
+      </header>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <section className={panelClass}>
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="m-0 text-sm font-semibold">Look up</h3>
+            <span className="text-xs text-muted">Reference or phone</span>
+          </div>
+          <LookupForm
+            lookupRef={lookupRef}
+            phone={phone}
+            loading={loading}
+            error={error}
+            setLookupRef={setLookupRef}
+            setPhone={setPhone}
+            onLookup={onLookup}
+            submitLabel="Open journey"
+            workspace
+          />
+          <MatchList matchedApps={matchedApps} onSelect={onSelect} workspace />
+          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5">
+            <span className="text-[0.7rem] uppercase tracking-wide text-muted">Sample</span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm font-mono text-xs"
+              onClick={() => onSelect(SAMPLE_REF)}
+            >
+              {SAMPLE_REF}
+            </button>
+          </div>
+        </section>
+
+        <section className={panelClass}>
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="m-0 text-sm font-semibold">Open book</h3>
+            <span className="text-xs tabular-nums text-muted">{recent.length} shown</span>
+          </div>
+          {recentLoading ? (
+            <LoadingPanel rows={4} />
+          ) : recent.length === 0 ? (
+            <EmptyState
+              title="No applications yet"
+              description="Register a customer, then start a Kenya or Malaysia case."
+              action={
+                <Link className="btn btn-primary btn-sm" to="/customers">
+                  Customers
+                </Link>
+              }
+            />
+          ) : (
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+              {recent.map((app) => (
+                <li key={app.id}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 rounded-sm border border-border bg-surface-elevated px-2.5 py-2 text-left transition-colors hover:border-foreground/40"
+                    onClick={() => onSelect(app.customer_ref)}
+                  >
+                    <span className="min-w-0">
+                      <strong className="block truncate text-sm">{app.customer_name || app.customer_ref}</strong>
+                      <span className="mono block truncate text-xs text-muted">{app.customer_ref}</span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={statusBadgeClass(app.status)}>
+                        {formatWorkflowLabel(app.status, app.current_phase)}
+                      </span>
+                      <span className="text-xs tabular-nums text-muted">
+                        {formatMoney(app.currency, app.amount_requested)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function LookupForm({
+  lookupRef,
+  phone,
+  loading,
+  error,
+  setLookupRef,
+  setPhone,
+  onLookup,
+  submitLabel,
+  workspace,
+}: {
+  lookupRef: string;
+  phone: string;
+  loading: boolean;
+  error: string;
+  setLookupRef: (value: string) => void;
+  setPhone: (value: string) => void;
+  onLookup: (event: FormEvent) => void;
+  submitLabel: string;
+  workspace?: boolean;
+}) {
+  if (workspace) {
+    return (
+      <form className="flex flex-col gap-2.5" onSubmit={onLookup}>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-sm">
             Application reference
             <input
+              className="rounded-sm border border-border bg-background px-2.5 py-2 font-mono text-sm"
               value={lookupRef}
               onChange={(e) => setLookupRef(e.target.value)}
-              placeholder="CUST-DEFAULT-2026-0003"
+              placeholder={SAMPLE_REF}
+              autoComplete="off"
             />
           </label>
-          <label>
+          <label className="flex flex-col gap-1 text-sm">
             Phone number
             <input
+              className="rounded-sm border border-border bg-background px-2.5 py-2 text-sm"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="254700999888"
               type="tel"
+              autoComplete="tel"
             />
           </label>
-          {error && <Alert tone="error">{error}</Alert>}
+        </div>
+        {error ? <Alert tone="error">{error}</Alert> : null}
+        <div className="flex flex-wrap gap-2">
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? "Searching" : "View my journey"}
-          </button>
-        </form>
-
-        {matchedApps.length > 0 && (
-          <div className="customer-match-list">
-            <p className="customer-kicker">Select an application</p>
-            {matchedApps.map((app) => (
-              <button
-                key={app.application_id}
-                type="button"
-                className="customer-match-item"
-                onClick={() => onSelect(app.customer_ref)}
-              >
-                <span>
-                  <strong className="mono">{app.customer_ref}</strong>
-                  <span className="muted">
-                    {app.currency} {parseFloat(app.amount).toLocaleString("en-KE")}
-                    {app.institution ? ` · ${app.institution}` : ""}
-                  </span>
-                </span>
-                <span className={statusBadgeClass(app.status)}>{app.status.replace(/_/g, " ")}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="customer-sample">
-          <p className="customer-kicker">Sample reference</p>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => onSelect("CUST-DEFAULT-2026-0003")}
-          >
-            CUST-DEFAULT-2026-0003
+            {loading ? "Searching…" : submitLabel}
           </button>
         </div>
-      </section>
+      </form>
+    );
+  }
+
+  return (
+    <form className="form" onSubmit={onLookup}>
+      <label>
+        Application reference
+        <input
+          value={lookupRef}
+          onChange={(e) => setLookupRef(e.target.value)}
+          placeholder={SAMPLE_REF}
+        />
+      </label>
+      <label>
+        Phone number
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="254700999888" type="tel" />
+      </label>
+      {error ? <Alert tone="error">{error}</Alert> : null}
+      <button type="submit" className="btn btn-primary" disabled={loading}>
+        {loading ? "Searching" : submitLabel}
+      </button>
+    </form>
+  );
+}
+
+function MatchList({
+  matchedApps,
+  onSelect,
+  workspace,
+}: {
+  matchedApps: MatchedApp[];
+  onSelect: (ref: string) => void;
+  workspace?: boolean;
+}) {
+  if (matchedApps.length === 0) return null;
+
+  if (workspace) {
+    return (
+      <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
+        <span className="text-[0.7rem] uppercase tracking-wide text-muted">
+          {matchedApps.length} matches
+        </span>
+        {matchedApps.map((app) => (
+          <button
+            key={app.application_id}
+            type="button"
+            className="flex w-full items-center justify-between gap-2 rounded-sm border border-border bg-surface-elevated px-2.5 py-2 text-left hover:border-foreground/40"
+            onClick={() => onSelect(app.customer_ref)}
+          >
+            <span className="min-w-0">
+              <strong className="mono block truncate text-sm">{app.customer_ref}</strong>
+              <span className="block truncate text-xs text-muted">
+                {formatMoney(app.currency || "KES", app.amount)}
+                {app.institution ? ` · ${app.institution}` : ""}
+              </span>
+            </span>
+            <span className={statusBadgeClass(app.status)}>{app.status.replace(/_/g, " ")}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="customer-match-list">
+      <p className="customer-kicker">Select an application</p>
+      {matchedApps.map((app) => (
+        <button
+          key={app.application_id}
+          type="button"
+          className="customer-match-item"
+          onClick={() => onSelect(app.customer_ref)}
+        >
+          <span>
+            <strong className="mono">{app.customer_ref}</strong>
+            <span className="muted">
+              {app.currency} {parseFloat(app.amount).toLocaleString("en-KE")}
+              {app.institution ? ` · ${app.institution}` : ""}
+            </span>
+          </span>
+          <span className={statusBadgeClass(app.status)}>{app.status.replace(/_/g, " ")}</span>
+        </button>
+      ))}
     </div>
   );
 }
 
 function JourneyView({
+  embedded,
   journey,
   loading,
   error,
@@ -346,6 +599,7 @@ function JourneyView({
   actionBusy,
   onCustomerAction,
 }: {
+  embedded: boolean;
   journey: CustomerJourney | null;
   loading: boolean;
   error: string;
@@ -362,12 +616,12 @@ function JourneyView({
   onCustomerAction: () => void;
 }) {
   return (
-    <div className="customer-journey">
+    <div className={embedded ? "flex flex-col gap-3" : "customer-journey"}>
       {error && journey && <Alert tone="error">{error}</Alert>}
       {loading && !journey && <LoadingPanel rows={6} />}
 
       {!loading && !journey && (
-        <section className="panel">
+        <section className={embedded ? panelClass : "panel"}>
           <EmptyState
             title="Journey not found"
             description="Check the application reference or phone number, then try another lookup."
@@ -382,33 +636,86 @@ function JourneyView({
 
       {journey && (
         <>
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="customer-kicker">
-                  {journey.track === "malaysia" ? "Malaysia BSAS" : "Kenya float"} track
-                </p>
-                <h2>{journey.customer_name || journey.customer_ref}</h2>
-                <p className="muted">
-                  {journey.currency} {parseFloat(journey.amount).toLocaleString("en-KE")}
-                  {journey.murabaha_total && (
-                    <>
-                      {" "}
-                      payable {journey.currency} {parseFloat(journey.murabaha_total).toLocaleString("en-KE")}
-                    </>
-                  )}
+          {embedded ? (
+            <header className="grid gap-3 rounded-sm border border-border bg-surface p-3 lg:grid-cols-[1fr_auto] lg:items-center">
+              <div className="min-w-0">
+                <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                  <span className={pillClass}>
+                    {journey.track === "malaysia" ? "Malaysia BSAS" : "Kenya float"}
+                  </span>
+                  <span className={statusBadgeClass(journey.status)}>
+                    {journey.status.replace(/_/g, " ")}
+                  </span>
+                  {pollingActive ? (
+                    <span className={`${pillClass} border-success/40 text-success`}>
+                      <span className="size-1.5 rounded-full bg-success" aria-hidden />
+                      Live
+                    </span>
+                  ) : null}
+                </div>
+                <h2 className="m-0 text-lg font-semibold tracking-tight">
+                  {journey.customer_name || journey.customer_ref}
+                </h2>
+                <p className="m-0 mt-0.5 text-sm text-muted">
+                  {formatMoney(journey.currency || "KES", journey.amount)}
+                  {journey.murabaha_total
+                    ? ` · Murabaha ${formatMoney(journey.currency || "KES", journey.murabaha_total)}`
+                    : ""}
                   {journey.institution_name ? ` · ${journey.institution_name}` : ""}
                 </p>
-                <p className="mono muted">Ref {journey.customer_ref}</p>
+                <p className="mono m-0 mt-0.5 text-xs text-muted">{journey.customer_ref}</p>
               </div>
-              <div className="actions">
-                <span className={statusBadgeClass(journey.status)}>{journey.status.replace(/_/g, " ")}</span>
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                <div className="min-w-[9rem] flex-1 sm:flex-none">
+                  <div className="mb-1 flex justify-between gap-2 text-xs text-muted">
+                    <span>Progress</span>
+                    <span className="tabular-nums">{progress}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-sm bg-border/60" aria-label={`Progress ${progress} percent`}>
+                    <span className="block h-full rounded-sm bg-primary" style={{ width: `${progress}%` }} />
+                  </div>
+                  <p className="m-0 mt-1 text-xs text-muted">
+                    {allDone
+                      ? "Complete"
+                      : `Step ${journey.overall_progress} of ${journey.total_steps}`}
+                  </p>
+                </div>
                 <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
                   New lookup
                 </button>
               </div>
-            </div>
+            </header>
+          ) : (
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <p className="customer-kicker">
+                    {journey.track === "malaysia" ? "Malaysia BSAS" : "Kenya float"} track
+                  </p>
+                  <h2>{journey.customer_name || journey.customer_ref}</h2>
+                  <p className="muted">
+                    {journey.currency} {parseFloat(journey.amount).toLocaleString("en-KE")}
+                    {journey.murabaha_total && (
+                      <>
+                        {" "}
+                        payable {journey.currency} {parseFloat(journey.murabaha_total).toLocaleString("en-KE")}
+                      </>
+                    )}
+                    {journey.institution_name ? ` · ${journey.institution_name}` : ""}
+                  </p>
+                  <p className="mono muted">Ref {journey.customer_ref}</p>
+                </div>
+                <div className="actions">
+                  <span className={statusBadgeClass(journey.status)}>{journey.status.replace(/_/g, " ")}</span>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
+                    New lookup
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
 
+          <section className={embedded ? panelClass : "panel"}>
             <DealTape
               amount={journey.amount}
               termMonths={journey.term_months || journey.steps.find((step) => step.installments_total)?.installments_total || 12}
@@ -427,6 +734,7 @@ function JourneyView({
               installmentsPaid={journey.steps.find((step) => step.installments_paid !== undefined)?.installments_paid}
             />
 
+            {!embedded ? (
             <div className="customer-progress" aria-label={`Progress ${progress} percent`}>
               <div className="customer-progress-track">
                 <div className="customer-progress-fill" style={{ width: `${progress}%` }} />
@@ -438,6 +746,7 @@ function JourneyView({
                 {pollingActive ? " · Updating" : ""}
               </p>
             </div>
+            ) : null}
             {journey.customer_action ? (
               <div className="customer-action">
                 <p>
@@ -506,9 +815,13 @@ function JourneyView({
             )}
           </section>
 
-          <div className="page-grid">
-            <section className="panel">
-              <h2>Financing steps</h2>
+          <div className={embedded ? "grid gap-3 lg:grid-cols-2" : "page-grid"}>
+            <section className={embedded ? panelClass : "panel"}>
+              {embedded ? (
+                <h3 className="m-0 text-sm font-semibold">Financing steps</h3>
+              ) : (
+                <h2>Financing steps</h2>
+              )}
               <ol className="customer-steps">
                 {journey.steps.map((step) => {
                   const expanded = openStep === step.number;
@@ -614,8 +927,12 @@ function JourneyView({
               </ol>
             </section>
 
-            <section className="panel">
-              <h2>Certificates</h2>
+            <section className={embedded ? panelClass : "panel"}>
+              {embedded ? (
+                <h3 className="m-0 text-sm font-semibold">Certificates</h3>
+              ) : (
+                <h2>Certificates</h2>
+              )}
               {journey.certificates.length === 0 ? (
                 <EmptyState
                   title="No certificates yet"

@@ -28,6 +28,8 @@ export interface NavItem {
   permission?: string;
   roles?: OpsRole[];
   excludeRoles?: OpsRole[];
+  /** Temporarily omit from the sidebar without removing the route. */
+  hidden?: boolean;
 }
 
 export interface NavSection {
@@ -49,13 +51,20 @@ export const NAV_SECTIONS: NavSection[] = [
         hint: "Engine telemetry for your role",
         permission: "view_metrics",
       },
-      { to: "/customer", label: "Customer Journey", Icon: IconApplications, hint: "Eight-step tracker and certificates" },
+      {
+        to: "/customer",
+        label: "Customer Journey",
+        Icon: IconApplications,
+        hint: "Eight-step tracker and certificates",
+        hidden: true,
+      },
       {
         to: "/billing",
         label: "Billing",
         Icon: IconMonitor,
         hint: "Fees and invoices (BTI Finance)",
         permission: "manage_billing",
+        hidden: true,
       },
       {
         to: "/reconciliation",
@@ -63,6 +72,7 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: IconTransactions,
         hint: "Settlement matching",
         permission: "reconcile",
+        hidden: true,
       },
     ],
   },
@@ -72,8 +82,22 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: "/institutions", label: "Institutions", Icon: IconInstitutions, hint: "Onboard a bank or SACCO", permission: "manage_institutions" },
       { to: "/users", label: "Users", Icon: IconUsers, hint: "Roles and portal logins", permission: "manage_credentials" },
-      { to: "/integrations", label: "Integrations", Icon: IconIntegrations, hint: "Partner credentials", permission: "manage_integrations" },
-      { to: "/webhooks", label: "Webhooks & Keys", Icon: IconWebhooks, hint: "System-to-system", permission: "manage_credentials" },
+      {
+        to: "/integrations",
+        label: "Integrations",
+        Icon: IconIntegrations,
+        hint: "Partner credentials",
+        permission: "manage_integrations",
+        hidden: true,
+      },
+      {
+        to: "/webhooks",
+        label: "Webhooks & Keys",
+        Icon: IconWebhooks,
+        hint: "System-to-system",
+        permission: "manage_credentials",
+        hidden: true,
+      },
     ],
   },
   {
@@ -136,20 +160,56 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "records",
     label: "Records & evidence",
     items: [
-      { to: "/applications/new", label: "New Application", Icon: IconNewApplication, hint: "Start a journey", permission: "write_ops" },
-      { to: "/applications", label: "Applications", Icon: IconApplications, hint: "Customer side" },
-      { to: "/transactions", label: "Transactions", Icon: IconTransactions, hint: "Commodity side" },
-      { to: "/shariah", label: "Shariah Audit", Icon: IconShariah, hint: "Verify the chain", permission: "view_shariah" },
+      {
+        to: "/applications/new",
+        label: "New Application",
+        Icon: IconNewApplication,
+        hint: "Start a journey",
+        permission: "write_ops",
+        hidden: true,
+      },
+      { to: "/applications", label: "Applications", Icon: IconApplications, hint: "Customer side", hidden: true },
+      { to: "/transactions", label: "Transactions", Icon: IconTransactions, hint: "Commodity side", hidden: true },
+      {
+        to: "/shariah",
+        label: "Shariah Audit",
+        Icon: IconShariah,
+        hint: "Verify the chain",
+        permission: "view_shariah",
+        hidden: true,
+      },
+      {
+        to: "/documentation",
+        label: "Documentation",
+        Icon: IconApplications,
+        hint: "Process guides and desk explainers",
+        excludeRoles: ["agent_dealer"],
+      },
+      {
+        to: "/audit",
+        label: "Audit trail",
+        Icon: IconShariah,
+        hint: "Grouped ops events from login onward",
+        roles: ["platform_admin", "bti_ops", "bti_finance", "institution_admin", "shariah_officer", "reconciler"],
+      },
     ],
   },
 ];
 
-export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((section) => section.items);
+export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((section) => section.items).filter((item) => !item.hidden);
 
 export const ROUTE_META: Record<string, { title: string; description: string }> = {
   "/": {
     title: "Dashboard",
-    description: "System health, integrations, and quick actions",
+    description: "Live book, queues, and projected analytics",
+  },
+  "/documentation": {
+    title: "Documentation",
+    description: "Process guides, desk explainers, and approval-limit notes",
+  },
+  "/audit": {
+    title: "Audit trail",
+    description: "Grouped portal and API operations scoped to your institutions",
   },
   "/ops": {
     title: "Ops Monitor",
@@ -171,13 +231,25 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
     title: "Agent Dealers",
     description: "Kenya step 2 float pools. Only the dealer login can add float.",
   },
+  "/settings": {
+    title: "Settings",
+    description: "Profile, HR record, password, MFA, and role shortcuts",
+  },
   "/institutions": {
     title: "Institutions",
-    description: "Onboard banks and SACCOs onto the Tawarruq engine",
+    description: "Client banks and SACCOs; manage profile, controls, and audit per tenant",
+  },
+  "/institutions/:institutionId": {
+    title: "Institution management",
+    description: "Tenant profile, maker-checker, billing fee, and audit trail",
   },
   "/users": {
     title: "Users",
-    description: "Create ops logins and share temporary passwords",
+    description: "Invite portal logins; manage profile, HR, and audit per user",
+  },
+  "/users/:userId": {
+    title: "User management",
+    description: "Admin profile, HR fields, access actions, and audit trail",
   },
   "/applications": {
     title: "Applications",
@@ -263,6 +335,22 @@ export function getRouteMeta(pathname: string, role?: string | null) {
       title: "Customer Profile",
       description: "Customer record, applications, and journey links",
     };
+  }
+  if (pathname.startsWith("/users/") && pathname !== "/users") {
+    return (
+      ROUTE_META["/users/:userId"] || {
+        title: "User management",
+        description: "Admin profile, HR fields, access actions, and audit trail",
+      }
+    );
+  }
+  if (pathname.startsWith("/institutions/") && pathname !== "/institutions") {
+    return (
+      ROUTE_META["/institutions/:institutionId"] || {
+        title: "Institution management",
+        description: "Tenant profile, maker-checker, billing fee, and audit trail",
+      }
+    );
   }
   if (pathname.startsWith("/applications/")) {
     return {

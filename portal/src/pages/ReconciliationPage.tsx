@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type ReconciliationRow } from "../api/client";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import "../components/ui.css";
 
 export function ReconciliationPage() {
   const [items, setItems] = useState<ReconciliationRow[]>([]);

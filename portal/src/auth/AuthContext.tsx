@@ -19,10 +19,18 @@ import {
   type SessionUser,
 } from "../api/client";
 
+type EngineHealth = {
+  online: boolean | null;
+  status: string | null;
+  checkedAt: number | null;
+};
+
 type AuthState = {
   loading: boolean;
   authEnabled: boolean;
   user: SessionUser | null;
+  engineHealth: EngineHealth;
+  refreshHealth: () => Promise<EngineHealth>;
   login: (email: string, password: string) => Promise<SessionUser>;
   logout: () => void;
   refresh: () => Promise<void>;
@@ -31,7 +39,15 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-function toSessionUser(result: LoginResponse): SessionUser {
+const INITIAL_HEALTH: EngineHealth = { online: null, status: null, checkedAt: null };
+
+function healthFromPayload(data: { status?: string } | null | undefined): EngineHealth {
+  const status = data?.status ?? null;
+  const online = status === "ok" || status === "degraded";
+  return { online, status, checkedAt: Date.now() };
+}
+
+function toSessionUser(result: LoginResponse, extras?: Partial<SessionUser>): SessionUser {
   return {
     email: result.email,
     full_name: result.full_name,
@@ -43,35 +59,51 @@ function toSessionUser(result: LoginResponse): SessionUser {
     permissions: result.permissions || [],
     mfa_enroll_required: Boolean(result.mfa_enroll_required),
     mfa_enabled: Boolean(result.mfa_enabled),
+    mfa_method: result.mfa_method ?? null,
+    ...extras,
   };
-}
-
-async function readAuthEnabledFallback(): Promise<boolean> {
-  try {
-    const health = await fetchHealth();
-    return Boolean(health?.auth_enabled);
-  } catch {
-    return true;
-  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [authEnabled, setAuthEnabled] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [engineHealth, setEngineHealth] = useState<EngineHealth>(INITIAL_HEALTH);
 
-  const applyLoginResponse = useCallback((result: LoginResponse) => {
-    setAccessToken(result.access_token);
-    const session = toSessionUser(result);
-    setStoredSessionUser(session);
-    setUser(session);
-    setAuthEnabled(true);
-    return session;
+  const refreshHealth = useCallback(async () => {
+    try {
+      const data = await fetchHealth();
+      const next = healthFromPayload(data);
+      setEngineHealth(next);
+      if (typeof data?.auth_enabled === "boolean") {
+        setAuthEnabled(Boolean(data.auth_enabled));
+      }
+      return next;
+    } catch {
+      const next: EngineHealth = { online: false, status: "unreachable", checkedAt: Date.now() };
+      setEngineHealth(next);
+      return next;
+    }
   }, []);
+
+  const applyLoginResponse = useCallback(
+    (result: LoginResponse) => {
+      setAccessToken(result.access_token);
+      const session = toSessionUser(result);
+      setStoredSessionUser(session);
+      setUser(session);
+      setAuthEnabled(true);
+      if (result.access_token) {
+        void refreshHealth();
+      }
+      return session;
+    },
+    [refreshHealth],
+  );
 
   const refresh = useCallback(async () => {
     try {
-      const ctx = await api.getAuthContext();
+      const [ctx] = await Promise.all([api.getAuthContext(), refreshHealth()]);
       setAuthEnabled(Boolean(ctx.auth_enabled));
       if (!ctx.auth_enabled) {
         setUser(null);
@@ -89,24 +121,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         institution_id: ctx.institution_id,
         institution_name: ctx.institution_name ?? stored?.institution_name,
         agent_dealer_id: ctx.agent_dealer_id ?? stored?.agent_dealer_id,
+        user_id: ctx.user_id ?? stored?.user_id,
         must_change_password: Boolean(ctx.must_change_password ?? stored?.must_change_password),
         permissions: ctx.permissions?.length ? ctx.permissions : stored?.permissions || [],
         mfa_enroll_required: Boolean(ctx.mfa_enroll_required ?? stored?.mfa_enroll_required),
         mfa_enabled: Boolean(ctx.mfa_enabled ?? stored?.mfa_enabled),
+        mfa_method: (ctx.mfa_method ?? stored?.mfa_method ?? null) as SessionUser["mfa_method"],
+        job_title: ctx.job_title ?? stored?.job_title ?? null,
+        department: ctx.department ?? stored?.department ?? null,
+        employee_number: ctx.employee_number ?? stored?.employee_number ?? null,
+        phone: ctx.phone ?? stored?.phone ?? null,
+        office: ctx.office ?? stored?.office ?? null,
       };
       setStoredSessionUser(session);
       setUser(session);
     } catch {
       // /ops/auth/me returns 401 when auth is on and there is no valid session.
-      const enabled = await readAuthEnabledFallback();
-      setAuthEnabled(enabled);
-      if (enabled && getAccessToken()) {
-        // Stale/invalid token — clear it so the login page can be used again.
+      const health = await refreshHealth();
+      if (health.status === "unreachable") {
+        setAuthEnabled(true);
+      }
+      if (getAccessToken()) {
         clearPortalSession();
       }
       setUser(null);
     }
-  }, []);
+  }, [refreshHealth]);
 
   useEffect(() => {
     let active = true;
@@ -142,12 +182,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       authEnabled,
       user,
+      engineHealth,
+      refreshHealth,
       login,
       logout,
       refresh,
       applyLoginResponse,
     }),
-    [loading, authEnabled, user, login, logout, refresh, applyLoginResponse],
+    [loading, authEnabled, user, engineHealth, refreshHealth, login, logout, refresh, applyLoginResponse],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

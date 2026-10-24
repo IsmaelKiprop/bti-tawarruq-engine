@@ -9,6 +9,7 @@ import { ApplicationsListPage } from "./pages/ApplicationsListPage";
 import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { InstitutionIntegrationsPage } from "./pages/InstitutionIntegrationsPage";
+import { InstitutionManagementPage } from "./pages/InstitutionManagementPage";
 import { InstitutionsPage } from "./pages/InstitutionsPage";
 import { KenyaFlowPage } from "./pages/KenyaFlowPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -20,6 +21,7 @@ import { SedaniaFinancingPage } from "./pages/SedaniaFinancingPage";
 import { ShariahCompliancePage } from "./pages/ShariahCompliancePage";
 import { TransactionDetailPage } from "./pages/TransactionPages";
 import { TransactionsListPage } from "./pages/TransactionsListPage";
+import { UserManagementPage } from "./pages/UserManagementPage";
 import { UsersPage } from "./pages/UsersPage";
 import { WebhooksPage } from "./pages/WebhooksPage";
 import { AgentDealerPage } from "./pages/AgentDealerPage";
@@ -30,7 +32,10 @@ import { BillingPage } from "./pages/BillingPage";
 import { ReconciliationPage } from "./pages/ReconciliationPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { MfaEnrollPage } from "./pages/MfaEnrollPage";
-import "./styles/globals.css";
+import { SettingsPage } from "./pages/SettingsPage";
+import { DocumentationPage } from "./pages/DocumentationPage";
+import { AuditTrailPage } from "./pages/AuditTrailPage";
+import "./styles/index.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -49,6 +54,17 @@ createRoot(document.getElementById("root")!).render(
           <Route element={<RequireAuth />}>
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="documentation" element={<DocumentationPage />} />
+              <Route
+                element={
+                  <RequireAnyPermission
+                    permissions={["manage_institutions", "manage_credentials", "view_metrics", "export_data"]}
+                  />
+                }
+              >
+                <Route path="audit" element={<AuditTrailPage />} />
+              </Route>
               <Route element={<RequirePermission permission="view_metrics" />}>
                 <Route path="ops" element={<OpsMonitorPage />} />
               </Route>
@@ -78,9 +94,11 @@ createRoot(document.getElementById("root")!).render(
               </Route>
               <Route element={<RequirePermission permission="manage_institutions" />}>
                 <Route path="institutions" element={<InstitutionsPage />} />
+                <Route path="institutions/:institutionId" element={<InstitutionManagementPage />} />
               </Route>
               <Route element={<RequirePermission permission="manage_credentials" />}>
                 <Route path="users" element={<UsersPage />} />
+                <Route path="users/:userId" element={<UserManagementPage />} />
                 <Route path="webhooks" element={<WebhooksPage />} />
               </Route>
               <Route element={<RequirePermission permission="manage_integrations" />}>

@@ -313,7 +313,7 @@ Copy `.env.example` to `.env`.
 | `MALAYSIA_COMMODITY_DESK` | `bsas` or `eiger` when live |
 | `INTEGRATION_ENCRYPTION_KEY` | Encrypt partner secrets at rest |
 
-Partner keys (Daraja, MNO, Airtel, broker): [INTEGRATIONS.md](INTEGRATIONS.md).
+Partner keys (Daraja, MNO, Airtel, broker): [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 ## Tests
 
@@ -335,13 +335,16 @@ bti-tawarruq-engine/
 │   ├── integrations/       # Daraja, MNO, Airtel, broker, Sedania
 │   └── services/           # RBAC, invites, flows, billing, recon
 ├── portal/                 # Vite ops portal
+│   ├── public/brand/       # Logo (served at /brand/…)
+│   └── src/styles/         # Single CSS entry (index.css)
 ├── mobile/                 # Expo Buruuj Lend
+│   └── assets/             # App icons / splash only
 ├── shariah-audit-service/  # Append-only ledger mirror
-├── alembic/                # Migrations (through 011)
+├── alembic/                # Migrations
 ├── tests/                  # pytest
-├── docs/                   # Flow and access guides
+├── docs/                   # Flow, access, integrations guides
 ├── scripts/                # Demo, seed docx, live invite check
-└── INTEGRATIONS.md
+└── data/                   # Local runtime only (gitignored except .gitkeep)
 ```
 
 ## Documentation
@@ -357,7 +360,7 @@ bti-tawarruq-engine/
 | [docs/SHARIAH_AUDIT.md](docs/SHARIAH_AUDIT.md) | Ledger, hash chain, export |
 | [docs/LOCAL_TEST.md](docs/LOCAL_TEST.md) | Swagger walkthrough, Kenya / Malaysia / invites |
 | [docs/PRODUCTION_OPS.md](docs/PRODUCTION_OPS.md) | Seed emails, monitoring, CI/CD |
-| [INTEGRATIONS.md](INTEGRATIONS.md) | Daraja / MNO / broker credentials |
+| [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Daraja / MNO / broker credentials |
 
 ## License
 

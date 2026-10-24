@@ -2,7 +2,6 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { AppLayout } from "../components/AppLayout";
 import { LoadingPanel } from "../components/PageShell";
-import "../components/ui.css";
 
 export function OptionalAppLayout() {
   const { loading, authEnabled, user } = useAuth();

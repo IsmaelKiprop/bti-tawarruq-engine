@@ -31,6 +31,8 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_api_key_role_column()
     _ensure_ops_user_dealer_column()
+    _ensure_ops_user_hr_columns()
+    _ensure_audit_ops_columns()
     _ensure_application_desk_columns()
     _ensure_certificate_ecert_columns()
     _ensure_trade_evidence_columns()
@@ -77,6 +79,56 @@ def _ensure_ops_user_dealer_column() -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE ops_users ADD COLUMN agent_dealer_id VARCHAR(36)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ops_users_agent_dealer_id ON ops_users (agent_dealer_id)"))
+
+
+def _ensure_ops_user_hr_columns() -> None:
+    """Add optional HR / profile fields on ops_users (SQLite and Postgres)."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "ops_users" not in inspector.get_table_names():
+        return
+    columns = {col["name"] for col in inspector.get_columns("ops_users")}
+    additions = {
+        "job_title": "ALTER TABLE ops_users ADD COLUMN job_title VARCHAR(128)",
+        "department": "ALTER TABLE ops_users ADD COLUMN department VARCHAR(128)",
+        "employee_number": "ALTER TABLE ops_users ADD COLUMN employee_number VARCHAR(64)",
+        "phone": "ALTER TABLE ops_users ADD COLUMN phone VARCHAR(64)",
+        "office": "ALTER TABLE ops_users ADD COLUMN office VARCHAR(128)",
+    }
+    with engine.begin() as conn:
+        for name, ddl in additions.items():
+            if name not in columns:
+                conn.execute(text(ddl))
+
+
+def _ensure_audit_ops_columns() -> None:
+    """Institution / request grouping columns for ops audit middleware."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "audit_events" not in inspector.get_table_names():
+        return
+    columns = {col["name"] for col in inspector.get_columns("audit_events")}
+    additions = {
+        "institution_id": "ALTER TABLE audit_events ADD COLUMN institution_id VARCHAR(36)",
+        "actor_user_id": "ALTER TABLE audit_events ADD COLUMN actor_user_id VARCHAR(36)",
+        "group_id": "ALTER TABLE audit_events ADD COLUMN group_id VARCHAR(36)",
+        "action_group": "ALTER TABLE audit_events ADD COLUMN action_group VARCHAR(64)",
+        "http_method": "ALTER TABLE audit_events ADD COLUMN http_method VARCHAR(16)",
+        "http_path": "ALTER TABLE audit_events ADD COLUMN http_path VARCHAR(512)",
+        "http_status": "ALTER TABLE audit_events ADD COLUMN http_status INTEGER",
+    }
+    with engine.begin() as conn:
+        for name, ddl in additions.items():
+            if name not in columns:
+                conn.execute(text(ddl))
+        if "institution_id" not in columns:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_events_institution_id ON audit_events (institution_id)"))
+        if "group_id" not in columns:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_events_group_id ON audit_events (group_id)"))
+        if "action_group" not in columns:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_events_action_group ON audit_events (action_group)"))
 
 
 def _ensure_application_desk_columns() -> None:
@@ -334,6 +386,7 @@ def _ensure_control_schema() -> None:
         {
             "approval_limit_amount": "ALTER TABLE ops_users ADD COLUMN approval_limit_amount NUMERIC(18, 2)",
             "mfa_secret": "ALTER TABLE ops_users ADD COLUMN mfa_secret VARCHAR(64)",
+            "mfa_method": "ALTER TABLE ops_users ADD COLUMN mfa_method VARCHAR(16)",
             "mfa_enabled": f"ALTER TABLE ops_users ADD COLUMN mfa_enabled BOOLEAN DEFAULT {0 if settings.is_sqlite else 'FALSE'} NOT NULL",
         },
     )

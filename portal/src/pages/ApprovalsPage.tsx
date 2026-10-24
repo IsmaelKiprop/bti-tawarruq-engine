@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type PendingApproval } from "../api/client";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import "../components/ui.css";
 
 export function ApprovalsPage() {
   const [items, setItems] = useState<PendingApproval[]>([]);
@@ -47,12 +46,6 @@ export function ApprovalsPage() {
     <PageShell wide>
       <header className="page-header">
         <h1>Maker-checker approvals</h1>
-        <p className="muted">
-          FI Operations queues Murabaha, liquidation, or disbursement. FI Approver must approve it. You cannot
-          approve a request you initiated. Approval limit is the maximum deal amount you may authorize. The
-          engine uses the lower of your personal limit and the institution limit. If the deal is larger, the
-          approve is rejected.
-        </p>
       </header>
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}

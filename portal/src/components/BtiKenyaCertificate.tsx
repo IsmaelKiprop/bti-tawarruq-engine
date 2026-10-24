@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import type { CustomerJourney } from "../api/client";
 import { BrandLogo } from "./BrandLogo";
-import "./BtiKenyaCertificate.css";
 
 interface Props {
   journey: CustomerJourney;

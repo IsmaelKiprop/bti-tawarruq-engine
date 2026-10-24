@@ -1,10 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, type ApiKeyRecord, type Institution, type Webhook } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
-import "../components/ui.css";
 
 export function WebhooksPage() {
   const { user } = useAuth();
@@ -96,8 +93,6 @@ export function WebhooksPage() {
 
   return (
     <PageShell wide>
-      <PageExplain content={PAGE_EXPLAINS["/webhooks"]} />
-      <HowItWorks content={HOW_IT_WORKS["/webhooks"]} />
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
       {secret ? <Alert tone="info">Webhook secret (copy once): {secret}</Alert> : null}
@@ -116,9 +111,6 @@ export function WebhooksPage() {
       {isSuperAdmin ? (
         <section className="panel">
           <h2>Onboard API key</h2>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Super Admin issues machine keys for FI core banking. FI Admin cannot create keys.
-          </p>
           <form className="grid-2" onSubmit={onCreateKey}>
             <label>
               Institution

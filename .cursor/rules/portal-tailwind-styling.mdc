@@ -1,0 +1,26 @@
+---
+description: Tailwind is the primary styling approach for the portal
+globs: portal/**/*.{tsx,ts,css}
+alwaysApply: true
+---
+
+# Portal styling: Tailwind first
+
+Tailwind CSS is the **main styling system** for `portal/`. Prefer utility classes in components over new CSS files.
+
+## Do
+
+- Style new UI with Tailwind utilities (`flex`, `gap-*`, `text-muted`, `bg-surface`, `border-border`, `text-primary`, etc.).
+- Use design tokens from `portal/src/styles/tokens.css` via the `@theme` map in `portal/src/styles/index.css` (e.g. `bg-primary`, `text-foreground`, `font-sans`).
+- Keep shared legacy classes (`.panel`, `.btn`, `.page-shell`) only where they already exist; migrate toward Tailwind when touching those screens.
+- Put any remaining non-Tailwind CSS under `portal/src/styles/` (`components/`, `pages/`, `certificates/`) and import it only from `portal/src/styles/index.css`.
+
+## Do not
+
+- Add new co-located page/component `.css` files next to `.tsx` files.
+- Import CSS from individual pages or components (except the single entry `import "./styles/index.css"` in `main.tsx`).
+- Invent parallel color systems; extend `tokens.css` + `@theme` instead.
+
+## Certificates / print layouts
+
+Dense print/PDF certificate markup may keep dedicated CSS under `portal/src/styles/certificates/`. Still avoid scattering imports outside `styles/index.css`.

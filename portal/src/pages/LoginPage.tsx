@@ -4,7 +4,6 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { BrandLogo } from "../components/BrandLogo";
 import { getHomePath } from "../config/roles";
-import "../components/ui.css";
 
 export function LoginPage() {
   const { authEnabled, loading, user, applyLoginResponse } = useAuth();
@@ -13,6 +12,8 @@ export function LoginPage() {
   const [email, setEmail] = useState("admin@bti.local");
   const [password, setPassword] = useState("");
   const [mfaToken, setMfaToken] = useState("");
+  const [mfaMethod, setMfaMethod] = useState<"totp" | "email" | null>(null);
+  const [mfaDevCode, setMfaDevCode] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,7 +31,7 @@ export function LoginPage() {
   }
 
   if (!loading && user?.mfa_enroll_required) {
-    return <Navigate to="/mfa-enroll" replace />;
+    return <Navigate to="/settings" replace />;
   }
 
   async function finishLogin(result: Awaited<ReturnType<typeof api.login>>) {
@@ -40,7 +41,7 @@ export function LoginPage() {
       return;
     }
     if (session.mfa_enroll_required) {
-      navigate("/mfa-enroll", { replace: true });
+      navigate("/settings", { replace: true });
       return;
     }
     navigate(getHomePath(session.role), { replace: true });
@@ -59,6 +60,8 @@ export function LoginPage() {
       const result = await api.login(email.trim(), password);
       if (result.mfa_required && result.mfa_token) {
         setMfaToken(result.mfa_token);
+        setMfaMethod(result.mfa_method === "email" ? "email" : "totp");
+        setMfaDevCode(result.mfa_dev_code || null);
         return;
       }
       await finishLogin(result);
@@ -74,19 +77,37 @@ export function LoginPage() {
       <form className="login-card" onSubmit={onSubmit}>
         <div className="login-brand login-brand--logo">
           <BrandLogo variant="lockup" />
-          <p>{mfaToken ? "Authenticator code" : "Ops portal sign in"}</p>
+          <p>
+            {mfaToken
+              ? mfaMethod === "email"
+                ? "Email verification code"
+                : "Authenticator code"
+              : "Ops portal sign in"}
+          </p>
         </div>
         {mfaToken ? (
-          <label>
-            6-digit code
-            <input
-              value={mfaCode}
-              onChange={(event) => setMfaCode(event.target.value)}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              required
-            />
-          </label>
+          <>
+            <p className="muted">
+              {mfaMethod === "email"
+                ? "Enter the 6-digit code sent to your email."
+                : "Enter the 6-digit code from Microsoft Authenticator (or Google / Authy)."}
+            </p>
+            {mfaDevCode ? (
+              <p className="meta">
+                Demo code: <code>{mfaDevCode}</code>
+              </p>
+            ) : null}
+            <label>
+              6-digit code
+              <input
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+              />
+            </label>
+          </>
         ) : (
           <>
             <label>

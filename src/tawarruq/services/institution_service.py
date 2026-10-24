@@ -62,6 +62,8 @@ def update_institution(
             f"name={institution.name}, mode={institution.bsas_mode}, active={institution.active}, "
             f"steps={institution.approval_steps}"
         ),
+        institution_id=institution.id,
+        action_group="institutions",
     )
     db.flush()
     return institution
@@ -134,6 +136,8 @@ def delete_institution(db, institution: Institution, *, actor: AuditActor = Audi
         actor=actor,
         action="institution.deleted",
         details=f"code={code}, name={name}",
+        institution_id=institution_id,
+        action_group="institutions",
     )
     db.delete(institution)
     db.flush()

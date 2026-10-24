@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from tawarruq import __version__
 from tawarruq.amanah.worker import AmanahWorker
+from tawarruq.api.audit_middleware import AuditMiddleware
 from tawarruq.api.middleware import ApiKeyMiddleware
 from tawarruq.api.openapi_metadata import API_DESCRIPTION, OPENAPI_TAGS
 from tawarruq.api.routes import router
@@ -152,6 +153,7 @@ def create_app() -> FastAPI:
         cors_origins.append(portal_origin)
 
     app.add_middleware(ApiKeyMiddleware)
+    app.add_middleware(AuditMiddleware)
     app.add_middleware(RequestMetricsMiddleware)
     app.add_middleware(
         CORSMiddleware,

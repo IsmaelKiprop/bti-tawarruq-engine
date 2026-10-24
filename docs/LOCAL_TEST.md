@@ -244,4 +244,4 @@ Confirm also writes `data/manual_bridge/replies/{external_ref}.json` so the file
 | pytest slow or hung | Clear `SHARIAH_AUDIT_SERVICE_URL` in the test env (conftest does this) |
 | Mobile cannot reach API | Use the LAN IP in `EXPO_PUBLIC_API_URL` |
 
-Live partner setup: [INTEGRATIONS.md](../INTEGRATIONS.md)
+Live partner setup: [INTEGRATIONS.md](INTEGRATIONS.md)

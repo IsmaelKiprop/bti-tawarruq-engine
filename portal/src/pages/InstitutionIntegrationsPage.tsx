@@ -1,9 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, type Institution, type InstitutionIntegration } from "../api/client";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
-import "../components/ui.css";
 
 export function InstitutionIntegrationsPage() {
   const [institutions, setInstitutions] = useState<Institution[]>([]);
@@ -77,8 +74,6 @@ export function InstitutionIntegrationsPage() {
 
   return (
     <PageShell wide>
-      <PageExplain content={PAGE_EXPLAINS["/integrations"]} />
-      <HowItWorks content={HOW_IT_WORKS["/integrations"]} />
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
 
@@ -86,7 +81,6 @@ export function InstitutionIntegrationsPage() {
         <div className="panel-header">
           <div>
             <h2>Institution integrations</h2>
-            <p className="muted">M-Pesa and partner credentials for Kenya float desks.</p>
           </div>
           <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)}>
             {institutions.map((item) => (

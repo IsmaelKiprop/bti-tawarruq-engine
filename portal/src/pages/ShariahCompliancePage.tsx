@@ -2,10 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, Institution, KenyaOpsCase, ShariahAuditEntry } from "../api/client";
 import { DealTape } from "../components/DealTape";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
-import "../components/ui.css";
 
 export function ShariahCompliancePage() {
   const [institutions, setInstitutions] = useState<Institution[]>([]);
@@ -89,13 +86,8 @@ export function ShariahCompliancePage() {
   return (
     <PageShell wide>
       <div className="page-grid">
-        <div className="span-2">
-          <PageExplain content={PAGE_EXPLAINS["/shariah"]} />
-        </div>
-        <HowItWorks content={HOW_IT_WORKS["/shariah"]} />
         <section className="panel">
           <h2>Regulatory export</h2>
-          <p className="muted">Append-only Shariah ledger for CMA / CBK-style review</p>
           {loading ? (
             <LoadingPanel rows={3} />
           ) : (

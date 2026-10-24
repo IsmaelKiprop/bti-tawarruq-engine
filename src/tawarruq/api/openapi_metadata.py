@@ -139,7 +139,7 @@ Approved path: independent OTC broker (`OTC_KENYA` seed) or live `BROKER_LIQUIDA
 | Airtel Money disburse | Same Airtel OAuth as airtime |
 | Broker liquidation | `BROKER_LIQUIDATION_API_URL` |
 
-Per-institution credentials: `Institution Integrations` tag. See INTEGRATIONS.md.
+Per-institution credentials: `Institution Integrations` tag. See docs/INTEGRATIONS.md.
 
 ---
 

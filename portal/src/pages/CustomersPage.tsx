@@ -2,10 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type KenyaCustomer } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
-import "../components/ui.css";
 
 export function CustomersPage() {
   const { customerId } = useParams();
@@ -65,8 +62,6 @@ export function CustomersPage() {
 
   return (
     <PageShell wide>
-      <PageExplain content={PAGE_EXPLAINS["/customers"]} />
-      <HowItWorks content={HOW_IT_WORKS["/customers"]} />
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
 

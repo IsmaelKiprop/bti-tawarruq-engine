@@ -186,6 +186,12 @@ class AuthContextRead(BaseModel):
     auth_method: str | None = Field(None, description='session | api_key | none')
     mfa_enabled: bool = False
     mfa_enroll_required: bool = False
+    mfa_method: str | None = Field(None, description='totp | email when MFA is enabled')
+    job_title: str | None = None
+    department: str | None = None
+    employee_number: str | None = None
+    phone: str | None = None
+    office: str | None = None
 
 class OpsLoginRequest(BaseModel):
     email: str = Field(..., examples=['admin@bti.local'])
@@ -206,6 +212,11 @@ class OpsLoginResponse(BaseModel):
     mfa_token: str | None = None
     mfa_enroll_required: bool = False
     mfa_enabled: bool = False
+    mfa_method: str | None = Field(None, description='totp | email')
+    mfa_dev_code: str | None = Field(
+        None,
+        description='Present only when SMTP is off (local demo). Never set in production with SMTP.',
+    )
 
 class OpsChangePasswordRequest(BaseModel):
     current_password: str
@@ -244,7 +255,13 @@ class OpsUserRead(BaseModel):
     active: bool
     approval_limit_amount: Decimal | None = None
     mfa_enabled: bool = False
+    job_title: str | None = None
+    department: str | None = None
+    employee_number: str | None = None
+    phone: str | None = None
+    office: str | None = None
     created_at: datetime
+    updated_at: datetime | None = None
 
 class OpsUserUpdate(BaseModel):
     full_name: str | None = None
@@ -260,6 +277,22 @@ class OpsUserUpdate(BaseModel):
     agent_dealer_id: str | None = None
     active: bool | None = None
     approval_limit_amount: Decimal | None = None
+    job_title: str | None = None
+    department: str | None = None
+    employee_number: str | None = None
+    phone: str | None = None
+    office: str | None = None
+
+
+class OpsProfileUpdate(BaseModel):
+    """Self-service profile / HR fields editable on Settings."""
+
+    full_name: str | None = None
+    job_title: str | None = None
+    department: str | None = None
+    employee_number: str | None = None
+    phone: str | None = None
+    office: str | None = None
 
 class OpsUserCreatedRead(OpsUserRead):
     temporary_password: str | None = Field(
@@ -308,6 +341,17 @@ class OpsMetricsRead(BaseModel):
     http_latency_ms_avg: float
     http_by_status: dict = Field(default_factory=dict)
     http_top_paths: dict = Field(default_factory=dict)
+    applications_open: int = 0
+    applications_completed: int = 0
+    applications_failed: int = 0
+    transactions_open: int = 0
+    pending_approvals: int = 0
+    book_amount_requested: float = 0
+    disbursed_volume: float = 0
+    completion_rate_pct: float = 0
+    projected_30d_volume: float = 0
+    projected_open_book: float = 0
+    week_disbursed_volume: float = 0
 
 class InstitutionUpdate(BaseModel):
     name: str | None = None
@@ -441,6 +485,31 @@ class AuditEventRead(BaseModel):
     details: str | None = None
     evidence_ref: str | None = Field(None, description='Certificate number or file path')
     timestamp: datetime
+    institution_id: str | None = None
+    actor_user_id: str | None = None
+    group_id: str | None = None
+    action_group: str | None = None
+    http_method: str | None = None
+    http_path: str | None = None
+    http_status: int | None = None
+
+
+class AuditGroupRead(BaseModel):
+    group_id: str
+    action_group: str
+    institution_id: str | None = None
+    actor_user_id: str | None = None
+    actor: str | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    events: list[AuditEventRead] = Field(default_factory=list)
+
+
+class AuditFeedRead(BaseModel):
+    scope_institution_id: str | None = None
+    cross_tenant: bool = False
+    groups: list[AuditGroupRead] = Field(default_factory=list)
+    events: list[AuditEventRead] = Field(default_factory=list)
 
 class ManualBridgeConfirm(BaseModel):
     model_config = ConfigDict(json_schema_extra={'examples': [{'certificate_number': 'CPO28AUG26-0009491-000', 'issuer': 'Bursa Malaysia Islamic Services Sdn.Bhd.', 'seller': 'Hidaya Said ( 000 )', 'buyer': 'Bursa Malaysia Islamic Services', 'bid_no': '1', 'selling_time': '19:00:50.857', 'selling_date': '28 AUGUST 2026', 'value_date': '28 AUGUST 2026', 'product_code': 'CPO-MSIA-09', 'product_description': 'Crude Palm Oil - Malaysia - Listed 09', 'unit': 'Tonnage', 'volume': '.32293179', 'currency': 'KES', 'price': '154831.46067416', 'price_myr_equivalent': '4823.00', 'value_amount': '50000.00', 'transaction_type': '-'}]})

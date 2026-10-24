@@ -2,13 +2,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api, Application, AuditEvent, BusinessStatus, OfferSummary, Transaction } from "../api/client";
 import { DealTape } from "../components/DealTape";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
 import { ActorChips, StepCallout } from "../components/ProcessGuide";
 import { applicationUsesSpot } from "../config/applicationOps";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
 import type { ActorId } from "../config/processModel";
-import "../components/ui.css";
 
 const LEG_LABELS: Record<string, string> = {
   "1": "Leg 1: Agent purchase",
@@ -115,10 +112,6 @@ export function TransactionDetailPage() {
   return (
     <PageShell wide>
       <div className="page-grid">
-        <div className="span-2">
-          <PageExplain content={PAGE_EXPLAINS["/transactions"]} />
-        </div>
-        <HowItWorks content={HOW_IT_WORKS["/transactions"]} />
         {application ? (
           <section className="panel">
             <DealTape

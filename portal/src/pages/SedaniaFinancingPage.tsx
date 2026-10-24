@@ -1,10 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CustomerPicker, type CustomerPickerHandle } from "../components/CustomerPicker";
-import { HowItWorks, PageExplain } from "../components/PageExplain";
 import { Alert, EmptyState, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
 import { api, type SedaniaFinancing } from "../api/client";
-import { HOW_IT_WORKS, PAGE_EXPLAINS } from "../config/pageExplainers";
-import "../components/ui.css";
 
 const DOC_BUTTONS = [
   { kind: "purchase_order", label: "Purchase Order" },
@@ -102,8 +99,6 @@ export function SedaniaFinancingPage() {
 
   return (
     <PageShell wide>
-      <PageExplain content={PAGE_EXPLAINS["/sedania"]} />
-      <HowItWorks content={HOW_IT_WORKS["/sedania"]} />
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
 
@@ -112,7 +107,6 @@ export function SedaniaFinancingPage() {
           <div className="panel-header">
             <div>
               <h2>New AS SIDQ facility</h2>
-              <p className="muted">Runs the deck from application through CASA credit, or physical delivery.</p>
             </div>
           </div>
           <form className="stack gap-md" onSubmit={onSubmit}>
@@ -181,7 +175,6 @@ export function SedaniaFinancingPage() {
           <div className="panel-header">
             <div>
               <h2>Current run</h2>
-              <p className="muted">Steps, SASC role, and the four AS SIDQ documents.</p>
             </div>
             {selected ? <span className={statusBadgeClass(selected.status)}>{selected.status}</span> : null}
           </div>
@@ -266,7 +259,6 @@ export function SedaniaFinancingPage() {
         <div className="panel-header">
           <div>
             <h2>Recent facilities</h2>
-            <p className="muted">Bank CMP runs only. SACCO execute stays on Webhooks and Keys.</p>
           </div>
         </div>
         {loading ? (

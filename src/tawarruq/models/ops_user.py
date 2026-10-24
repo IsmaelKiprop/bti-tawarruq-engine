@@ -26,7 +26,13 @@ class OpsUser(Base):
         String(36), ForeignKey("agent_dealers.id"), nullable=True, index=True
     )
     approval_limit_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
+    job_title: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    employee_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    office: Mapped[str | None] = mapped_column(String(128), nullable=True)
     mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mfa_method: Mapped[str | None] = mapped_column(String(16), nullable=True)  # totp | email
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)

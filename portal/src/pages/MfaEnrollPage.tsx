@@ -4,7 +4,6 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { BrandLogo } from "../components/BrandLogo";
 import { getHomePath } from "../config/roles";
-import "../components/ui.css";
 
 export function MfaEnrollPage() {
   const { applyLoginResponse, user, refresh } = useAuth();

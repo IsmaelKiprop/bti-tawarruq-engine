@@ -1,20 +1,27 @@
 """Production ops endpoints: login, users, metrics, auth context."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from tawarruq.api.deps import get_tenant_institution_id
 from tawarruq.config import get_settings
 from tawarruq.database import get_db
-from tawarruq.enums import ApiKeyRole
+from tawarruq.enums import ApiKeyRole, AuditActor
 from tawarruq.models.institution import Institution
 from tawarruq.models.ops_user import OpsUser
 from tawarruq.schemas import (
+    AuditEventRead,
+    AuditFeedRead,
+    AuditGroupRead,
     AuthContextRead,
     OpsChangePasswordRequest,
     OpsLoginRequest,
     OpsLoginResponse,
     OpsMetricsRead,
+    OpsProfileUpdate,
     OpsUserCreate,
     OpsUserCreatedRead,
     OpsUserPasswordResetRead,
@@ -22,13 +29,15 @@ from tawarruq.schemas import (
     OpsUserRead,
     OpsUserUpdate,
 )
+from tawarruq.services.audit_query_service import group_audit_events, query_audit_events
+from tawarruq.services.audit_service import log_audit
 from tawarruq.services.metrics_service import collect_ops_metrics
-from pydantic import BaseModel, Field
 
 from tawarruq.services.ops_user_service import (
     authenticate_user,
     begin_mfa_enroll,
     change_password,
+    confirm_email_mfa_enroll,
     confirm_mfa_enroll,
     create_mfa_challenge_token,
     create_ops_user,
@@ -36,9 +45,15 @@ from tawarruq.services.ops_user_service import (
     decode_mfa_challenge_token,
     delete_ops_user,
     deliver_ops_invite_email,
+    disable_mfa,
+    enable_email_mfa,
+    enable_totp_mfa,
+    issue_email_otp,
     list_ops_users,
     reset_ops_password,
     update_ops_user,
+    user_mfa_method,
+    verify_email_otp,
 )
 from tawarruq.services.totp_service import verify_totp
 from tawarruq.services.rbac import (
@@ -67,6 +82,10 @@ class OpsMfaConfirmRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=8)
 
 
+class OpsMfaDisableRequest(BaseModel):
+    password: str = Field(..., min_length=8)
+
+
 def _mfa_enroll_required(user: OpsUser) -> bool:
     try:
         role = parse_role(user.role)
@@ -77,7 +96,12 @@ def _mfa_enroll_required(user: OpsUser) -> bool:
 
 def _ops_login_payload(db: Session, user: OpsUser, *, require_mfa_challenge: bool = True) -> OpsLoginResponse:
     role = parse_role(user.role)
+    method = user_mfa_method(user)
     if require_mfa_challenge and user.mfa_enabled:
+        dev_code = None
+        if method == "email":
+            delivery = issue_email_otp(user, purpose="sign-in")
+            dev_code = delivery.get("dev_code")
         return OpsLoginResponse(
             access_token="",
             role=user.role,
@@ -92,6 +116,8 @@ def _ops_login_payload(db: Session, user: OpsUser, *, require_mfa_challenge: boo
             mfa_token=create_mfa_challenge_token(user),
             mfa_enroll_required=False,
             mfa_enabled=True,
+            mfa_method=method,
+            mfa_dev_code=dev_code,
         )
     return OpsLoginResponse(
         access_token=create_session_token(user),
@@ -106,6 +132,7 @@ def _ops_login_payload(db: Session, user: OpsUser, *, require_mfa_challenge: boo
         mfa_required=False,
         mfa_enroll_required=_mfa_enroll_required(user),
         mfa_enabled=bool(user.mfa_enabled),
+        mfa_method=method,
     )
 
 
@@ -128,30 +155,66 @@ def _institution_name(db: Session, institution_id: str | None) -> str | None:
 
 
 @router.post("/ops/auth/login", response_model=OpsLoginResponse, summary="Ops portal login")
-def ops_login(payload: OpsLoginRequest, db: Session = Depends(get_db)) -> OpsLoginResponse:
+def ops_login(payload: OpsLoginRequest, request: Request, db: Session = Depends(get_db)) -> OpsLoginResponse:
     settings = get_settings()
     if not settings.auth_enabled:
         raise HTTPException(status_code=400, detail="Auth is disabled (AUTH_ENABLED=false)")
+    group_id = getattr(request.state, "audit_group_id", None)
     user = authenticate_user(db, payload.email, payload.password)
     if not user:
+        log_audit(
+            db,
+            entity_type="ops_user",
+            entity_id=group_id or "login",
+            actor=AuditActor.SYSTEM,
+            action="auth.login_failed",
+            details=f"email={payload.email.strip().lower()}",
+            group_id=group_id,
+            action_group="auth",
+            http_method="POST",
+            http_path="/api/v1/ops/auth/login",
+            http_status=401,
+        )
+        db.commit()
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    log_audit(
+        db,
+        entity_type="ops_user",
+        entity_id=user.id,
+        actor=AuditActor.HUMAN,
+        action="auth.login_ok",
+        details=f"email={user.email}, role={user.role}",
+        institution_id=user.institution_id,
+        actor_user_id=user.id,
+        group_id=group_id,
+        action_group="auth",
+        http_method="POST",
+        http_path="/api/v1/ops/auth/login",
+        http_status=200,
+    )
+    db.commit()
     return _ops_login_payload(db, user)
 
 
-@router.post("/ops/auth/mfa", response_model=OpsLoginResponse, summary="Verify privileged MFA code")
+@router.post("/ops/auth/mfa", response_model=OpsLoginResponse, summary="Verify MFA code (authenticator or email)")
 def ops_mfa_verify(payload: OpsMfaVerifyRequest, db: Session = Depends(get_db)) -> OpsLoginResponse:
     challenge = decode_mfa_challenge_token(payload.mfa_token)
     if not challenge:
         raise HTTPException(status_code=401, detail="Invalid or expired MFA challenge")
     user = db.get(OpsUser, challenge.get("sub"))
-    if not user or not user.active or not user.mfa_secret:
+    if not user or not user.active or not user.mfa_enabled:
         raise HTTPException(status_code=401, detail="User not found")
-    if not verify_totp(user.mfa_secret, payload.code):
-        raise HTTPException(status_code=401, detail="Invalid authenticator code")
+    method = user_mfa_method(user)
+    if method == "email":
+        if not verify_email_otp(user, payload.code):
+            raise HTTPException(status_code=401, detail="Invalid or expired email code")
+    else:
+        if not user.mfa_secret or not verify_totp(user.mfa_secret, payload.code):
+            raise HTTPException(status_code=401, detail="Invalid authenticator code")
     return _ops_login_payload(db, user, require_mfa_challenge=False)
 
 
-@router.post("/ops/auth/mfa/enroll", summary="Start TOTP enrollment for privileged roles")
+@router.post("/ops/auth/mfa/enroll", summary="Start authenticator (TOTP) enrollment")
 def ops_mfa_enroll(request: Request, db: Session = Depends(get_db)) -> dict:
     user_id = getattr(request.state, "ops_user_id", None)
     if not user_id:
@@ -161,10 +224,10 @@ def ops_mfa_enroll(request: Request, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=401, detail="User not found")
     secret, url = begin_mfa_enroll(user)
     db.commit()
-    return {"secret": secret, "otpauth_url": url, "email": user.email}
+    return {"secret": secret, "otpauth_url": url, "email": user.email, "method": "totp"}
 
 
-@router.post("/ops/auth/mfa/confirm", response_model=OpsLoginResponse, summary="Confirm TOTP enrollment")
+@router.post("/ops/auth/mfa/confirm", response_model=OpsLoginResponse, summary="Confirm authenticator enrollment")
 def ops_mfa_confirm(
     payload: OpsMfaConfirmRequest, request: Request, db: Session = Depends(get_db)
 ) -> OpsLoginResponse:
@@ -176,6 +239,97 @@ def ops_mfa_confirm(
         raise HTTPException(status_code=401, detail="User not found")
     try:
         confirm_mfa_enroll(user, payload.code)
+        db.commit()
+        db.refresh(user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _ops_login_payload(db, user, require_mfa_challenge=False)
+
+
+@router.post("/ops/auth/mfa/email/send", summary="Send email MFA enrollment or challenge code")
+def ops_mfa_email_send(request: Request, db: Session = Depends(get_db)) -> dict:
+    user_id = getattr(request.state, "ops_user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = db.get(OpsUser, user_id)
+    if not user or not user.active:
+        raise HTTPException(status_code=401, detail="User not found")
+    delivery = issue_email_otp(user, purpose="MFA enrollment")
+    return {
+        "email": user.email,
+        "smtp_sent": delivery["smtp_sent"],
+        "mail_path": delivery["mail_path"],
+        "dev_code": delivery["dev_code"],
+        "method": "email",
+    }
+
+
+@router.post("/ops/auth/mfa/email/confirm", response_model=OpsLoginResponse, summary="Confirm email MFA enrollment")
+def ops_mfa_email_confirm(
+    payload: OpsMfaConfirmRequest, request: Request, db: Session = Depends(get_db)
+) -> OpsLoginResponse:
+    user_id = getattr(request.state, "ops_user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = db.get(OpsUser, user_id)
+    if not user or not user.active:
+        raise HTTPException(status_code=401, detail="User not found")
+    try:
+        confirm_email_mfa_enroll(user, payload.code)
+        db.commit()
+        db.refresh(user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _ops_login_payload(db, user, require_mfa_challenge=False)
+
+
+@router.post("/ops/auth/mfa/email/enable", response_model=OpsLoginResponse, summary="Enable email MFA (codes gated at login)")
+def ops_mfa_email_enable(request: Request, db: Session = Depends(get_db)) -> OpsLoginResponse:
+    user_id = getattr(request.state, "ops_user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = db.get(OpsUser, user_id)
+    if not user or not user.active:
+        raise HTTPException(status_code=401, detail="User not found")
+    enable_email_mfa(user)
+    db.commit()
+    db.refresh(user)
+    return _ops_login_payload(db, user, require_mfa_challenge=False)
+
+
+@router.post("/ops/auth/mfa/enable", response_model=OpsLoginResponse, summary="Enable authenticator MFA after QR setup")
+def ops_mfa_enable(request: Request, db: Session = Depends(get_db)) -> OpsLoginResponse:
+    user_id = getattr(request.state, "ops_user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = db.get(OpsUser, user_id)
+    if not user or not user.active:
+        raise HTTPException(status_code=401, detail="User not found")
+    try:
+        enable_totp_mfa(user)
+        db.commit()
+        db.refresh(user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _ops_login_payload(db, user, require_mfa_challenge=False)
+
+
+@router.post("/ops/auth/mfa/disable", response_model=OpsLoginResponse, summary="Disable MFA (password required)")
+def ops_mfa_disable(
+    payload: OpsMfaDisableRequest, request: Request, db: Session = Depends(get_db)
+) -> OpsLoginResponse:
+    user_id = getattr(request.state, "ops_user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = db.get(OpsUser, user_id)
+    if not user or not user.active:
+        raise HTTPException(status_code=401, detail="User not found")
+    try:
+        role = parse_role(user.role)
+        if role in PRIVILEGED_MFA_ROLES and user.mfa_enabled:
+            # Privileged roles may disable only to re-enroll; still require password.
+            pass
+        disable_mfa(user, password=payload.password)
         db.commit()
         db.refresh(user)
     except ValueError as exc:
@@ -218,6 +372,12 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
     must_change = False
     mfa_enabled = False
     mfa_enroll_required = False
+    mfa_method = None
+    job_title = None
+    department = None
+    employee_number = None
+    phone = None
+    office = None
     agent_dealer_id = getattr(request.state, "agent_dealer_id", None)
     if user_id:
         user = db.get(OpsUser, user_id)
@@ -228,6 +388,12 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
             agent_dealer_id = user.agent_dealer_id
             mfa_enabled = bool(user.mfa_enabled)
             mfa_enroll_required = _mfa_enroll_required(user)
+            mfa_method = user_mfa_method(user)
+            job_title = user.job_title
+            department = user.department
+            employee_number = user.employee_number
+            phone = user.phone
+            office = user.office
     return AuthContextRead(
         auth_enabled=settings.auth_enabled,
         authenticated=role is not None or not settings.auth_enabled,
@@ -244,7 +410,46 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
         auth_method=getattr(request.state, "auth_method", None),
         mfa_enabled=mfa_enabled,
         mfa_enroll_required=mfa_enroll_required,
+        mfa_method=mfa_method,
+        job_title=job_title,
+        department=department,
+        employee_number=employee_number,
+        phone=phone,
+        office=office,
     )
+
+
+@router.patch(
+    "/ops/auth/me",
+    response_model=AuthContextRead,
+    summary="Update own profile and HR fields",
+)
+def update_own_profile(
+    payload: OpsProfileUpdate, request: Request, db: Session = Depends(get_db)
+) -> AuthContextRead:
+    user_id = getattr(request.state, "ops_user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    user = db.get(OpsUser, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        extra = {}
+        for field in ("job_title", "department", "employee_number", "phone", "office", "full_name"):
+            if field in payload.model_fields_set:
+                extra[field] = getattr(payload, field)
+        update_ops_user(
+            db,
+            user,
+            actor_id=user_id,
+            actor_is_platform_admin=can_cross_tenant(request),
+            audit_action="ops_user.profile_updated",
+            **extra,
+        )
+        db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return auth_me(request, db)
 
 
 @router.get("/ops/auth/users", response_model=list[OpsUserRead], summary="List ops users")
@@ -252,6 +457,15 @@ def get_ops_users(request: Request, db: Session = Depends(get_db)) -> list[OpsUs
     require_permission(request, "manage_credentials")
     scoped = None if can_cross_tenant(request) else get_tenant_institution_id(request)
     return list_ops_users(db, institution_id=scoped)
+
+
+@router.get(
+    "/ops/auth/users/{user_id}",
+    response_model=OpsUserRead,
+    summary="Get one ops user for management",
+)
+def get_ops_user(user_id: str, request: Request, db: Session = Depends(get_db)) -> OpsUserRead:
+    return _managed_user(request, db, user_id)
 
 
 @router.post(
@@ -313,18 +527,9 @@ def create_ops_user_endpoint(
             "They must change it on first login."
         )
 
+    base = OpsUserRead.model_validate(user)
     return OpsUserCreatedRead(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        institution_id=user.institution_id,
-        agent_dealer_id=user.agent_dealer_id,
-        must_change_password=user.must_change_password,
-        active=user.active,
-        approval_limit_amount=user.approval_limit_amount,
-        mfa_enabled=user.mfa_enabled,
-        created_at=user.created_at,
+        **base.model_dump(),
         temporary_password=temp if delivery["expose_password"] else None,
         smtp_sent=bool(delivery["smtp_sent"]),
         mail_path=delivery.get("mail_path"),
@@ -374,8 +579,16 @@ def update_ops_user_endpoint(
         institution_id = get_tenant_institution_id(request)
     try:
         extra = {}
-        if "approval_limit_amount" in payload.model_fields_set:
-            extra["approval_limit_amount"] = payload.approval_limit_amount
+        for field in (
+            "approval_limit_amount",
+            "job_title",
+            "department",
+            "employee_number",
+            "phone",
+            "office",
+        ):
+            if field in payload.model_fields_set:
+                extra[field] = getattr(payload, field)
         updated = update_ops_user(
             db,
             target,
@@ -454,6 +667,82 @@ def delete_ops_user_endpoint(user_id: str, request: Request, db: Session = Depen
         db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/ops/audit",
+    response_model=AuditFeedRead,
+    summary="Grouped ops audit feed",
+    description=(
+        "Super Admin / BTI cross-tenant roles see all institutions. "
+        "Institution admins see only their tenant. Events are grouped by request id."
+    ),
+)
+def ops_audit_feed(
+    request: Request,
+    db: Session = Depends(get_db),
+    institution_id: str | None = None,
+    action_group: str | None = None,
+    actor_user_id: str | None = None,
+    group_id: str | None = None,
+    from_ts: datetime | None = Query(None, alias="from"),
+    to_ts: datetime | None = Query(None, alias="to"),
+    limit: int = Query(300, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+    grouped: bool = Query(True),
+) -> AuditFeedRead:
+    # Admins and ops desks that already see metrics / credentials / institutions.
+    if not (
+        has_permission(request, "manage_institutions")
+        or has_permission(request, "manage_credentials")
+        or has_permission(request, "view_metrics")
+        or has_permission(request, "export_data")
+    ):
+        raise HTTPException(status_code=403, detail="Audit feed requires an admin or ops role")
+
+    cross_tenant = can_cross_tenant(request)
+    if cross_tenant:
+        scoped = institution_id
+    else:
+        scoped = get_tenant_institution_id(request)
+        if not scoped:
+            raise HTTPException(status_code=403, detail="No institution scope for this login")
+        if institution_id and institution_id != scoped:
+            raise HTTPException(status_code=403, detail="Access denied for this institution")
+
+    events = query_audit_events(
+        db,
+        institution_id=scoped,
+        action_group=action_group,
+        actor_user_id=actor_user_id,
+        group_id=group_id,
+        from_ts=from_ts,
+        to_ts=to_ts,
+        limit=limit,
+        offset=offset,
+    )
+    event_reads = [AuditEventRead.model_validate(event) for event in events]
+    groups: list[AuditGroupRead] = []
+    if grouped:
+        for bucket in group_audit_events(events):
+            groups.append(
+                AuditGroupRead(
+                    group_id=bucket["group_id"],
+                    action_group=bucket["action_group"],
+                    institution_id=bucket.get("institution_id"),
+                    actor_user_id=bucket.get("actor_user_id"),
+                    actor=bucket.get("actor"),
+                    started_at=bucket.get("started_at"),
+                    ended_at=bucket.get("ended_at"),
+                    events=[AuditEventRead.model_validate(e) for e in bucket["events"]],
+                )
+            )
+    return AuditFeedRead(
+        scope_institution_id=scoped,
+        cross_tenant=cross_tenant,
+        groups=groups,
+        events=event_reads,
+    )
 
 
 @router.get("/ops/metrics", response_model=OpsMetricsRead, summary="Operational metrics dashboard")

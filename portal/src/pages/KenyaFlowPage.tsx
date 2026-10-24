@@ -13,12 +13,10 @@ import {
 import { BtiKenyaCertificate } from "../components/BtiKenyaCertificate";
 import { Alert, EmptyState, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
 import { AuditTape, DealTape, MurabahaTape, PossessionTape, SettlementTape, WakalaTape } from "../components/DealTape";
-import { FloatExplain } from "../components/FloatExplain";
 import { ActorChips, StepCallout } from "../components/ProcessGuide";
 import { useAuth } from "../auth/AuthContext";
-import { DEFAULT_PROFIT_RATE_PCT, KENYA_QUEUES, KENYA_STEP_GUIDE, type KenyaQueueId } from "../config/kenyaOps";
+import { DEFAULT_PROFIT_RATE_PCT, KENYA_QUEUES, type KenyaQueueId } from "../config/kenyaOps";
 import type { ActorId } from "../config/processModel";
-import "../components/ui.css";
 
 type QueueFilter = KenyaQueueId;
 
@@ -230,7 +228,6 @@ export function KenyaFlowPage() {
 
   return (
     <PageShell wide>
-      <FloatExplain />
       {dealerSummary && (
         <div className={`kenya-float-banner health-${dealerSummary.health}`}>
           <div className="kenya-float-copy">
@@ -334,33 +331,10 @@ export function KenyaFlowPage() {
           )}
 
           {!selected && !showNew && (
-            <section className="panel">
-              <h2>How Kenya Ops works</h2>
-              <p className="muted">
-                This is the eight-step desk. The commodity is float (see What float means above).
-                Pick a customer already on Customers, create a case, then run only the next action
-                the case names. Do not skip ahead.
-              </p>
-              <ol className="flow-list numbered">
-                {KENYA_STEP_GUIDE.map((step) => (
-                  <li key={step.n}>
-                    <strong>
-                      {step.n}. {step.title}.
-                    </strong>{" "}
-                    {step.body}
-                  </li>
-                ))}
-              </ol>
-              <p className="meta">
-                Hard rules: possession (step 3) before Murabaha (step 4). Wakala (step 5) before the
-                independent sale (step 6). No-Inah blocks sale back to the same dealer or MNO pool
-                that supplied the float.
-              </p>
-              <p className="meta">
-                Use New case to start. Use Run automated 8-step flow only for a mock demo after the
-                case exists. Live desks should click the next action one step at a time.
-              </p>
-            </section>
+            <EmptyState
+              title="Select a case"
+              description="Open a case from the queue, or create a new one."
+            />
           )}
 
           {selected && (
