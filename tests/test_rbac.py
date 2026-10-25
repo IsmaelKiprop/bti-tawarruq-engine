@@ -168,6 +168,65 @@ def test_ops_metrics_and_auth_me(client, monkeypatch):
     get_settings.cache_clear()
 
 
+def test_ops_metrics_are_tenant_scoped_for_fi_admin(client, monkeypatch):
+    from tawarruq.config import get_settings
+
+    db = SessionLocal()
+    default = get_or_create_default_institution(db)
+    db.commit()
+    default_id = default.id
+    fi_key = _create_key(db, default_id, ApiKeyRole.INSTITUTION_ADMIN)
+    admin_key = _create_key(db, default_id, ApiKeyRole.PLATFORM_ADMIN)
+    db.close()
+
+    other = client.post(
+        "/api/v1/institutions",
+        json={"name": "Other Bank", "code": "OTHER", "bsas_mode": "mock"},
+    )
+    assert other.status_code == 201
+    other_id = other.json()["id"]
+
+    own = client.post(
+        "/api/v1/applications",
+        json={
+            "amount_requested": "1000.00",
+            "term_months": 3,
+            "purpose": "Own book",
+            "institution_id": default_id,
+        },
+    )
+    assert own.status_code == 201
+    foreign = client.post(
+        "/api/v1/applications",
+        json={
+            "amount_requested": "2000.00",
+            "term_months": 3,
+            "purpose": "Other book",
+            "institution_id": other_id,
+        },
+    )
+    assert foreign.status_code == 201
+
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    get_settings.cache_clear()
+
+    fi_metrics = client.get("/api/v1/ops/metrics", headers={"X-API-Key": fi_key})
+    assert fi_metrics.status_code == 200
+    fi_body = fi_metrics.json()
+    assert fi_body["scoped_institution_id"] == default_id
+    assert fi_body["applications_total"] == 1
+    assert fi_body["institutions_total"] == 1
+
+    platform = client.get("/api/v1/ops/metrics", headers={"X-API-Key": admin_key})
+    assert platform.status_code == 200
+    platform_body = platform.json()
+    assert platform_body["scoped_institution_id"] is None
+    assert platform_body["applications_total"] >= 2
+    assert platform_body["institutions_total"] >= 2
+
+    get_settings.cache_clear()
+
+
 def test_bti_ops_cross_tenant_without_manage_institutions(client, monkeypatch):
     from tawarruq.config import get_settings
 

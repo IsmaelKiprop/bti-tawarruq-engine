@@ -18,6 +18,7 @@ const GROUP_FILTERS = [
   { value: "approvals", label: "Approvals" },
   { value: "finance", label: "Finance" },
   { value: "ops", label: "Ops" },
+  { value: "ui", label: "UI" },
 ];
 
 const pillClass =

@@ -44,6 +44,7 @@ DEALER_ALLOWED_PREFIXES = (
     "/api/v1/ops/auth/me",
     "/api/v1/ops/auth/change-password",
     "/api/v1/ops/auth/login",
+    "/api/v1/ops/audit/ui",
     "/api/v1/kenya/agent-dealers",
 )
 
@@ -56,6 +57,8 @@ def _write_forbidden(role: str, path: str, method: str) -> bool:
     if method in READ_METHODS:
         return False
     if path in PASSWORD_CHANGE_ALLOWED or path.startswith("/api/v1/ops/auth/mfa"):
+        return False
+    if path == "/api/v1/ops/audit/ui" or path.endswith("/ops/audit/ui"):
         return False
     if role == ApiKeyRole.BTI_FINANCE.value and "/ops/billing" in path:
         return False

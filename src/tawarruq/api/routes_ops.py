@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -84,6 +84,25 @@ class OpsMfaConfirmRequest(BaseModel):
 
 class OpsMfaDisableRequest(BaseModel):
     password: str = Field(..., min_length=8)
+
+
+class UiAuditRequest(BaseModel):
+    action: str = Field("ui.click", max_length=80)
+    label: str = Field(..., max_length=160)
+    path: str = Field(..., max_length=256)
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:64]
+    if request.client and request.client.host:
+        return request.client.host[:64]
+    return "unknown"
+
+
+def _login_evidence(email: str, request: Request, *, mfa: str) -> str:
+    return f"email={email.strip().lower()}; ip={_client_ip(request)}; mfa={mfa}"[:256]
 
 
 def _mfa_enroll_required(user: OpsUser) -> bool:
@@ -169,6 +188,7 @@ def ops_login(payload: OpsLoginRequest, request: Request, db: Session = Depends(
             actor=AuditActor.SYSTEM,
             action="auth.login_failed",
             details=f"email={payload.email.strip().lower()}",
+            evidence_ref=_login_evidence(payload.email, request, mfa="none"),
             group_id=group_id,
             action_group="auth",
             http_method="POST",
@@ -184,6 +204,7 @@ def ops_login(payload: OpsLoginRequest, request: Request, db: Session = Depends(
         actor=AuditActor.HUMAN,
         action="auth.login_ok",
         details=f"email={user.email}, role={user.role}",
+        evidence_ref=_login_evidence(user.email, request, mfa="pending" if user.mfa_enabled else "none"),
         institution_id=user.institution_id,
         actor_user_id=user.id,
         group_id=group_id,
@@ -746,6 +767,35 @@ def ops_audit_feed(
         groups=groups,
         events=event_reads,
     )
+
+
+@router.post("/ops/audit/ui", status_code=204, summary="Record a portal control press")
+def log_ui_audit(payload: UiAuditRequest, request: Request, db: Session = Depends(get_db)) -> Response:
+    settings = get_settings()
+    user_id = getattr(request.state, "ops_user_id", None)
+    if settings.auth_enabled and not user_id:
+        raise HTTPException(status_code=401, detail="Session required")
+    label = payload.label.strip()[:160]
+    path = payload.path.strip()[:256] or "/"
+    action = (payload.action or "ui.click").strip()[:80] or "ui.click"
+    log_audit(
+        db,
+        entity_type="ui",
+        entity_id=user_id or "anonymous",
+        actor=AuditActor.HUMAN,
+        action=action,
+        details=f"{label} {path}",
+        evidence_ref=f"{label}; {path}"[:256],
+        institution_id=getattr(request.state, "institution_id", None),
+        actor_user_id=user_id,
+        group_id=getattr(request.state, "audit_group_id", None),
+        action_group="ui",
+        http_method="POST",
+        http_path="/api/v1/ops/audit/ui",
+        http_status=204,
+    )
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/ops/metrics", response_model=OpsMetricsRead, summary="Operational metrics dashboard")

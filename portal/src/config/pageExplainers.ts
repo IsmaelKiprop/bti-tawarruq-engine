@@ -28,15 +28,11 @@ export const APPROVAL_LIMIT_DASHBOARD =
 export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   "/": {
     title: "What this dashboard is",
-    lead: "This is the control tower for the Tawarruq tracks. It is not a cash-loan book. Kenya uses float. Sedania uses telecommunication airtime on AS SIDQ. Malaysia uses crude palm oil on Suq Al-Sila'.",
-    dealTitle: "How a deal uses it",
+    lead: "Institution count and engine uptime for your role.",
+    dealTitle: "How you use it",
     dealSteps: [
-      "Check the engine is online and which desk is configured.",
-      "Read the book numbers: amount is commodity cost, Murabaha is what the customer owes.",
-      "Open an active journey, or jump to Sedania Financing, Kenya Ops, or Malaysia Manual Bridge.",
-      "Setup pages (institutions, users, integrations) must exist before a live deal.",
+      "Confirm the engine is up, then open Institutions, Users, Audit, or Ops Monitor if your role allows.",
     ],
-    note: "Book Murabaha here is a 5% preview until each offer locks on the application. Approval limit is the maximum deal amount an FI Approver may authorize. The engine uses the lower of the user limit and the institution limit.",
   },
   "/sedania": {
     title: "What Sedania Financing is",
@@ -56,7 +52,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
     dealTitle: "How a deal uses it",
     dealSteps: [
       "Confirm your role and institution scope before you troubleshoot.",
-      "Watch pending manual-bridge e-certificates and HTTP errors.",
+      "Watch the counters your role is allowed to see: engine health, and your book if you operate a desk.",
       "Open an active application from the list, then finish it on the track desk.",
     ],
     note: "A red counter means work is waiting, not that a trade has settled.",
@@ -176,7 +172,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Approval limit is the maximum deal amount that person may approve. Set it on FI Approver. The engine uses the lower of this and the institution limit.",
       "Staff set their own name and HR fields on Settings. Admins can override the same fields on User management.",
     ],
-    note: "Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, FI Operations, FI Approver, Shariah / Audit, and Reconciliation. FI Admin may invite the FI desk roles for their institution. API keys are Super Admin only.",
+    note: "Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah / Audit, and Reconciliation. FI Admin invites FI Ops, FI Approver, and the other FI desk roles for their institution. Super Admin does not invite FI Ops or FI Approver. API keys are Super Admin only.",
   },
   "/settings": {
     title: "What settings cover",
@@ -262,13 +258,11 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
 export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
   "/": {
     title: "How the dashboard works",
-    intro: "Use this page to see the book, then leave it to run the desk.",
+    intro: "Read uptime, and the FI count if you manage institutions.",
     steps: [
-      { n: 1, title: "Check health", body: "Engine online, Kenya partners, Malaysia desk mode." },
-      { n: 2, title: "Read the book", body: "Cost and Murabaha totals by currency." },
-      { n: 3, title: "Open a journey", body: "Customer tracker, Kenya Ops, or Malaysia bridge." },
+      { n: 1, title: "Check uptime", body: "The engine reports whether it is healthy." },
+      { n: 2, title: "Open a page you can access", body: "Institutions, Users, Audit, or Ops Monitor stay role-gated." },
     ],
-    note: "Do not skip possession or Wakala from here. The desks enforce the order.",
   },
   "/ops": {
     title: "How Ops Monitor works",

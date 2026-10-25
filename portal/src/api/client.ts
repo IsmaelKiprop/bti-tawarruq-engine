@@ -1101,6 +1101,8 @@ export const api = {
   updateOwnProfile: (body: OpsUserProfilePatch) =>
     request<AuthContext>("/ops/auth/me", { method: "PATCH", body: JSON.stringify(body) }),
   getOpsMetrics: () => request<OpsMetrics>("/ops/metrics"),
+  logUiAudit: (body: { action: string; label: string; path: string }) =>
+    request<void>("/ops/audit/ui", { method: "POST", body: JSON.stringify(body) }).catch(() => undefined),
 
   login: (email: string, password: string) =>
     request<LoginResponse>("/ops/auth/login", {
@@ -1668,7 +1670,17 @@ export const api = {
     }),
 };
 
-export async function fetchHealth() {
+export type HealthPayload = {
+  status?: string;
+  auth_enabled?: boolean;
+  deployment_mode?: string;
+  enabled_products?: string[];
+  brand_name?: string;
+  uptime_seconds?: number;
+  uptime_pct?: number;
+};
+
+export async function fetchHealth(): Promise<HealthPayload> {
   const base = import.meta.env.VITE_API_URL?.replace("/api/v1", "") || "";
   const response = await fetch(`${base}/health`);
   return response.json();

@@ -31,7 +31,7 @@ curl -X POST http://localhost:8000/api/v1/institutions/{id}/api-keys \
   -d '{"name":"fi-core-banking","role":"api_client"}'
 ```
 
-Only Super Admin (`platform_admin`) can create API keys or register new institutions. Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, FI Operations, FI Approver, Shariah / Audit, and Reconciliation. FI Admin invites FI desk staff (FI Admin, FI Operations, FI Approver, Shariah / Audit, Reconciliation) for their own tenant.
+Only Super Admin (`platform_admin`) can create API keys or register new institutions. Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah / Audit, and Reconciliation. Super Admin does not invite FI Operations or FI Approver. FI Admin invites FI desk staff (FI Admin, FI Operations, FI Approver, Shariah / Audit, Reconciliation) for their own tenant.
 
 ### Portal auth (email + password)
 
@@ -41,7 +41,7 @@ With `AUTH_ENABLED=true`, the ops portal uses a login page (not pasted API keys)
 2. Bootstrap / seed passwords come from `OPS_BOOTSTRAP_*` and `OPS_SEED_PASSWORD`. New secrets are appended to `data/ops_seed_credentials.txt` (gitignored).
 3. Sign in at `/login`. Temporary passwords force `/change-password` before any other page.
 4. Re-run anytime: `python -m tawarruq.cli seed-ops-users`
-5. Super Admin invites staff under **Users** using the named roles, including FI Admin, FI Operations, and FI Approver when needed.
+5. Super Admin invites BTI staff and the FI Admin under **Users**. That FI Admin then invites FI Operations and FI Approver.
 6. Machine clients use `X-API-Key` (`api_client` role preferred). Super Admin issues the key on **Webhooks**; FI Admin requests BTI to onboard.
 7. Privileged portal roles (Super Admin, BTI Ops, BTI Finance) should enroll TOTP at `/mfa-enroll`. After enrollment, login requires the authenticator code.
 8. Murabaha, liquidation, and disbursement are maker-checker gated when `AUTH_ENABLED=true`. FI Ops queues the step; FI Approvers act on **Approvals**. Amount limits on the institution or the approver are enforced. The initiator cannot be the sole approver.

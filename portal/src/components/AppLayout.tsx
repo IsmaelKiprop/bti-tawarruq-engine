@@ -2,9 +2,10 @@ import { useEffect } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { getRouteMeta, NAV_SECTIONS } from "../config/navigation";
-import { canSeeNavItem, getHomePath, getRoleProfile, isDealerRole } from "../config/roles";
+import { canSeeNavItem, getHomePath, isDealerRole, TESTER_SHELL } from "../config/roles";
 import { useSidebar } from "../hooks/useSidebar";
 import { useTheme } from "../hooks/useTheme";
+import { useUiAudit } from "../hooks/useUiAudit";
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -31,6 +32,7 @@ export function AppLayout() {
   const { theme, toggleTheme } = useTheme();
   const { authEnabled, user, logout, engineHealth, refreshHealth } = useAuth();
   const { collapsed, mobileOpen, isMobile, toggleCollapsed, closeMobile, toggleMobile } = useSidebar();
+  useUiAudit();
 
   useEffect(() => {
     if (engineHealth.checkedAt != null) return;
@@ -45,7 +47,6 @@ export function AppLayout() {
     return () => window.clearInterval(id);
   }, [user, refreshHealth]);
 
-  const profile = getRoleProfile(user?.role);
   const meta = getRouteMeta(location.pathname, user?.role);
 
   function canSee(item: (typeof NAV_SECTIONS)[number]["items"][number]) {
@@ -187,9 +188,6 @@ export function AppLayout() {
           </div>
 
           <div className="navbar-actions">
-            <span className="role-badge" title={user?.email || profile.label}>
-              {user ? profile.label : authEnabled ? "Signed out" : "Auth off"}
-            </span>
             <button
               type="button"
               className="icon-btn"
@@ -212,6 +210,7 @@ export function AppLayout() {
 
         <main className="content">
           {isDealerRole(user?.role) &&
+          !TESTER_SHELL &&
           !location.pathname.startsWith("/agent-dealers") &&
           !location.pathname.startsWith("/dealers") ? (
             <Navigate to={getHomePath(user?.role)} replace />

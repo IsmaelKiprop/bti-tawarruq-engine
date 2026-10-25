@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import type { ProductModule } from "./deployment";
-import { getRoleProfile, type OpsRole } from "./roles";
+import { AUDIT_ROLES, getRoleProfile, TESTER_SHELL, type OpsRole } from "./roles";
 import {
   IconApplications,
   IconDashboard,
@@ -201,7 +201,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Audit trail",
         Icon: IconShariah,
         hint: "Grouped ops events from login onward",
-        roles: ["platform_admin", "bti_ops", "bti_finance", "institution_admin", "shariah_officer", "reconciler"],
+        roles: AUDIT_ROLES,
       },
     ],
   },
@@ -212,7 +212,7 @@ export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((section) => section.it
 export const ROUTE_META: Record<string, { title: string; description: string }> = {
   "/": {
     title: "Dashboard",
-    description: "Live book, queues, and projected analytics",
+    description: "Institution count and engine uptime",
   },
   "/documentation": {
     title: "Documentation",
@@ -325,7 +325,7 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
 };
 
 export function getRouteMeta(pathname: string, role?: string | null) {
-  if (pathname === "/" && role) {
+  if (pathname === "/" && role && !TESTER_SHELL) {
     return { title: "Dashboard", description: getRoleProfile(role).navDescription };
   }
   if ((pathname.startsWith("/agent-dealers") || pathname.startsWith("/dealers")) && role === "agent_dealer") {

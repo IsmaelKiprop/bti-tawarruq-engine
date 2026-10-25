@@ -9,6 +9,8 @@ from tawarruq.models.audit import AuditEvent
 def classify_action_group(path: str | None = None, action: str | None = None) -> str:
     """Bucket audit actions for grouped ops views."""
     hay = f"{path or ''} {action or ''}".lower()
+    if "audit/ui" in hay or hay.startswith("ui.") or " ui." in hay:
+        return "ui"
     if any(token in hay for token in ("/ops/auth", "auth.", "login", "mfa", "password")):
         return "auth"
     if any(token in hay for token in ("/ops/auth/users", "ops_user", "/users")):

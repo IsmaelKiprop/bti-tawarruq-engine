@@ -35,8 +35,6 @@ export const INVITE_TARGETS_BY_CREATOR: Record<string, OpsRole[]> = {
     "bti_ops",
     "bti_finance",
     "institution_admin",
-    "institution_ops",
-    "fi_approver",
     "shariah_officer",
     "reconciler",
   ],
@@ -242,8 +240,30 @@ export function getRoleProfile(role?: string | null): RoleProfile {
   };
 }
 
+/** Who may open Audit. Keep in sync with the `/audit` nav item. */
+export const AUDIT_ROLES: OpsRole[] = [
+  "platform_admin",
+  "bti_ops",
+  "bti_finance",
+  "institution_admin",
+  "shariah_officer",
+  "reconciler",
+];
+
+/** Temporary tester shell: hide product desks until BTI Admin signs off. */
+export const TESTER_SHELL = true;
+
+const TESTER_VISIBLE_PATHS = ["/", "/ops", "/institutions", "/users", "/audit", "/settings"] as const;
+
+export function isTesterVisiblePath(to: string): boolean {
+  const path = to.split("?")[0] || "/";
+  return TESTER_VISIBLE_PATHS.some((allowed) => path === allowed || (allowed !== "/" && path.startsWith(`${allowed}/`)));
+}
+
 export function getHomePath(role?: string | null): string {
-  return getRoleProfile(role).homePath;
+  const path = getRoleProfile(role).homePath;
+  if (TESTER_SHELL && !isTesterVisiblePath(path)) return "/";
+  return path;
 }
 
 export function isDealerRole(role?: string | null): boolean {
@@ -255,10 +275,12 @@ export function canSeeNavItem(
   user: SessionUser | null | undefined,
   authEnabled: boolean,
 ): boolean {
+  if (TESTER_SHELL && !isTesterVisiblePath(item.to)) return false;
   if (item.hideOnOnprem && isOnprem()) return false;
   if (item.product && !productEnabled(item.product)) return false;
   if (!authEnabled || !user) return true;
   if (isDealerRole(user.role)) {
+    if (TESTER_SHELL) return item.to === "/" || item.to === "/settings";
     return item.to === "/agent-dealers" || item.to === "/dealers";
   }
   if (item.excludeRoles?.includes(user.role as OpsRole)) return false;

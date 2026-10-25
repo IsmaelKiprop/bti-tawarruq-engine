@@ -113,7 +113,7 @@ export function BtiKenyaCertificate({ journey, onClose, embedded = false }: Prop
       <div className="bti-cert-frame">
         <header className="bti-cert-masthead">
           <div className="bti-cert-brand">
-            <BrandLogo variant="lockup" className="bti-cert-logo" />
+            <BrandLogo variant="lockup" className="bti-cert-logo" tone="light" />
             <p className="bti-cert-entity-sub">Digital Islamic finance. Authorised Tawarruq execution agent.</p>
           </div>
           <div className="bti-cert-serial">
@@ -247,7 +247,7 @@ export function BtiKenyaCertificate({ journey, onClose, embedded = false }: Prop
             <p>Scan to open the ledger entry</p>
           </div>
           <div className="bti-cert-seal" aria-hidden="true">
-            <BrandLogo variant="mark" className="bti-cert-seal-logo" alt="" />
+            <BrandLogo variant="mark" className="bti-cert-seal-logo" alt="" tone="light" />
             <small>Verified</small>
           </div>
         </footer>

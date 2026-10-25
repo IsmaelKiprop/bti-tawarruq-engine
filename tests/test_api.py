@@ -64,7 +64,10 @@ def test_auto_generated_customer_ref(client):
 def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["uptime_pct"] == 100
+    assert payload["uptime_seconds"] >= 0
 
 
 def test_full_tawarruq_flow_mock(client):

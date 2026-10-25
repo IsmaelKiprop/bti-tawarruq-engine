@@ -5,7 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Alert, PageShell } from "../components/PageShell";
 import { useTheme } from "../hooks/useTheme";
 import { isOnprem, productEnabled } from "../config/deployment";
-import { getRoleProfile, roleLabel } from "../config/roles";
+import { getRoleProfile, isTesterVisiblePath, roleLabel, TESTER_SHELL } from "../config/roles";
 
 type MfaMode = "idle" | "totp";
 
@@ -79,18 +79,20 @@ export function SettingsPage() {
     }
     if (user?.permissions.includes("manage_credentials")) {
       links.push({ to: "/users", label: "Users & roles", hint: "Invite portal logins for your scope" });
-      links.push({ to: "/webhooks", label: "API keys & webhooks", hint: "Machine credentials and callbacks" });
+      if (!TESTER_SHELL) {
+        links.push({ to: "/webhooks", label: "API keys & webhooks", hint: "Machine credentials and callbacks" });
+      }
     }
-    if (user?.permissions.includes("manage_integrations")) {
+    if (!TESTER_SHELL && user?.permissions.includes("manage_integrations")) {
       links.push({ to: "/integrations", label: "Integrations", hint: "M-Pesa, MNO, and partner profiles" });
     }
-    if (user?.permissions.includes("manage_billing") && productEnabled("billing")) {
+    if (!TESTER_SHELL && user?.permissions.includes("manage_billing") && productEnabled("billing")) {
       links.push({ to: "/billing", label: "Billing", hint: "Invoices and usage fees" });
     }
     if (user?.permissions.includes("view_metrics")) {
       links.push({ to: "/ops", label: "Ops Monitor", hint: "Engine telemetry for your role" });
     }
-    return links;
+    return TESTER_SHELL ? links.filter((link) => isTesterVisiblePath(link.to)) : links;
   }, [user?.permissions]);
 
   async function onChangePassword(event: FormEvent) {

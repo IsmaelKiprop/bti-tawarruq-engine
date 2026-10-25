@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, Application, AuthContext, OpsMetrics } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { Alert, LoadingPanel, PageShell, statusBadgeClass } from "../components/PageShell";
 import { IconExternal, IconMonitor } from "../components/icons";
 import { previewApplicationDeal } from "../config/applicationOps";
+import { AUDIT_ROLES, TESTER_SHELL, type OpsRole } from "../config/roles";
 import { displayCustomerName, formatMoney, formatWorkflowLabel } from "../lib/display";
 
 const pillClass =
@@ -25,6 +27,7 @@ function errorRate(metrics: OpsMetrics) {
 }
 
 export function OpsMonitorPage() {
+  const { user, authEnabled } = useAuth();
   const [metrics, setMetrics] = useState<OpsMetrics | null>(null);
   const [auth, setAuth] = useState<AuthContext | null>(null);
   const [activeApps, setActiveApps] = useState<Application[]>([]);
@@ -40,10 +43,13 @@ export function OpsMonitorPage() {
       else setLoading(true);
       setError("");
       try {
+        const canSeeJourneys =
+          !authEnabled ||
+          Boolean(user?.permissions.includes("write_ops") || user?.permissions.includes("approve_txn"));
         const [metricsData, authData, allApps] = await Promise.all([
           api.getOpsMetrics(),
           api.getAuthContext(),
-          api.listApplications().catch(() => [] as Application[]),
+          canSeeJourneys ? api.listApplications().catch(() => [] as Application[]) : Promise.resolve([] as Application[]),
         ]);
         if (!alive) return;
         setMetrics(metricsData);
@@ -70,7 +76,7 @@ export function OpsMonitorPage() {
       alive = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [authEnabled, user?.permissions]);
 
   const appStatuses = useMemo(() => rankEntries(metrics?.applications_by_status), [metrics]);
   const txnStatuses = useMemo(() => rankEntries(metrics?.transactions_by_status), [metrics]);
@@ -82,10 +88,24 @@ export function OpsMonitorPage() {
   const maxPath = Math.max(1, ...topPaths.map(([, n]) => n));
   const maxHttp = Math.max(1, ...httpStatuses.map(([, n]) => n));
 
-  const bridgeAlert = (metrics?.manual_bridge_pending ?? 0) > 0;
   const errorAlert = (metrics?.http_errors_total ?? 0) > 0;
   const latencyHot = (metrics?.http_latency_ms_avg ?? 0) >= 500;
   const errPct = metrics ? errorRate(metrics) : 0;
+
+  const perms = auth?.permissions?.length ? auth.permissions : user?.permissions ?? [];
+  const role = (auth?.role ?? user?.role) as OpsRole | undefined;
+  const can = (permission: string) => !authEnabled || perms.includes(permission);
+  const showBridge = !TESTER_SHELL && can("write_ops");
+  const showApprovals = can("approve_txn");
+  const showInstitutions = can("manage_institutions");
+  const showApiKeys = can("manage_institutions");
+  const showWebhooks = can("manage_credentials");
+  const showAudit = !authEnabled || Boolean(role && AUDIT_ROLES.includes(role));
+  const showJourneys = can("write_ops") || can("approve_txn");
+  const showEngineFlags = can("write_bti_ops") || can("manage_institutions");
+  const primaryCols = 2 + Number(showBridge) + Number(showApprovals);
+  const primaryGrid =
+    primaryCols >= 4 ? "lg:grid-cols-4" : primaryCols === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2";
 
   return (
     <PageShell wide>
@@ -116,7 +136,7 @@ export function OpsMonitorPage() {
                 {auth.is_platform_admin ? <span className={pillClass}>Platform</span> : null}
               </>
             ) : null}
-            {metrics ? (
+            {metrics && showEngineFlags ? (
               <span className={pillClass}>{metrics.kenya_integration_mode}</span>
             ) : null}
           </div>
@@ -128,14 +148,15 @@ export function OpsMonitorPage() {
           <LoadingPanel rows={8} />
         ) : metrics ? (
           <>
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-              <Kpi
-                label="Manual bridge"
-                value={metrics.manual_bridge_pending}
-                hint="Pending e-certificates"
-                tone={bridgeAlert ? "alert" : undefined}
-                to="/malaysia"
-              />
+            <div className={`grid grid-cols-2 gap-2 ${primaryGrid}`}>
+              {showBridge ? (
+                <Kpi
+                  label="Manual bridge"
+                  value={metrics.manual_bridge_pending}
+                  hint="Pending e-certificates"
+                  tone={(metrics.manual_bridge_pending ?? 0) > 0 ? "alert" : undefined}
+                />
+              ) : null}
               <Kpi
                 label="HTTP errors"
                 value={metrics.http_errors_total}
@@ -148,30 +169,41 @@ export function OpsMonitorPage() {
                 hint={latencyHot ? "Elevated" : "Since process start"}
                 tone={latencyHot ? "warn" : undefined}
               />
-              <Kpi
-                label="Approvals queue"
-                value={metrics.pending_approvals ?? 0}
-                hint="Maker-checker waiting"
-                to="/approvals"
-              />
+              {showApprovals ? (
+                <Kpi
+                  label="Approvals queue"
+                  value={metrics.pending_approvals ?? 0}
+                  hint="Maker-checker waiting"
+                />
+              ) : null}
             </div>
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
               <Kpi label="Applications" value={metrics.applications_total} hint={`${metrics.applications_open ?? 0} open`} compact />
               <Kpi label="Transactions" value={metrics.transactions_total} hint={`${metrics.transactions_open ?? 0} in flight`} compact />
-              <Kpi label="Institutions" value={metrics.institutions_total} hint="In directory" compact />
-              <Kpi label="API keys" value={metrics.active_api_keys} hint="Active" compact />
-              <Kpi label="Webhooks" value={metrics.active_webhooks} hint="Active" compact />
-              <Kpi label="Audit today" value={metrics.audit_events_today} hint="Events logged" compact />
+              {showInstitutions ? (
+                <Kpi label="Institutions" value={metrics.institutions_total} hint="In directory" compact />
+              ) : null}
+              {showApiKeys ? (
+                <Kpi label="API keys" value={metrics.active_api_keys} hint="Active" compact />
+              ) : null}
+              {showWebhooks ? (
+                <Kpi label="Webhooks" value={metrics.active_webhooks} hint="Active" compact />
+              ) : null}
+              {showAudit ? (
+                <Kpi label="Audit today" value={metrics.audit_events_today} hint="Events logged" compact />
+              ) : null}
             </div>
 
             <div className="grid gap-2 lg:grid-cols-3">
               <section className={panelClass}>
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="m-0 text-sm font-semibold">Application mix</h3>
-                  <Link className="text-xs text-primary hover:underline" to="/applications">
-                    View
-                  </Link>
+                  {TESTER_SHELL ? null : (
+                    <Link className="text-xs text-primary hover:underline" to="/applications">
+                      View
+                    </Link>
+                  )}
                 </div>
                 <Distribution rows={appStatuses} max={maxApp} empty="No applications yet" bar="bg-primary" />
               </section>
@@ -179,9 +211,11 @@ export function OpsMonitorPage() {
               <section className={panelClass}>
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="m-0 text-sm font-semibold">Transaction mix</h3>
-                  <Link className="text-xs text-primary hover:underline" to="/transactions">
-                    View
-                  </Link>
+                  {TESTER_SHELL ? null : (
+                    <Link className="text-xs text-primary hover:underline" to="/transactions">
+                      View
+                    </Link>
+                  )}
                 </div>
                 <Distribution rows={txnStatuses} max={maxTxn} empty="No transactions yet" bar="bg-accent" />
               </section>
@@ -192,18 +226,21 @@ export function OpsMonitorPage() {
                   <span className="text-xs tabular-nums text-muted">{metrics.http_requests_total} req</span>
                 </div>
                 <Distribution rows={httpStatuses} max={maxHttp} empty="No requests yet" bar="bg-foreground/70" />
-                <div className="mt-auto grid grid-cols-2 gap-1.5 border-t border-border pt-2">
-                  <MiniStat
-                    label="Amanah writes"
-                    value={metrics.amanah_write_enabled ? "On" : "Off"}
-                    ok={metrics.amanah_write_enabled}
-                  />
+                <div className={`mt-auto grid gap-1.5 border-t border-border pt-2 ${showEngineFlags ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {showEngineFlags ? (
+                    <MiniStat
+                      label="Amanah writes"
+                      value={metrics.amanah_write_enabled ? "On" : "Off"}
+                      ok={metrics.amanah_write_enabled}
+                    />
+                  ) : null}
                   <MiniStat label="Auth" value={metrics.auth_enabled ? "On" : "Off"} ok={metrics.auth_enabled} />
                 </div>
               </section>
             </div>
 
-            <div className="grid gap-2 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <div className={`grid gap-2 ${showJourneys ? "xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]" : ""}`}>
+              {showJourneys ? (
               <section className={panelClass}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h3 className="m-0 text-sm font-semibold">Active journeys</h3>
@@ -245,15 +282,17 @@ export function OpsMonitorPage() {
                                 </span>
                               </td>
                               <td>
-                                <Link
-                                  className="btn btn-secondary btn-sm inline-flex items-center gap-1"
-                                  to={`/customer/${encodeURIComponent(app.customer_ref)}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  Journey
-                                  <IconExternal size={12} />
-                                </Link>
+                                {TESTER_SHELL ? null : (
+                                  <Link
+                                    className="btn btn-secondary btn-sm inline-flex items-center gap-1"
+                                    to={`/customer/${encodeURIComponent(app.customer_ref)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Journey
+                                    <IconExternal size={12} />
+                                  </Link>
+                                )}
                               </td>
                             </tr>
                           );
@@ -263,6 +302,7 @@ export function OpsMonitorPage() {
                   </div>
                 )}
               </section>
+              ) : null}
 
               <section className={panelClass}>
                 <div className="flex items-baseline justify-between gap-2">

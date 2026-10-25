@@ -310,12 +310,12 @@ def test_invite_user_emails_temp_password_via_smtp(monkeypatch, tmp_path):
         get_settings.cache_clear()
 
 
-def test_super_admin_can_invite_fi_ops_or_approver():
+def test_super_admin_cannot_invite_fi_ops_or_approver():
     client = _client()
     headers, institution_id = _super_admin_headers(client)
 
     for role in ("institution_ops", "fi_approver"):
-        created = client.post(
+        denied = client.post(
             "/api/v1/ops/auth/users",
             headers=headers,
             json={
@@ -325,8 +325,16 @@ def test_super_admin_can_invite_fi_ops_or_approver():
                 "institution_id": institution_id,
             },
         )
-        assert created.status_code == 201, created.text
-        assert created.json()["role"] == role
+        assert denied.status_code == 403, denied.text
+        assert "not allowed to invite" in denied.json()["detail"].lower()
+
+    fi_id, _ = _invite_fi_admin(client, headers, institution_id, email="desk.lead.patch@bank.local")
+    patched = client.patch(
+        f"/api/v1/ops/auth/users/{fi_id}",
+        headers=headers,
+        json={"role": "institution_ops"},
+    )
+    assert patched.status_code == 403, patched.text
 
 
 def test_fi_admin_cannot_invite_bti_roles():
@@ -401,6 +409,35 @@ def test_fi_admin_cannot_create_api_key():
     )
     assert denied.status_code == 403, denied.text
     assert "super admin" in denied.json()["detail"].lower()
+
+
+def test_login_writes_evidence_and_ui_click_is_audited():
+    client = _client()
+    headers, _institution_id = _super_admin_headers(client)
+
+    failed = client.post("/api/v1/ops/auth/login", json={"email": "nobody@bti.local", "password": "wrong-pass-99"})
+    assert failed.status_code == 401
+
+    ui = client.post(
+        "/api/v1/ops/audit/ui",
+        headers=headers,
+        json={"action": "ui.click", "label": "Invite user", "path": "/users"},
+    )
+    assert ui.status_code == 204, ui.text
+
+    feed = client.get("/api/v1/ops/audit?grouped=false&limit=500", headers=headers)
+    assert feed.status_code == 200, feed.text
+    events = feed.json()["events"]
+    login_ok = [event for event in events if event["action"] == "auth.login_ok" and event.get("evidence_ref")]
+    assert login_ok
+    assert "email=" in login_ok[-1]["evidence_ref"]
+    assert "mfa=" in login_ok[-1]["evidence_ref"]
+    login_failed = [event for event in events if event["action"] == "auth.login_failed" and event.get("evidence_ref")]
+    assert login_failed
+    ui_events = [event for event in events if event["action"] == "ui.click"]
+    assert ui_events
+    assert ui_events[-1]["action_group"] == "ui"
+    assert "Invite user" in (ui_events[-1]["evidence_ref"] or "")
 
 
 def test_super_admin_cannot_patch_to_machine_role():

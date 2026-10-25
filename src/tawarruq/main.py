@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -36,6 +37,7 @@ from tawarruq.services.metrics_service import collect_ops_metrics, render_promet
 from tawarruq.services.monitoring import RequestMetricsMiddleware
 
 logger = logging.getLogger(__name__)
+PROCESS_STARTED_AT = time.time()
 
 
 def _attach_swagger_security(app: FastAPI) -> None:
@@ -193,8 +195,9 @@ def create_app() -> FastAPI:
         - `amanah_write_enabled`: whether Amanah can auto-execute legs
         """
         db_ok = _database_ok()
+        status = "ok" if db_ok else "degraded"
         return HealthRead(
-            status="ok" if db_ok else "degraded",
+            status=status,
             version=__version__,
             amanah_write_enabled=settings.amanah_write_enabled,
             kenya_integration_mode=settings.kenya_integration_mode,
@@ -214,6 +217,8 @@ def create_app() -> FastAPI:
             deployment_mode=settings.normalized_mode,
             enabled_products=settings.products,
             brand_name=settings.brand_display,
+            uptime_seconds=max(0, int(time.time() - PROCESS_STARTED_AT)),
+            uptime_pct=100 if status == "ok" else 0,
         )
 
     @app.get("/metrics", include_in_schema=False, tags=["Production Ops"])

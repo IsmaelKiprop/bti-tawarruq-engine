@@ -132,8 +132,8 @@ CROSS_TENANT_ROLES = frozenset(
     }
 )
 
-# Only Super Admin and FI Admin may invite.
-# Super Admin may staff every portal desk. FI Admin stays on their own institution roles.
+# Only Super Admin and FI Admin may invite (BTI_Tawarruq_Users_ver_001.docx).
+# Super Admin staffs BTI roles and FI Admin. FI Admin staffs own-tenant desk roles.
 INVITE_TARGETS_BY_CREATOR: dict[ApiKeyRole, frozenset[ApiKeyRole]] = {
     ApiKeyRole.PLATFORM_ADMIN: frozenset(
         {
@@ -141,8 +141,6 @@ INVITE_TARGETS_BY_CREATOR: dict[ApiKeyRole, frozenset[ApiKeyRole]] = {
             ApiKeyRole.BTI_OPS,
             ApiKeyRole.BTI_FINANCE,
             ApiKeyRole.INSTITUTION_ADMIN,
-            ApiKeyRole.INSTITUTION_OPS,
-            ApiKeyRole.FI_APPROVER,
             ApiKeyRole.SHARIAH_OFFICER,
             ApiKeyRole.RECONCILER,
         }

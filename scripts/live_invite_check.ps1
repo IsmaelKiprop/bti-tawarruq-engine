@@ -79,7 +79,7 @@ $allowOps = Invoke-Api POST "/ops/auth/users" @{
     role = "institution_ops"
     institution_id = $institutionId
 } $adminToken
-Record "super-admin-can-invite-fi-ops" ($allowOps.status -eq 201) $allowOps.status
+Record "super-admin-cannot-invite-fi-ops" ($allowOps.status -eq 403) $allowOps.status
 
 $allowAppr = Invoke-Api POST "/ops/auth/users" @{
     email = "live.appr.$stamp@bank.local"
@@ -87,7 +87,7 @@ $allowAppr = Invoke-Api POST "/ops/auth/users" @{
     role = "fi_approver"
     institution_id = $institutionId
 } $adminToken
-Record "super-admin-can-invite-fi-approver" ($allowAppr.status -eq 201) $allowAppr.status
+Record "super-admin-cannot-invite-fi-approver" ($allowAppr.status -eq 403) $allowAppr.status
 
 $fiEmail = "live.fi.$stamp@bank.local"
 $fiCreate = Invoke-Api POST "/ops/auth/users" @{

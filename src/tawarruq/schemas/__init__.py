@@ -164,6 +164,8 @@ class HealthRead(BaseModel):
     deployment_mode: str = Field('managed', description='managed | onprem')
     enabled_products: list[str] = Field(default_factory=list, description='Active product modules')
     brand_name: str = Field('Buruuj Fintech', description='White-label operator name')
+    uptime_seconds: int = Field(0, description='Seconds since this process started')
+    uptime_pct: float = Field(100, description='100 when status is ok, otherwise 0')
 
 class MalaysiaFlowStatusRead(BaseModel):
     application_id: str
@@ -235,8 +237,8 @@ class OpsUserCreate(BaseModel):
         'institution_admin',
         description=(
             'Use the API value. Super Admin may invite: Super Admin (platform_admin), BTI Ops (bti_ops), '
-            'BTI Finance (bti_finance), FI Admin (institution_admin), FI Operations (institution_ops), '
-            'FI Approver (fi_approver), Shariah / Audit (shariah_officer), Reconciliation (reconciler). '
+            'BTI Finance (bti_finance), FI Admin (institution_admin), Shariah / Audit (shariah_officer), '
+            'Reconciliation (reconciler). Super Admin cannot invite FI Operations or FI Approver. '
             'FI Admin may invite: FI Admin, FI Operations, FI Approver, Shariah / Audit, Reconciliation.'
         ),
     )

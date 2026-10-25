@@ -22,7 +22,7 @@ SKIP_PREFIXES = (
     "/openapi.json",
     "/favicon",
 )
-SKIP_EXACT = {"/"}
+SKIP_EXACT = {"/", "/api/v1/ops/audit/ui"}
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 # Auth endpoints are often public (no session yet) but must still be audited.
 AUTH_SUFFIXES = (

@@ -149,7 +149,7 @@ Set `AUTH_ENABLED=true` and pass `X-API-Key` (machine) or `Authorization: Bearer
 
 In Swagger (`/docs`): `POST /ops/auth/login` → copy `access_token` → **Authorize** → BearerAuth. Change password first if `must_change_password` is true, then Authorize with the new token.
 
-**Portal invites** (`POST /ops/auth/users`): only Super Admin (`platform_admin`) and FI Admin (`institution_admin`) may create users. Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, FI Operations, FI Approver, Shariah / Audit, and Reconciliation. FI Admin may invite FI Admin, FI Operations, FI Approver, Shariah / Audit, and Reconciliation for their own tenant — not BTI-internal roles. The same rules apply to `PATCH` role.
+**Portal invites** (`POST /ops/auth/users`): only Super Admin (`platform_admin`) and FI Admin (`institution_admin`) may create users. Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah / Audit, and Reconciliation. Super Admin does not invite FI Operations or FI Approver. FI Admin may invite FI Admin, FI Operations, FI Approver, Shariah / Audit, and Reconciliation for their own tenant — not BTI-internal roles. The same rules apply to `PATCH` role.
 
 **API keys** (`POST /institutions/{id}/api-keys`): Super Admin only. FI Admin cannot issue keys; request BTI to onboard. Preferred machine role is `api_client`.
 

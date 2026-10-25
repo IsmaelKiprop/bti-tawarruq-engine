@@ -72,9 +72,10 @@ def collect_ops_metrics(db: Session, settings: Settings, institution_id: str | N
         api_key_q = api_key_q.where(ApiKey.institution_id == institution_id)
 
     day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    recent_audit = db.scalar(
-        select(func.count()).select_from(AuditEvent).where(AuditEvent.timestamp >= day_start)
-    )
+    audit_q = select(func.count()).select_from(AuditEvent).where(AuditEvent.timestamp >= day_start)
+    if institution_id:
+        audit_q = audit_q.where(AuditEvent.institution_id == institution_id)
+    recent_audit = db.scalar(audit_q)
 
     disb_q = select(func.coalesce(func.sum(Disbursement.amount), 0))
     if institution_id:

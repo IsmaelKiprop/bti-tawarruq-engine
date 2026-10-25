@@ -60,7 +60,7 @@ Only **Super Admin** (`platform_admin`) and **FI Admin** (`institution_admin`) m
 
 | Caller | May invite | Must not invite |
 |--------|------------|-----------------|
-| Super Admin | Super Admin, BTI Ops, BTI Finance, FI Admin, FI Operations, FI Approver, Shariah / Audit, Reconciliation | Read only, Agent dealer, API client |
+| Super Admin | Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah / Audit, Reconciliation | FI Ops, FI Approver, Read only, Agent dealer, API client |
 | FI Admin (own tenant) | FI Admin, FI Ops, FI Approver, Shariah, Recon | Super Admin, BTI Ops, BTI Finance |
 | Everyone else | — | Anyone |
 
@@ -205,7 +205,7 @@ python -m tawarruq.cli serve --reload
 3. If `must_change_password`, call **`POST /ops/auth/change-password`**, then copy the new `access_token`
 4. **Authorize → BearerAuth** — paste the token only (no `Bearer ` prefix)
 5. `GET /institutions` — copy an `id`
-6. Super Admin: `POST /ops/auth/users` with `role: institution_admin` and that `institution_id`. Super Admin may also invite `institution_ops` / `fi_approver`
+6. Super Admin: `POST /ops/auth/users` with `role: institution_admin` and that `institution_id`. Inviting `institution_ops` or `fi_approver` as Super Admin must 403
 7. Log in as that FI Admin, Authorize, invite `institution_ops` or `fi_approver`. FI Admin inviting `bti_ops` must 403
 8. Super Admin: `POST /institutions/{id}/api-keys` with `role: api_client`. The same call as FI Admin must 403
 
