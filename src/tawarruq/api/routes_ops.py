@@ -416,6 +416,9 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
         employee_number=employee_number,
         phone=phone,
         office=office,
+        deployment_mode=settings.normalized_mode,
+        enabled_products=settings.products,
+        brand_name=settings.brand_display,
     )
 
 

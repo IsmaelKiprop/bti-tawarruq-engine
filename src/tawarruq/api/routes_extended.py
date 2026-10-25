@@ -266,13 +266,13 @@ def create_institution_api_key(
         API_KEY_ALLOWED_ROLES,
         auth_is_enabled,
         can_cross_tenant,
-        is_platform_admin,
+        can_issue_api_keys,
     )
 
-    if auth_is_enabled(request) and not is_platform_admin(request):
+    if auth_is_enabled(request) and not can_issue_api_keys(request):
         raise HTTPException(
             status_code=403,
-            detail="Only Super Admin can create API keys. Request BTI to onboard the institution key.",
+            detail="Only Super Admin can create API keys. On a managed install, request BTI to onboard the institution key.",
         )
     if role not in API_KEY_ALLOWED_ROLES:
         raise HTTPException(

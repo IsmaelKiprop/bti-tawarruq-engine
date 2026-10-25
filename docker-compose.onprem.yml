@@ -1,0 +1,66 @@
+# Customer-server edition. Do not use this file on the BTI VPS.
+# Copy .env.onprem.example to .env, then:
+#   docker compose -f docker-compose.onprem.yml --env-file .env up -d --build
+#
+# After the first successful boot, set OPS_SEED_USERS=false in .env.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tawarruq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tawarruq}
+      POSTGRES_DB: tawarruq
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - onprem_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tawarruq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://tawarruq:${POSTGRES_PASSWORD:-tawarruq}@postgres:5432/tawarruq
+      SHARIAH_AUDIT_SERVICE_URL: http://shariah-audit:8001
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-onprem}
+      AUTH_ENABLED: "true"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "tawarruq.cli", "serve", "--host", "0.0.0.0", "--port", "8000"]
+
+  shariah-audit:
+    build: .
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      # Lab default is SQLite. Production on-prem: CREATE DATABASE tawarruq_audit
+      # and set SHARIAH_AUDIT_DATABASE_URL in .env (see docs/DEPLOYMENT.md).
+      SHARIAH_AUDIT_DATABASE_URL: ${SHARIAH_AUDIT_DATABASE_URL:-sqlite:////app/data/shariah_audit.db}
+      SHARIAH_AUDIT_PORT: "8001"
+    volumes:
+      - ./data:/app/data
+    command: ["python", "shariah-audit-service/app.py"]
+
+  portal:
+    build:
+      context: ./portal
+      args:
+        VITE_API_URL: /api/v1
+    ports:
+      - "${PORTAL_BIND:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  onprem_postgres_data:

@@ -55,7 +55,8 @@ def test_tenant_scoped_list_and_access(client, monkeypatch):
     from tawarruq.config import get_settings
     from tawarruq.services.auth_service import create_api_key
 
-    default = client.get("/api/v1/institutions").json()[0]["id"]
+    institutions = {row["code"]: row["id"] for row in client.get("/api/v1/institutions").json()}
+    default = institutions["DEFAULT"]
     other_id = _create_second_institution(client)
 
     app_resp = client.post(

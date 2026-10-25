@@ -1,4 +1,5 @@
 import type { SessionUser } from "../api/client";
+import { getDeploymentProfile, isOnprem, productEnabled, type ProductModule } from "./deployment";
 
 /** Stable role values — aligned with BTI_Tawarruq_Users_ver_001.docx */
 export type OpsRole =
@@ -50,8 +51,20 @@ export const INVITE_TARGETS_BY_CREATOR: Record<string, OpsRole[]> = {
 
 const PLATFORM_SCOPED_INVITE_ROLES: OpsRole[] = ["platform_admin", "bti_ops", "bti_finance"];
 
+const ONPREM_ROLE_LABELS: Partial<Record<OpsRole, string>> = {
+  platform_admin: "Site Admin",
+  bti_ops: "Site Ops",
+  bti_finance: "Site Finance",
+  institution_admin: "Admin",
+  institution_ops: "Operations",
+  fi_approver: "Approver",
+};
+
 export function roleLabel(role?: string | null): string {
   if (!role) return "Operator";
+  if (isOnprem() && ONPREM_ROLE_LABELS[role as OpsRole]) {
+    return ONPREM_ROLE_LABELS[role as OpsRole] as string;
+  }
   const named = PORTAL_ROLE_OPTIONS.find((opt) => opt.value === role);
   if (named) return named.label;
   return getRoleProfile(role).label;
@@ -69,7 +82,7 @@ export function inviteRoleOptions(creatorRole?: string | null) {
   );
   return PORTAL_ROLE_OPTIONS.filter((opt) => values.has(opt.value)).map((opt) => ({
     value: opt.value,
-    label: opt.label,
+    label: roleLabel(opt.value),
   }));
 }
 
@@ -87,6 +100,8 @@ type NavVisibility = {
   permission?: string;
   roles?: OpsRole[];
   excludeRoles?: OpsRole[];
+  product?: ProductModule;
+  hideOnOnprem?: boolean;
 };
 
 export type RoleProfile = {
@@ -119,7 +134,7 @@ const ROLE_PROFILES: Record<string, RoleProfile> = {
     showApiDocs: true,
     showWriteActions: true,
     showShariah: true,
-    homePath: "/ops",
+    homePath: "/kenya",
   },
   bti_finance: {
     label: "BTI Finance",
@@ -215,8 +230,16 @@ const DEFAULT_PROFILE: RoleProfile = {
 };
 
 export function getRoleProfile(role?: string | null): RoleProfile {
-  if (!role) return DEFAULT_PROFILE;
-  return ROLE_PROFILES[role] || { ...DEFAULT_PROFILE, label: role };
+  const base = !role ? DEFAULT_PROFILE : ROLE_PROFILES[role] || { ...DEFAULT_PROFILE, label: role };
+  if (!isOnprem()) return base;
+  const brand = getDeploymentProfile().brandName;
+  const label = ONPREM_ROLE_LABELS[role as OpsRole] || base.label;
+  return {
+    ...base,
+    label,
+    workspaceFallback: role === "platform_admin" || role === "bti_ops" || role === "bti_finance" ? brand : base.workspaceFallback,
+    homePath: role === "platform_admin" ? "/" : base.homePath,
+  };
 }
 
 export function getHomePath(role?: string | null): string {
@@ -232,6 +255,8 @@ export function canSeeNavItem(
   user: SessionUser | null | undefined,
   authEnabled: boolean,
 ): boolean {
+  if (item.hideOnOnprem && isOnprem()) return false;
+  if (item.product && !productEnabled(item.product)) return false;
   if (!authEnabled || !user) return true;
   if (isDealerRole(user.role)) {
     return item.to === "/agent-dealers" || item.to === "/dealers";

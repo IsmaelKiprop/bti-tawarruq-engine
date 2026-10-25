@@ -119,15 +119,6 @@ export function OpsMonitorPage() {
             {metrics ? (
               <span className={pillClass}>{metrics.kenya_integration_mode}</span>
             ) : null}
-            <Link className="btn btn-secondary btn-sm" to="/kenya">
-              Kenya
-            </Link>
-            <Link className="btn btn-secondary btn-sm" to="/malaysia">
-              Malaysia
-            </Link>
-            <Link className="btn btn-secondary btn-sm" to="/approvals">
-              Approvals
-            </Link>
           </div>
         </header>
 

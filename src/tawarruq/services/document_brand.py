@@ -7,13 +7,20 @@ from html import escape
 from typing import Any, Sequence
 
 
+def current_brand_name() -> str:
+    from tawarruq.config import get_settings
+
+    return get_settings().brand_display
+
+
 def _logo_block() -> str:
     from tawarruq.services.trade_evidence_service import _buruuj_logo_data_uri
 
+    brand = escape(current_brand_name())
     logo = _buruuj_logo_data_uri()
     if logo:
-        return f'<img class="logo" src="{logo}" alt="Buruuj Fintech" />'
-    return '<div class="logo-fallback">Buruuj Fintech</div>'
+        return f'<img class="logo" src="{logo}" alt="{brand}" />'
+    return f'<div class="logo-fallback">{brand}</div>'
 
 
 def section_table(rows: Sequence[tuple[str, object | None]]) -> str:
@@ -73,13 +80,15 @@ def render_branded_document(
     title: str,
     subtitle: str,
     doc_ref: str | None = None,
-    eyebrow: str = "Buruuj Lend · Official document",
+    eyebrow: str | None = None,
     sections_html: str,
     note: str | None = None,
     filename_hint: str = "",
 ) -> str:
+    brand = current_brand_name()
     stamped = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     ref = escape(doc_ref or filename_hint or "—")
+    shown_eyebrow = eyebrow or f"{brand} · Official document"
     note_html = (
         f'<aside class="note"><strong>Note</strong><p>{escape(note)}</p></aside>' if note else ""
     )
@@ -88,7 +97,7 @@ def render_branded_document(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>{escape(title)} · Buruuj Fintech</title>
+  <title>{escape(title)} · {escape(brand)}</title>
   <style>
     :root {{
       --navy: #0b1f3a;
@@ -392,7 +401,7 @@ def render_branded_document(
       <div class="brand-row">
         <div class="brand-left">
           {_logo_block()}
-          <p class="tagline">Islamic Fintech · operator of Buruuj Lend</p>
+          <p class="tagline">Islamic Fintech · {escape(brand)}</p>
         </div>
         <div class="brand-right">
           <div class="badge">Shariah · Tawarruq</div>
@@ -403,7 +412,7 @@ def render_branded_document(
     </header>
 
     <div class="title-band">
-      <p class="eyebrow">{escape(eyebrow)}</p>
+      <p class="eyebrow">{escape(shown_eyebrow)}</p>
       <h1>{escape(title)}</h1>
       <p class="subtitle">{escape(subtitle)}</p>
       <div class="meta-bar">
@@ -416,13 +425,13 @@ def render_branded_document(
       {sections_html}
       {note_html}
       <div class="footer">
-        <div><strong>Buruuj Fintech</strong> provides the technology rail. SEDANIA As Salam Capital may be appointed independently as wakeel or Rasul. Financing is issued by the named institution.</div>
+        <div><strong>{escape(brand)}</strong> provides the technology rail. SEDANIA As Salam Capital may be appointed independently as wakeel or Rasul. Financing is issued by the named institution.</div>
         <div class="stamp">{escape(stamped)}</div>
       </div>
     </main>
 
     <div class="foot-bar">
-      <span><span class="mark">Buruuj Fintech</span> · Buruuj Lend</span>
+      <span><span class="mark">{escape(brand)}</span></span>
       <span>Confidential · for customer &amp; institution use</span>
     </div>
   </div>

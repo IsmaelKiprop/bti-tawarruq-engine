@@ -529,6 +529,8 @@ Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it 
 - [KENYA_FLOW.md](KENYA_FLOW.md) — eight-step Kenya journey
 - [MALAYSIA_FLOW.md](MALAYSIA_FLOW.md) — BSAS legs
 - [SHARIAH_AUDIT.md](SHARIAH_AUDIT.md) — append-only ledger
+- [DEPLOYMENT.md](DEPLOYMENT.md) — packaging, tenancy, Shariah store
+- [ONPREM.md](ONPREM.md) — customer-server edition
 - [PRODUCTION_OPS.md](PRODUCTION_OPS.md) — monitoring, Prometheus, CI/CD
 - [LOCAL_TEST.md](LOCAL_TEST.md) — local Swagger walkthrough
 - [INTEGRATIONS.md](INTEGRATIONS.md) — Daraja / MNO / broker credentials

@@ -14,51 +14,33 @@ const ROLE_QUICK_LINKS: Record<string, QuickLink[]> = {
     { to: "/users", label: "Users" },
     { to: "/billing", label: "Billing" },
     { to: "/reconciliation", label: "Recon" },
-    { to: "/documentation", label: "Docs" },
   ],
   bti_ops: [
-    { to: "/ops", label: "Ops", primary: true },
-    { to: "/kenya", label: "Kenya" },
-    { to: "/sedania", label: "Sedania" },
-    { to: "/malaysia", label: "Malaysia" },
-    { to: "/documentation", label: "Docs" },
+    { to: "/sedania", label: "Sedania", primary: true },
   ],
   bti_finance: [
     { to: "/billing", label: "Billing", primary: true },
-    { to: "/ops", label: "Ops" },
-    { to: "/documentation", label: "Docs" },
   ],
   institution_admin: [
     { to: "/users", label: "Users", primary: true },
-    { to: "/kenya", label: "Kenya" },
-    { to: "/approvals", label: "Approvals" },
-    { to: "/documentation", label: "Docs" },
   ],
   institution_ops: [
-    { to: "/kenya", label: "Kenya", primary: true },
-    { to: "/sedania", label: "Sedania" },
+    { to: "/sedania", label: "Sedania", primary: true },
     { to: "/customers", label: "Customers" },
-    { to: "/documentation", label: "Docs" },
   ],
   fi_approver: [
-    { to: "/approvals", label: "Approvals", primary: true },
-    { to: "/mobile-lend", label: "Mobile Lend" },
-    { to: "/documentation", label: "Docs" },
+    { to: "/mobile-lend", label: "Mobile Lend", primary: true },
   ],
   shariah_officer: [
     { to: "/shariah", label: "Shariah", primary: true },
     { to: "/applications", label: "Applications" },
-    { to: "/documentation", label: "Docs" },
   ],
   reconciler: [
     { to: "/reconciliation", label: "Recon", primary: true },
-    { to: "/ops", label: "Ops" },
-    { to: "/documentation", label: "Docs" },
   ],
   read_only: [
     { to: "/applications", label: "Applications", primary: true },
     { to: "/transactions", label: "Transactions" },
-    { to: "/documentation", label: "Docs" },
   ],
   agent_dealer: [{ to: "/agent-dealers", label: "My float", primary: true }],
 };
@@ -103,7 +85,7 @@ export function DashboardPage() {
     ];
     return preferred.filter((link) => {
       const nav = NAV_ITEMS.find((item) => item.to === link.to);
-      if (!nav) return link.to === "/documentation" || link.to === "/";
+      if (!nav) return link.to === "/";
       return canSeeNavItem(nav, user, authEnabled);
     });
   }, [user, authEnabled]);
@@ -288,9 +270,6 @@ export function DashboardPage() {
               <section className={panelClass}>
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="m-0 text-sm font-semibold">Platform pulse</h3>
-                  <Link className="text-xs text-primary hover:underline" to="/ops">
-                    Ops
-                  </Link>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {[
@@ -315,16 +294,7 @@ export function DashboardPage() {
         ) : (
           <section className={`${panelClass} max-w-xl`}>
             <h3 className="m-0 text-sm font-semibold">{profile.label} desk</h3>
-            <p className="muted m-0 text-sm">
-              This role does not include telemetry. Use shortcuts above
-              {user?.role !== "agent_dealer" ? (
-                <>
-                  {" "}
-                  or open <Link to="/documentation">Documentation</Link>
-                </>
-              ) : null}
-              .
-            </p>
+            <p className="muted m-0 text-sm">This role does not include telemetry. Use shortcuts above.</p>
           </section>
         )}
       </section>

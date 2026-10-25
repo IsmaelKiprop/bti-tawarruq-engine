@@ -7,7 +7,9 @@ Append-only immutable ledger for Shariah compliance and regulatory review (CMA /
 1. **Append-only** — no UPDATE or DELETE on `shariah_audit_logs` (ORM event guards)
 2. **Hash chain** — each entry links `previous_hash` → `entry_hash` for tamper detection
 3. **State machine** — transactions cannot skip phases (e.g. liquidation without sealed possession)
-4. **Dual storage** — primary DB in engine; optional mirror to audit microservice
+4. **Dual storage** — primary rows in the **engine** database (`shariah_audit_logs`); optional HTTP mirror to the audit microservice
+
+The primary chain is what ops and regulators should treat as the book. The microservice is a copy. See [DEPLOYMENT.md](DEPLOYMENT.md#shariah-audit-stores-packaging-gap).
 
 ## Audit entry fields
 
@@ -71,7 +73,22 @@ SHARIAH_AUDIT_SERVICE_TOKEN=   # optional Bearer token
 
 Every `log_shariah_step()` call appends locally and POSTs to the microservice (failures are logged, non-blocking).
 
-Docker Compose runs both services; audit DB is separate SQLite file under `./data/`.
+### Where the mirror is stored
+
+| Install | `SHARIAH_AUDIT_DATABASE_URL` | Backup |
+|---------|------------------------------|--------|
+| Lab / local Compose | `sqlite:////app/data/shariah_audit.db` (compose default) | File under `./data/` — easy to lose |
+| BTI VPS (managed) | Same SQLite default unless you change it | Snapshot `./data` **and** Postgres |
+| Real on-prem | **Postgres** `tawarruq_audit` on the same server as `tawarruq` | `pg_dump` both databases together |
+
+The service accepts any SQLAlchemy URL. Do **not** point it at the engine database `tawarruq` — `shariah-audit-service` calls `init_db()` and would create engine tables in the mirror. Use a dedicated database:
+
+```env
+SHARIAH_AUDIT_SERVICE_URL=http://shariah-audit:8001
+SHARIAH_AUDIT_DATABASE_URL=postgresql+psycopg://tawarruq:YOUR_PASSWORD@postgres:5432/tawarruq_audit
+```
+
+You can omit the mirror entirely (`SHARIAH_AUDIT_SERVICE_URL` empty). The in-process ledger in the engine Postgres still records every step.
 
 ## State machine enforcement
 

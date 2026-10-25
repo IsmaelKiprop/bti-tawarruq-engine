@@ -73,6 +73,31 @@ def generate_customer_ref(db: Session, institution: Institution) -> str:
 
 
 def get_or_create_default_institution(db: Session) -> Institution:
+    from tawarruq.config import get_settings
+
+    settings = get_settings()
+    if settings.is_onprem:
+        code = (settings.onprem_institution_code or "SITE").strip().upper() or "SITE"
+        name = (settings.onprem_institution_name or settings.brand_display).strip() or settings.brand_display
+        institution = db.query(Institution).filter(Institution.code == code).first()
+        if institution:
+            return institution
+        default = db.query(Institution).filter(Institution.code == "DEFAULT").first()
+        if default:
+            return default
+        institution = Institution(name=name, code=code, bsas_mode="mock")
+        db.add(institution)
+        db.flush()
+        log_audit(
+            db,
+            entity_type="institution",
+            entity_id=institution.id,
+            actor=AuditActor.SYSTEM,
+            action="institution.created",
+            details="On-prem site institution seeded",
+        )
+        return institution
+
     institution = db.query(Institution).filter(Institution.code == "DEFAULT").first()
     if institution:
         if (institution.name or "").strip() in {"", "Default Institution"}:

@@ -1,4 +1,6 @@
-/** Buruuj Fintech brand mark / lockup. */
+/** Operator brand mark / lockup. Default art is Buruuj; other brands render a text lockup. */
+
+import { getDeploymentProfile, isDefaultBrand } from "../config/deployment";
 
 export const BURUUJ_LOGO_SRC = "/brand/buruuj-logo.png";
 
@@ -12,12 +14,23 @@ type BrandLogoProps = {
 export function BrandLogo({
   variant = "lockup",
   className = "",
-  alt = "Buruuj Fintech",
+  alt,
 }: BrandLogoProps) {
+  const brand = getDeploymentProfile().brandName;
+  const shownAlt = alt || brand;
+  if (!isDefaultBrand()) {
+    return (
+      <span
+        className={`brand-logo brand-logo--text brand-logo--${variant}${className ? ` ${className}` : ""}`}
+      >
+        {brand}
+      </span>
+    );
+  }
   return (
     <img
       src={BURUUJ_LOGO_SRC}
-      alt={alt}
+      alt={shownAlt}
       className={`brand-logo brand-logo--${variant}${className ? ` ${className}` : ""}`}
       draggable={false}
     />

@@ -220,7 +220,7 @@ def issue_email_otp(user: OpsUser, *, purpose: str = "login") -> dict[str, Any]:
     _email_otp_store[user.id] = (_hash_otp(code), time.time() + EMAIL_OTP_TTL_SECONDS)
 
     settings = get_settings()
-    subject = "Buruuj Ops portal verification code"
+    subject = f"{settings.totp_issuer} portal verification code"
     body = (
         f"Hello {user.full_name},\n\n"
         f"Your one-time code for {purpose} is: {code}\n\n"

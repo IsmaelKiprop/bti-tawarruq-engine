@@ -7,9 +7,12 @@ from tawarruq.services.no_inah_service import seed_default_brokers
 
 
 def seed_kenya_defaults(db: Session) -> None:
+    from tawarruq.config import get_settings
+
     seed_default_brokers(db)
-    _seed_mwalimu_demo(db)
-    _seed_sedania_bank_demo(db)
+    if not get_settings().is_onprem:
+        _seed_mwalimu_demo(db)
+        _seed_sedania_bank_demo(db)
     for institution in db.query(Institution).all():
         ensure_liquidity_pool(db, institution.id)
 

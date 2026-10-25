@@ -409,6 +409,9 @@ export interface AuthContext {
   employee_number?: string | null;
   phone?: string | null;
   office?: string | null;
+  deployment_mode?: string;
+  enabled_products?: string[];
+  brand_name?: string;
 }
 
 export interface OpsMetrics {

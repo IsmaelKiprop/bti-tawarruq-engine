@@ -67,8 +67,16 @@ def require_manage_institutions(request: Request) -> None:
     require_permission(request, "manage_institutions")
 
 
+def require_product(name: str) -> None:
+    from tawarruq.config import get_settings
+
+    if not get_settings().product_enabled(name):
+        raise HTTPException(status_code=404, detail=f"Product '{name}' is not enabled on this install")
+
+
 def require_manage_billing(request: Request) -> None:
     require_permission(request, "manage_billing")
+    require_product("billing")
 
 
 def require_reconcile(request: Request) -> None:

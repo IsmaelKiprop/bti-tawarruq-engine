@@ -212,6 +212,19 @@ def is_platform_admin(request: Request) -> bool:
     return getattr(request.state, "is_platform_admin", False)
 
 
+def can_issue_api_keys(request: Request) -> bool:
+    """Managed: Super Admin only. On-prem: site admin or FI Admin for their tenant."""
+    if not auth_is_enabled(request):
+        return True
+    if is_platform_admin(request):
+        return True
+    from tawarruq.config import get_settings
+
+    if get_settings().is_onprem and get_request_role(request) == ApiKeyRole.INSTITUTION_ADMIN:
+        return True
+    return False
+
+
 def auth_is_enabled(request: Request) -> bool:
     return getattr(request.state, "auth_enabled", False)
 

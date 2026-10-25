@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { OptionalAppLayout, RequireAnyPermission, RequireAuth, RequirePermission } from "./auth/RequireAuth";
 import { AppLayout } from "./components/AppLayout";
@@ -15,7 +15,6 @@ import { KenyaFlowPage } from "./pages/KenyaFlowPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MalaysiaManualBridgePage } from "./pages/MalaysiaManualBridgePage";
 import { NewApplicationPage } from "./pages/NewApplicationPage";
-import { OpsMonitorPage } from "./pages/OpsMonitorPage";
 import { RepaymentsPage } from "./pages/RepaymentsPage";
 import { SedaniaFinancingPage } from "./pages/SedaniaFinancingPage";
 import { ShariahCompliancePage } from "./pages/ShariahCompliancePage";
@@ -33,7 +32,7 @@ import { ReconciliationPage } from "./pages/ReconciliationPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { MfaEnrollPage } from "./pages/MfaEnrollPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { DocumentationPage } from "./pages/DocumentationPage";
+import { OpsMonitorPage } from "./pages/OpsMonitorPage";
 import { AuditTrailPage } from "./pages/AuditTrailPage";
 import "./styles/index.css";
 
@@ -55,7 +54,7 @@ createRoot(document.getElementById("root")!).render(
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
               <Route path="settings" element={<SettingsPage />} />
-              <Route path="documentation" element={<DocumentationPage />} />
+              <Route path="documentation" element={<Navigate to="/" replace />} />
               <Route
                 element={
                   <RequireAnyPermission

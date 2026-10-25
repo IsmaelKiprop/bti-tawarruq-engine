@@ -139,6 +139,7 @@ Services:
 ### Go-live checklist
 
 - [ ] Postgres `DATABASE_URL` (not SQLite)
+- [ ] On-prem: Shariah **mirror** on Postgres `tawarruq_audit`, or disable the mirror — do not rely on Compose SQLite as the only extra copy ([DEPLOYMENT.md](DEPLOYMENT.md#shariah-audit-stores-packaging-gap))
 - [ ] `AUTH_ENABLED=true`
 - [ ] Alembic `011` applied (approvals, billing, MFA columns)
 - [ ] Super Admin password rotated and TOTP enrolled

@@ -161,6 +161,9 @@ class HealthRead(BaseModel):
     manual_bridge_ready: bool = Field(True, description='Manual-bridge inbox directory is writable')
     sedania_mode: str = Field('mock', description='mock | live')
     sedania_configured: bool = Field(False, description='SEDANIA_API_URL and key are set')
+    deployment_mode: str = Field('managed', description='managed | onprem')
+    enabled_products: list[str] = Field(default_factory=list, description='Active product modules')
+    brand_name: str = Field('Buruuj Fintech', description='White-label operator name')
 
 class MalaysiaFlowStatusRead(BaseModel):
     application_id: str
@@ -192,6 +195,9 @@ class AuthContextRead(BaseModel):
     employee_number: str | None = None
     phone: str | None = None
     office: str | None = None
+    deployment_mode: str = Field('managed', description='managed | onprem')
+    enabled_products: list[str] = Field(default_factory=list)
+    brand_name: str = Field('Buruuj Fintech')
 
 class OpsLoginRequest(BaseModel):
     email: str = Field(..., examples=['admin@bti.local'])

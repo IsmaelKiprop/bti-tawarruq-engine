@@ -10,7 +10,10 @@ import struct
 import time
 from urllib.parse import quote
 
-ISSUER = "Buruuj Ops"
+def _issuer() -> str:
+    from tawarruq.config import get_settings
+
+    return get_settings().totp_issuer
 
 
 def generate_totp_secret() -> str:
@@ -43,6 +46,7 @@ def verify_totp(secret: str, code: str, *, window: int = 1) -> bool:
 
 
 def otpauth_url(secret: str, email: str) -> str:
-    label = quote(f"{ISSUER}:{email}")
-    issuer = quote(ISSUER)
+    name = _issuer()
+    label = quote(f"{name}:{email}")
+    issuer = quote(name)
     return f"otpauth://totp/{label}?secret={secret}&issuer={issuer}&period=30&digits=6"

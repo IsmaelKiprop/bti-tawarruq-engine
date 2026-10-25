@@ -123,14 +123,15 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    brand = settings.brand_display
     app = FastAPI(
-        title="Buruuj Tawarruq Engine API",
+        title=f"{brand} Tawarruq Engine API",
         description=API_DESCRIPTION,
         version=__version__,
         lifespan=lifespan,
         openapi_tags=OPENAPI_TAGS,
         contact={
-            "name": "Buruuj Fintech",
+            "name": brand,
             "url": "https://github.com/IsmaelKiprop/bti-tawarruq-engine",
         },
         license_info={"name": "Proprietary"},
@@ -147,10 +148,15 @@ def create_app() -> FastAPI:
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:15173",
+        "http://localhost:15173",
     ]
     portal_origin = (settings.portal_public_url or "").rstrip("/")
     if portal_origin and portal_origin not in cors_origins:
         cors_origins.append(portal_origin)
+    for origin in settings.extra_cors_origins:
+        if origin not in cors_origins:
+            cors_origins.append(origin)
 
     app.add_middleware(ApiKeyMiddleware)
     app.add_middleware(AuditMiddleware)
@@ -205,6 +211,9 @@ def create_app() -> FastAPI:
             manual_bridge_ready=settings.manual_bridge_path.exists(),
             sedania_mode=settings.sedania_mode,
             sedania_configured=settings.sedania_configured,
+            deployment_mode=settings.normalized_mode,
+            enabled_products=settings.products,
+            brand_name=settings.brand_display,
         )
 
     @app.get("/metrics", include_in_schema=False, tags=["Production Ops"])
@@ -221,7 +230,7 @@ def create_app() -> FastAPI:
     async def swagger_ui():
         return get_swagger_ui_html(
             openapi_url="/openapi.json",
-            title=f"Buruuj Tawarruq Engine API v{__version__}",
+            title=f"{brand} Tawarruq Engine API v{__version__}",
             swagger_ui_parameters={
                 "docExpansion": "list",
                 "defaultModelsExpandDepth": 2,
@@ -236,29 +245,35 @@ def create_app() -> FastAPI:
     def root():
         return JSONResponse(
             {
-                "name": "Buruuj Tawarruq Engine",
+                "name": f"{brand} Tawarruq Engine",
                 "version": __version__,
                 "docs": "/docs",
                 "redoc": "/redoc",
                 "openapi": "/openapi.json",
                 "health": "/health",
                 "api_prefix": settings.api_prefix,
+                **settings.deployment_public(),
             }
         )
 
     app.include_router(router, prefix=settings.api_prefix)
     app.include_router(extended_router, prefix=settings.api_prefix)
-    app.include_router(sacco_router, prefix=settings.api_prefix)
-    app.include_router(sedania_router, prefix=settings.api_prefix)
-    app.include_router(kenya_router, prefix=settings.api_prefix)
-    app.include_router(manual_bridge_router, prefix=settings.api_prefix)
-    app.include_router(callbacks_router, prefix=settings.api_prefix)
     app.include_router(integrations_router, prefix=settings.api_prefix)
     app.include_router(ops_router, prefix=settings.api_prefix)
-    app.include_router(ops_mobile_router, prefix=settings.api_prefix)
     app.include_router(controls_router, prefix=settings.api_prefix)
-    app.include_router(mobile_auth_router, prefix=settings.api_prefix)
     app.include_router(customer_router, prefix=settings.api_prefix)
+    if settings.product_enabled("sacco"):
+        app.include_router(sacco_router, prefix=settings.api_prefix)
+    if settings.product_enabled("sedania"):
+        app.include_router(sedania_router, prefix=settings.api_prefix)
+    if settings.product_enabled("kenya"):
+        app.include_router(kenya_router, prefix=settings.api_prefix)
+        app.include_router(callbacks_router, prefix=settings.api_prefix)
+    if settings.product_enabled("malaysia"):
+        app.include_router(manual_bridge_router, prefix=settings.api_prefix)
+    if settings.product_enabled("mobile"):
+        app.include_router(ops_mobile_router, prefix=settings.api_prefix)
+        app.include_router(mobile_auth_router, prefix=settings.api_prefix)
     return app
 
 

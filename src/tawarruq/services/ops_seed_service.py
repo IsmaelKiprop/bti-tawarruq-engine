@@ -92,7 +92,7 @@ def seed_ops_role_catalogue(db: Session) -> list[SeededCredential]:
             user, temp = create_ops_user(
                 db,
                 email=bootstrap_email,
-                full_name="BTI Platform Super Admin",
+                full_name="Site Admin" if settings.is_onprem else "BTI Platform Super Admin",
                 role=ApiKeyRole.PLATFORM_ADMIN,
                 institution_id=None,
                 temporary_password=bootstrap_password,
@@ -114,16 +114,25 @@ def seed_ops_role_catalogue(db: Session) -> list[SeededCredential]:
             delete_ops_user(db, extra)
             logger.info("Removed extra seed login %s", extra.email)
 
-    catalogue: list[tuple[str, str, ApiKeyRole, str | None, str | None]] = [
-        ("bti.ops", "BTI Tawarruq Operations", ApiKeyRole.BTI_OPS, None, None),
-        ("bti.finance", "BTI Finance Billing", ApiKeyRole.BTI_FINANCE, None, None),
-        ("fi.admin", "FI Administrator", ApiKeyRole.INSTITUTION_ADMIN, institution.id, None),
-        ("fi.ops", "FI Operations Officer", ApiKeyRole.INSTITUTION_OPS, institution.id, None),
-        ("fi.approver", "FI Approver", ApiKeyRole.FI_APPROVER, institution.id, None),
-        ("shariah", "Shariah Audit Officer", ApiKeyRole.SHARIAH_OFFICER, institution.id, None),
-        ("reconciler", "BTI Reconciliation Officer", ApiKeyRole.RECONCILER, None, None),
-        ("fi.reconciler", "FI Reconciliation Officer", ApiKeyRole.RECONCILER, institution.id, None),
-    ]
+    if settings.is_onprem:
+        catalogue: list[tuple[str, str, ApiKeyRole, str | None, str | None]] = [
+            ("fi.admin", "Site Administrator", ApiKeyRole.INSTITUTION_ADMIN, institution.id, None),
+            ("fi.ops", "Operations Officer", ApiKeyRole.INSTITUTION_OPS, institution.id, None),
+            ("fi.approver", "Approver", ApiKeyRole.FI_APPROVER, institution.id, None),
+            ("shariah", "Shariah Audit Officer", ApiKeyRole.SHARIAH_OFFICER, institution.id, None),
+            ("fi.reconciler", "Reconciliation Officer", ApiKeyRole.RECONCILER, institution.id, None),
+        ]
+    else:
+        catalogue = [
+            ("bti.ops", "BTI Tawarruq Operations", ApiKeyRole.BTI_OPS, None, None),
+            ("bti.finance", "BTI Finance Billing", ApiKeyRole.BTI_FINANCE, None, None),
+            ("fi.admin", "FI Administrator", ApiKeyRole.INSTITUTION_ADMIN, institution.id, None),
+            ("fi.ops", "FI Operations Officer", ApiKeyRole.INSTITUTION_OPS, institution.id, None),
+            ("fi.approver", "FI Approver", ApiKeyRole.FI_APPROVER, institution.id, None),
+            ("shariah", "Shariah Audit Officer", ApiKeyRole.SHARIAH_OFFICER, institution.id, None),
+            ("reconciler", "BTI Reconciliation Officer", ApiKeyRole.RECONCILER, None, None),
+            ("fi.reconciler", "FI Reconciliation Officer", ApiKeyRole.RECONCILER, institution.id, None),
+        ]
 
     for local, full_name, role, institution_id, agent_dealer_id in catalogue:
         email = f"{local}@{domain}"

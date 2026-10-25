@@ -9,7 +9,6 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconClose,
-  IconExternal,
   IconLogout,
   IconMenu,
   IconMoon,
@@ -136,20 +135,7 @@ export function AppLayout() {
 
           <div className="sidebar-footer">
             <div className="sidebar-footer-row sidebar-docs-row">
-              {profile.showApiDocs ? (
-                <a
-                  className="sidebar-doc-link"
-                  href="http://127.0.0.1:8000/docs"
-                  target="_blank"
-                  rel="noreferrer"
-                  title={collapsed && !isMobile ? "API docs" : undefined}
-                >
-                  <IconExternal size={16} />
-                  <span>API docs</span>
-                </a>
-              ) : (
-                <span className="sidebar-footer-spacer" />
-              )}
+              <span className="sidebar-footer-spacer" />
               <HealthBadge
                 online={engineHealth.online}
                 compact={collapsed && !isMobile}

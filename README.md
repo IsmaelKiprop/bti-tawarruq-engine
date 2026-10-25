@@ -41,6 +41,8 @@ Public surfaces: ops portal (`ops.buruujfintech.com` / local `:5173`), API (`api
     Leg orchestration    Live partner APIs     Append-only ledger mirror
 ```
 
+Two deploy editions, same images: **managed** (BTI-hosted multi-tenant, default) and **onprem** (customer server). Set `DEPLOYMENT_MODE` and `ENABLED_PRODUCTS`. Customer runbook: [docs/ONPREM.md](docs/ONPREM.md).
+
 Auth when `AUTH_ENABLED=true`:
 
 | Identity | How it authenticates |
@@ -360,6 +362,8 @@ bti-tawarruq-engine/
 | [docs/SHARIAH_AUDIT.md](docs/SHARIAH_AUDIT.md) | Ledger, hash chain, export |
 | [docs/LOCAL_TEST.md](docs/LOCAL_TEST.md) | Swagger walkthrough, Kenya / Malaysia / invites |
 | [docs/PRODUCTION_OPS.md](docs/PRODUCTION_OPS.md) | Seed emails, monitoring, CI/CD |
+| [docs/ONPREM.md](docs/ONPREM.md) | Customer-server install |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Compose vs bare metal, shared vs dedicated Postgres, Shariah store |
 | [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Daraja / MNO / broker credentials |
 
 ## License

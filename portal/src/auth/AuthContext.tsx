@@ -18,6 +18,7 @@ import {
   type LoginResponse,
   type SessionUser,
 } from "../api/client";
+import { setDeploymentProfile } from "../config/deployment";
 
 type EngineHealth = {
   online: boolean | null;
@@ -73,6 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshHealth = useCallback(async () => {
     try {
       const data = await fetchHealth();
+      if (data) {
+        setDeploymentProfile(data);
+      }
       const next = healthFromPayload(data);
       setEngineHealth(next);
       if (typeof data?.auth_enabled === "boolean") {
@@ -104,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const [ctx] = await Promise.all([api.getAuthContext(), refreshHealth()]);
+      setDeploymentProfile(ctx);
       setAuthEnabled(Boolean(ctx.auth_enabled));
       if (!ctx.auth_enabled) {
         setUser(null);

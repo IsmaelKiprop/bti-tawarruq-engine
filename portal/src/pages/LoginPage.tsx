@@ -3,13 +3,15 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { BrandLogo } from "../components/BrandLogo";
+import { getDeploymentProfile, isOnprem } from "../config/deployment";
 import { getHomePath } from "../config/roles";
 
 export function LoginPage() {
   const { authEnabled, loading, user, applyLoginResponse } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("admin@bti.local");
+  const brand = getDeploymentProfile().brandName;
+  const [email, setEmail] = useState(isOnprem() ? "" : "admin@buruujfintech.com");
   const [password, setPassword] = useState("");
   const [mfaToken, setMfaToken] = useState("");
   const [mfaMethod, setMfaMethod] = useState<"totp" | "email" | null>(null);
@@ -82,7 +84,7 @@ export function LoginPage() {
               ? mfaMethod === "email"
                 ? "Email verification code"
                 : "Authenticator code"
-              : "Ops portal sign in"}
+              : `${brand} ops portal sign in`}
           </p>
         </div>
         {mfaToken ? (

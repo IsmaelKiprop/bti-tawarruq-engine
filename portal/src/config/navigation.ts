@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { ProductModule } from "./deployment";
 import { getRoleProfile, type OpsRole } from "./roles";
 import {
   IconApplications,
@@ -30,6 +31,10 @@ export interface NavItem {
   excludeRoles?: OpsRole[];
   /** Temporarily omit from the sidebar without removing the route. */
   hidden?: boolean;
+  /** Hide unless this product module is enabled on the install. */
+  product?: ProductModule;
+  /** Hide on customer-server editions (Institutions directory). */
+  hideOnOnprem?: boolean;
 }
 
 export interface NavSection {
@@ -64,6 +69,7 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: IconMonitor,
         hint: "Fees and invoices (BTI Finance)",
         permission: "manage_billing",
+        product: "billing",
         hidden: true,
       },
       {
@@ -80,7 +86,7 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "setup",
     label: "Setup & access",
     items: [
-      { to: "/institutions", label: "Institutions", Icon: IconInstitutions, hint: "Onboard a bank or SACCO", permission: "manage_institutions" },
+      { to: "/institutions", label: "Institutions", Icon: IconInstitutions, hint: "Onboard a bank or SACCO", permission: "manage_institutions", hideOnOnprem: true },
       { to: "/users", label: "Users", Icon: IconUsers, hint: "Roles and portal logins", permission: "manage_credentials" },
       {
         to: "/integrations",
@@ -104,23 +110,25 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "kenya",
     label: "Kenya track: float / airtime",
     items: [
-      { to: "/kenya", label: "Kenya Ops", Icon: IconKenya, hint: "Run the eight steps in order", permission: "write_ops" },
+      { to: "/kenya", label: "Kenya Ops", Icon: IconKenya, hint: "Run the eight steps in order", permission: "write_ops", product: "kenya" },
       {
         to: "/agent-dealers",
         label: "Agent Dealers",
         Icon: IconKenya,
         hint: "Step 2 float pool. Dealer adds float.",
         roles: ["bti_ops", "institution_admin", "institution_ops", "agent_dealer"],
+        product: "kenya",
       },
-      { to: "/customers", label: "Customers", Icon: IconUsers, hint: "Step 1 records and journey links", permission: "write_ops" },
+      { to: "/customers", label: "Customers", Icon: IconUsers, hint: "Step 1 records and journey links", permission: "write_ops", product: "kenya" },
       {
         to: "/mobile-lend",
         label: "Mobile Lend",
         Icon: IconUsers,
         hint: "Invite (ops) and approve (approver)",
         roles: ["bti_ops", "institution_admin", "institution_ops", "fi_approver"],
+        product: "mobile",
       },
-      { to: "/repayments", label: "Repayments", Icon: IconRepayments, hint: "After disbursement", permission: "write_ops" },
+      { to: "/repayments", label: "Repayments", Icon: IconRepayments, hint: "After disbursement", permission: "write_ops", product: "kenya" },
       {
         to: "/approvals",
         label: "Approvals",
@@ -140,6 +148,7 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: IconMalaysia,
         hint: "Wakeel or Rasul, muqassah, CASA",
         permission: "write_ops",
+        product: "sedania",
       },
     ],
   },
@@ -153,6 +162,7 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: IconMalaysia,
         hint: "Desk packet in, e-cert out",
         permission: "write_ops",
+        product: "malaysia",
       },
     ],
   },
@@ -184,6 +194,7 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: IconApplications,
         hint: "Process guides and desk explainers",
         excludeRoles: ["agent_dealer"],
+        hidden: true,
       },
       {
         to: "/audit",

@@ -8,6 +8,8 @@ from pathlib import Path
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from tawarruq.deployment import DEFAULT_PRODUCTS, normalize_mode, parse_cors_origins, parse_products
+
 ENGINE_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -58,6 +60,14 @@ class Settings(BaseSettings):
 
     portal_public_url: str = "http://127.0.0.1:5173"
     customer_mail_dir: str = "./data/customer_mail"
+
+    # managed = BTI multi-tenant SaaS. onprem = customer-owned single-tenant stack.
+    deployment_mode: str = "managed"
+    enabled_products: str = DEFAULT_PRODUCTS
+    brand_name: str = "Buruuj Fintech"
+    cors_origins: str = ""
+    onprem_institution_name: str = ""
+    onprem_institution_code: str = ""
 
     auth_enabled: bool = False
     api_key_header: str = "X-API-Key"
@@ -189,6 +199,43 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    @property
+    def is_onprem(self) -> bool:
+        return normalize_mode(self.deployment_mode) == "onprem"
+
+    @property
+    def normalized_mode(self) -> str:
+        return normalize_mode(self.deployment_mode)
+
+    @property
+    def products(self) -> list[str]:
+        return parse_products(self.enabled_products)
+
+    def product_enabled(self, name: str) -> bool:
+        return name.strip().lower() in self.products
+
+    @property
+    def brand_display(self) -> str:
+        return (self.brand_name or "Buruuj Fintech").strip() or "Buruuj Fintech"
+
+    @property
+    def totp_issuer(self) -> str:
+        name = self.brand_display
+        if name.lower() in {"buruuj fintech", "buruuj"}:
+            return "Buruuj Ops"
+        return f"{name} Ops"
+
+    @property
+    def extra_cors_origins(self) -> list[str]:
+        return parse_cors_origins(self.cors_origins)
+
+    def deployment_public(self) -> dict[str, object]:
+        return {
+            "deployment_mode": self.normalized_mode,
+            "enabled_products": self.products,
+            "brand_name": self.brand_display,
+        }
 
 
 @lru_cache

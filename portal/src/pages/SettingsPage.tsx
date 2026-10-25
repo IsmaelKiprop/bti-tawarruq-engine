@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, PageShell } from "../components/PageShell";
 import { useTheme } from "../hooks/useTheme";
+import { isOnprem, productEnabled } from "../config/deployment";
 import { getRoleProfile, roleLabel } from "../config/roles";
 
 type MfaMode = "idle" | "totp";
@@ -73,7 +74,7 @@ export function SettingsPage() {
 
   const roleLinks = useMemo(() => {
     const links: { to: string; label: string; hint: string }[] = [];
-    if (user?.permissions.includes("manage_institutions")) {
+    if (user?.permissions.includes("manage_institutions") && !isOnprem()) {
       links.push({ to: "/institutions", label: "Institutions", hint: "Tenant banks and SACCO onboarding" });
     }
     if (user?.permissions.includes("manage_credentials")) {
@@ -83,11 +84,11 @@ export function SettingsPage() {
     if (user?.permissions.includes("manage_integrations")) {
       links.push({ to: "/integrations", label: "Integrations", hint: "M-Pesa, MNO, and partner profiles" });
     }
-    if (user?.permissions.includes("manage_billing")) {
+    if (user?.permissions.includes("manage_billing") && productEnabled("billing")) {
       links.push({ to: "/billing", label: "Billing", hint: "Invoices and usage fees" });
     }
     if (user?.permissions.includes("view_metrics")) {
-      links.push({ to: "/ops", label: "Ops monitor", hint: "Engine telemetry for your role" });
+      links.push({ to: "/ops", label: "Ops Monitor", hint: "Engine telemetry for your role" });
     }
     return links;
   }, [user?.permissions]);
@@ -236,17 +237,11 @@ export function SettingsPage() {
               <dd>{user.institution_name || profile.workspaceFallback}</dd>
             </div>
           </dl>
-          <p className="meta" style={{ marginBottom: 0 }}>
-            Desk process notes live in{" "}
-            <Link to="/documentation">Documentation</Link>
-            {user.permissions.includes("manage_credentials") ? (
-              <>
-                . Admins manage other logins on <Link to="/users">Users</Link>.
-              </>
-            ) : (
-              "."
-            )}
-          </p>
+          {user.permissions.includes("manage_credentials") ? (
+            <p className="meta" style={{ marginBottom: 0 }}>
+              Admins manage other logins on <Link to="/users">Users</Link>.
+            </p>
+          ) : null}
         </section>
 
         <section className="panel settings-panel">
