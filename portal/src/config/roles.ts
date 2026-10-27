@@ -260,7 +260,7 @@ export const AUDIT_ROLES: OpsRole[] = [
 /** Temporary tester shell: hide product desks until BTI Admin signs off. */
 export const TESTER_SHELL = true;
 
-const TESTER_VISIBLE_PATHS = ["/", "/ops", "/institutions", "/institutions/onboard", "/users", "/audit", "/settings"] as const;
+const TESTER_VISIBLE_PATHS = ["/", "/ops", "/institutions", "/institutions/onboard", "/institution", "/users", "/audit", "/settings"] as const;
 
 export function isTesterVisiblePath(to: string): boolean {
   const path = to.split("?")[0] || "/";

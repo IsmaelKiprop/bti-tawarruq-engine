@@ -170,6 +170,7 @@ Vite proxies `/api` to `http://127.0.0.1:8000`. Nav is permission-based.
 | `/institutions/onboard` | Super Admin, BTI Ops — customer FI KYC wizard |
 | `/institutions` | Super Admin, BTI Ops — directory and lifecycle |
 | `/users` | Super Admin, BTI Ops, FI Admin — invites (filtered by caller) |
+| `/institution` | FI Admin — own KYC profile and Request API Client |
 | `/webhooks` | Super Admin issues keys; FI Admin registers callbacks and requests BTI for a key |
 | `/integrations` | Super Admin, FI Admin — Daraja / MNO secrets |
 | `/kenya` `/malaysia` `/sedania` | BTI Ops, FI Admin, FI Ops |

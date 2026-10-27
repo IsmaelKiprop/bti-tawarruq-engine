@@ -173,6 +173,13 @@ export function DashboardPage() {
             Onboard financial institution
           </Link>
         </div>
+      ) : user?.role === "institution_admin" ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="m-0 text-sm text-muted">Your institution KYC and API client request.</p>
+          <Link className="btn btn-primary" to="/institution">
+            Open FI profile
+          </Link>
+        </div>
       ) : null}
 
       {loading && !health && !metrics && !summary ? (

@@ -566,6 +566,14 @@ class ApiKeyCreatedRead(ApiKeyRead):
     api_key: str = Field(..., description='Full key shown once at creation')
     hmac_secret: str | None = Field(None, description='HMAC secret shown once. Sign POST /tawarruq/execute with X-BTI-Signature.')
 
+
+class ApiClientRequestRead(BaseModel):
+    institution_id: str
+    status: str
+    message: str
+    requested_at: datetime | None = None
+    key_count: int = 0
+
 class CustomerSaleRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

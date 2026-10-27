@@ -15,7 +15,9 @@ from tawarruq.models.application import FinancingApplication
 from tawarruq.models.institution import Institution
 from tawarruq.models.integration import WebhookSubscription
 from tawarruq.models.transaction import CommodityTransaction
+from tawarruq.models.audit import AuditEvent
 from tawarruq.schemas import (
+    ApiClientRequestRead,
     ApiKeyCreate,
     ApiKeyCreatedRead,
     ApiKeyRead,
@@ -37,7 +39,9 @@ from tawarruq.schemas import (
 )
 from tawarruq.schemas.kenya import ShariahAuditRead, ShariahIntegrityRead
 from tawarruq.services.audit_query_service import export_audit_csv, query_audit_events
+from tawarruq.services.audit_service import log_audit
 from tawarruq.services.auth_service import create_api_key, list_api_keys
+from tawarruq.services.rbac import can_issue_api_keys, get_request_role
 from tawarruq.services.business_flow_service import (
     appoint_customer_agency,
     business_steps_ready_for_leg3,
@@ -309,6 +313,91 @@ def get_institution_api_keys(
 ) -> list[ApiKeyRead]:
     require_tenant_access(request, institution_id)
     return list_api_keys(db, institution_id)
+
+
+API_CLIENT_REQUEST_ACTION = "institution.api_client.requested"
+
+
+def _api_client_request_state(db: Session, institution_id: str) -> ApiClientRequestRead:
+    keys = [key for key in list_api_keys(db, institution_id) if key.role == ApiKeyRole.API_CLIENT.value]
+    last = (
+        db.query(AuditEvent)
+        .filter(AuditEvent.entity_id == institution_id, AuditEvent.action == API_CLIENT_REQUEST_ACTION)
+        .order_by(AuditEvent.timestamp.desc())
+        .first()
+    )
+    if keys:
+        status = "issued"
+        message = "An API client key is already issued. Super Admin can rotate it from Webhooks."
+    elif last:
+        status = "requested"
+        message = "Request sent. Super Admin will issue the API client key."
+    else:
+        status = "none"
+        message = "No API client requested yet."
+    return ApiClientRequestRead(
+        institution_id=institution_id,
+        status=status,
+        message=message,
+        requested_at=last.timestamp if last else None,
+        key_count=len(keys),
+    )
+
+
+@router.get(
+    "/institutions/{institution_id}/api-keys/request",
+    response_model=ApiClientRequestRead,
+    tags=["Institutions"],
+    summary="API client request status",
+)
+def get_api_client_request(
+    institution_id: str, request: Request, db: Session = Depends(get_db)
+) -> ApiClientRequestRead:
+    require_tenant_access(request, institution_id)
+    institution = db.get(Institution, institution_id)
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    return _api_client_request_state(db, institution_id)
+
+
+@router.post(
+    "/institutions/{institution_id}/api-keys/request",
+    response_model=ApiClientRequestRead,
+    tags=["Institutions"],
+    summary="FI Admin request an API client key",
+)
+def request_api_client(
+    institution_id: str, request: Request, db: Session = Depends(get_db)
+) -> ApiClientRequestRead:
+    require_manage_credentials(request)
+    require_tenant_access(request, institution_id)
+    if can_issue_api_keys(request):
+        raise HTTPException(status_code=400, detail="Issue the API client key from Webhooks. You do not need to request it.")
+    if get_request_role(request) != ApiKeyRole.INSTITUTION_ADMIN:
+        raise HTTPException(status_code=403, detail="Only FI Admin can request an API client")
+    institution = db.get(Institution, institution_id)
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    if institution.lifecycle_status != "active" or not institution.active:
+        raise HTTPException(status_code=400, detail="Request an API client only after this financial institution is active")
+    current = _api_client_request_state(db, institution_id)
+    if current.status == "issued":
+        raise HTTPException(status_code=400, detail=current.message)
+    if current.status == "requested":
+        return current
+    log_audit(
+        db,
+        entity_type="institution",
+        entity_id=institution.id,
+        actor=AuditActor.HUMAN,
+        action=API_CLIENT_REQUEST_ACTION,
+        details=f"code={institution.code}",
+        institution_id=institution.id,
+        actor_user_id=getattr(request.state, "ops_user_id", None),
+        action_group="institutions",
+    )
+    db.commit()
+    return _api_client_request_state(db, institution_id)
 
 
 @router.post("/handoffs", response_model=HandoffRead, status_code=201, tags=["Audit"])

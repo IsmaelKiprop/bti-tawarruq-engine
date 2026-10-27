@@ -173,6 +173,17 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
     ],
     note: "Invite FI Admin only after the institution is Active. Deal maker-checker stays on Manage, not on the KYC wizard.",
   },
+  "/institution": {
+    title: "What FI profile is",
+    lead: "FI Admin sees their own KYC profile. They cannot edit onboarding. They request an API client; Super Admin issues the key.",
+    dealTitle: "How you use it",
+    dealSteps: [
+      "Read the KYC BTI captured when the institution was onboarded.",
+      "Request API Client when your core banking or app needs a machine key.",
+      "Super Admin issues the key on Webhooks and shares it out of band.",
+    ],
+    note: "Draft and pending FIs cannot request an API client.",
+  },
   "/users": {
     title: "What a user is",
     lead: "A portal login. Platform admin is Buruuj and sees all institutions. Other roles stay on one bank or SACCO. The directory is lean; open Manage for profile, HR, and audit.",

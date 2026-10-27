@@ -67,6 +67,13 @@ export const NAV_SECTIONS: NavSection[] = [
         anyPermissions: ["manage_institutions", "write_bti_ops"],
         hideOnOnprem: true,
       },
+      {
+        to: "/institution",
+        label: "FI profile",
+        Icon: IconInstitutions,
+        hint: "Your institution KYC and API client request",
+        roles: ["institution_admin"],
+      },
       { to: "/users", label: "Users", Icon: IconUsers, hint: "Roles and portal logins", permission: "manage_credentials" },
       { to: "/settings", label: "Settings", Icon: IconSettings, hint: "Your profile and security" },
       {
@@ -277,6 +284,10 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
   "/institutions/onboard": {
     title: "Onboard financial institution",
     description: "KYC wizard for a customer bank, SACCO, or other financial institution",
+  },
+  "/institution": {
+    title: "Institution profile",
+    description: "FI Admin view of own KYC profile and API client request",
   },
   "/institutions/:institutionId": {
     title: "Institution management",

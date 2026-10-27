@@ -182,6 +182,15 @@ def test_fi_admin_cannot_onboard_or_see_other_tenant(client, monkeypatch):
     assert listed.status_code == 200
     assert all(row["id"] != other_id for row in listed.json())
     assert client.get(f"/api/v1/institutions/{other_id}/onboarding", headers=headers).status_code == 403
+    mine = next((row for row in listed.json() if row["id"] != other_id), None)
+    assert mine
+    own = client.get(f"/api/v1/institutions/{mine['id']}/onboarding", headers=headers)
+    assert own.status_code == 200, own.text
+    assert client.patch(
+        f"/api/v1/institutions/{mine['id']}/onboarding",
+        headers=headers,
+        json={"trading_name": "Nope"},
+    ).status_code == 403
     get_settings.cache_clear()
 
 
@@ -201,4 +210,27 @@ def test_incomplete_kyc_rejected_on_submit(client, monkeypatch):
     fi_id = created.json()["id"]
     submitted = client.post(f"/api/v1/institutions/{fi_id}/onboarding/submit", headers=headers)
     assert submitted.status_code == 400
+    get_settings.cache_clear()
+
+
+def test_fi_admin_can_request_api_client_on_active_fi(client, monkeypatch):
+    from tawarruq.config import get_settings
+
+    admin = _key(ApiKeyRole.PLATFORM_ADMIN)
+    fi = _key(ApiKeyRole.INSTITUTION_ADMIN)
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    get_settings.cache_clear()
+    admin_headers = {"X-API-Key": admin}
+    fi_headers = {"X-API-Key": fi}
+
+    mine = client.get("/api/v1/institutions", headers=fi_headers).json()[0]["id"]
+    admin_request = client.post(f"/api/v1/institutions/{mine}/api-keys/request", headers=admin_headers)
+    assert admin_request.status_code == 400
+
+    first = client.post(f"/api/v1/institutions/{mine}/api-keys/request", headers=fi_headers)
+    assert first.status_code == 200, first.text
+    assert first.json()["status"] == "requested"
+    again = client.post(f"/api/v1/institutions/{mine}/api-keys/request", headers=fi_headers)
+    assert again.status_code == 200
+    assert again.json()["status"] == "requested"
     get_settings.cache_clear()

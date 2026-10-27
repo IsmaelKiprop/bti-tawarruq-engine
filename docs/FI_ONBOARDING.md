@@ -12,7 +12,7 @@ This slice stores KYC fields and document **references** (filename or ticket id)
 |-------|------------------------|-------------------|------------------------------------|-----------------|
 | Super Admin | Yes. Submit activates. | Yes | Yes | Only when lifecycle is `active` |
 | BTI Ops | Yes. Submit goes to `pending_approval`. | No | No | Only when lifecycle is `active` |
-| FI Admin | No | No | No | Own tenant after Active (FI desk roles) |
+| FI Admin | View own KYC only | No | No | Own tenant after Active (FI desk roles). May request API Client |
 | Everyone else | No | No | No | No |
 
 FI roles only see their own tenant. Do not invite FI Admin or FI desk users onto a draft or pending FI. After Active, Super Admin or BTI Ops invites FI Admin. That FI Admin invites FI Operations, FI Approver, and other FI desk roles in their tenancy.
@@ -29,6 +29,7 @@ Tester-shell nav: Dashboard, Onboard FI, Institutions, Users, Settings, then Ops
 | Directory | `/institutions` | Search, lifecycle filter, resume / approve, link to Manage |
 | Manage | `/institutions/:id` | Engine settings only |
 | Users | `/users` | Super Admin and BTI Ops invite FI Admin. Dropdown lists **Active** FIs only. FI Admin invites own-tenant desk roles. |
+| FI profile | `/institution` | FI Admin: read-only KYC and **Request API Client** |
 
 Super Admin home is Dashboard. Super Admin CTA on Review: **Activate institution**. BTI Ops CTA: **Submit for Super Admin approval**. Wizard CTAs: **Previous**, **Save draft**, **Next**.
 
@@ -79,10 +80,12 @@ Keep `POST /institutions` (name / code) for seeds and tests. Portal onboarding u
 | GET | `/institutions` | Session / key; FI roles are tenant-scoped | Directory |
 | GET | `/institutions/summary` | Super Admin (`manage_institutions`) | Dashboard charts |
 | POST | `/institutions/onboarding` | Super Admin or BTI Ops | Start draft |
-| GET / PATCH | `/institutions/{id}/onboarding` | Super Admin or BTI Ops | Read / save draft |
+| GET | `/institutions/{id}/onboarding` | Super Admin, BTI Ops, or FI Admin (own tenant) | Read KYC |
+| PATCH | `/institutions/{id}/onboarding` | Super Admin or BTI Ops | Save draft |
 | POST | `/institutions/{id}/onboarding/submit` | Super Admin or BTI Ops | Super Admin → `active` + `APPROVED`. BTI Ops → `pending_approval` + `UNDER_REVIEW` |
 | POST | `/institutions/{id}/onboarding/decide` | Super Admin | `{ "decision": "approve" \| "return" \| "reject", "reason"? }` |
 | PATCH | `/institutions/{id}/lifecycle` | Super Admin | `{ "lifecycle_status": "active" \| "dormant" \| "deactivated" }` |
+| GET / POST | `/institutions/{id}/api-keys/request` | FI Admin (own tenant) | Request API Client. Super Admin issues `POST /institutions/{id}/api-keys` |
 
 `fi_id` is the engine institution UUID. It is not typed on the form.
 

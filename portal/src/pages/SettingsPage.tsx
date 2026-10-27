@@ -78,6 +78,9 @@ export function SettingsPage() {
       links.push({ to: "/institutions/onboard", label: "Onboard FI", hint: "KYC wizard for a customer institution" });
       links.push({ to: "/institutions", label: "Institutions", hint: "Customer institution directory" });
     }
+    if (user?.role === "institution_admin") {
+      links.push({ to: "/institution", label: "FI profile", hint: "Your institution KYC and API client request" });
+    }
     if (user?.permissions.includes("manage_credentials")) {
       links.push({ to: "/users", label: "Users & roles", hint: "Invite portal logins for your scope" });
       if (!TESTER_SHELL) {

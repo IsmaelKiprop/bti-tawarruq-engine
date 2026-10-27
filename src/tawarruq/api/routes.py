@@ -136,6 +136,16 @@ def _require_onboard(request: Request) -> None:
     require_manage_institutions(request)
 
 
+def _require_onboard_read(request: Request) -> None:
+    if has_permission(request, "manage_institutions") or has_permission(request, "write_bti_ops"):
+        return
+    from tawarruq.enums import ApiKeyRole
+
+    if get_request_role(request) == ApiKeyRole.INSTITUTION_ADMIN:
+        return
+    require_manage_institutions(request)
+
+
 def _date_text(value) -> str | None:
     if value is None:
         return None
@@ -208,7 +218,7 @@ def start_institution_onboarding(
 def get_institution_onboarding(
     institution_id: str, request: Request, db: Session = Depends(get_db)
 ) -> InstitutionOnboardingRead:
-    _require_onboard(request)
+    _require_onboard_read(request)
     require_tenant_access(request, institution_id)
     institution = db.get(Institution, institution_id)
     if not institution:

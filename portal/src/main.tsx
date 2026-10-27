@@ -11,6 +11,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { InstitutionIntegrationsPage } from "./pages/InstitutionIntegrationsPage";
 import { InstitutionManagementPage } from "./pages/InstitutionManagementPage";
 import { InstitutionOnboardPage } from "./pages/InstitutionOnboardPage";
+import { InstitutionProfilePage } from "./pages/InstitutionProfilePage";
 import { InstitutionsPage } from "./pages/InstitutionsPage";
 import { KenyaFlowPage } from "./pages/KenyaFlowPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -54,6 +55,7 @@ createRoot(document.getElementById("root")!).render(
           <Route element={<RequireAuth />}>
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
+              <Route path="institution" element={<InstitutionProfilePage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="documentation" element={<Navigate to="/" replace />} />
               <Route

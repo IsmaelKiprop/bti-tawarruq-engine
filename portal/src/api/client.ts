@@ -469,6 +469,14 @@ export interface ApiKeyRecord {
   created_at: string;
 }
 
+export interface ApiClientRequest {
+  institution_id: string;
+  status: "none" | "requested" | "issued" | string;
+  message: string;
+  requested_at?: string | null;
+  key_count: number;
+}
+
 export interface AuthContext {
   auth_enabled: boolean;
   authenticated: boolean;
@@ -1208,6 +1216,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, role }),
     }),
+  getApiClientRequest: (institutionId: string) =>
+    request<ApiClientRequest>(`/institutions/${institutionId}/api-keys/request`),
+  requestApiClient: (institutionId: string) =>
+    request<ApiClientRequest>(`/institutions/${institutionId}/api-keys/request`, { method: "POST" }),
 
   getAuthContext: () => request<AuthContext>("/ops/auth/me"),
   updateOwnProfile: (body: OpsUserProfilePatch) =>
