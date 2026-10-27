@@ -561,10 +561,14 @@ export function InstitutionOnboardPage() {
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onDecide("approve")}>
                 {busy ? "Approving…" : "Approve and activate"}
               </button>
-            ) : record?.lifecycle_status === "active" ? (
-              <Link className="btn btn-secondary" to="/users">
+            ) : record?.lifecycle_status === "active" && isSuperAdmin ? (
+              <Link className="btn btn-primary" to="/users">
                 Invite FI Admin
               </Link>
+            ) : record?.lifecycle_status === "active" ? (
+              <p className="m-0 self-center text-sm text-muted">
+                This institution is already active. Super Admin invites FI Admin from Users.
+              </p>
             ) : (
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onSubmit()}>
                 {busy ? "Submitting…" : submitLabel}
