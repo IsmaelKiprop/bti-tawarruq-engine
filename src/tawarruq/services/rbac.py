@@ -26,6 +26,7 @@ ROLE_PERMISSIONS: dict[ApiKeyRole, frozenset[str]] = {
             "read",
             "write_ops",
             "write_bti_ops",
+            "manage_credentials",
             "view_metrics",
             "view_shariah",
             "export_data",
@@ -132,8 +133,8 @@ CROSS_TENANT_ROLES = frozenset(
     }
 )
 
-# Only Super Admin and FI Admin may invite (BTI_Tawarruq_Users_ver_001.docx).
-# Super Admin staffs BTI roles and FI Admin. FI Admin staffs own-tenant desk roles.
+# Super Admin staffs BTI roles and FI Admin. BTI Ops may invite FI Admin on Active FIs.
+# FI Admin staffs own-tenant desk roles after the FI is Active.
 INVITE_TARGETS_BY_CREATOR: dict[ApiKeyRole, frozenset[ApiKeyRole]] = {
     ApiKeyRole.PLATFORM_ADMIN: frozenset(
         {
@@ -145,6 +146,7 @@ INVITE_TARGETS_BY_CREATOR: dict[ApiKeyRole, frozenset[ApiKeyRole]] = {
             ApiKeyRole.RECONCILER,
         }
     ),
+    ApiKeyRole.BTI_OPS: frozenset({ApiKeyRole.INSTITUTION_ADMIN}),
     ApiKeyRole.INSTITUTION_ADMIN: frozenset(
         {
             ApiKeyRole.INSTITUTION_ADMIN,

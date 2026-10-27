@@ -75,12 +75,14 @@ Engine codes are the stable API values. Product names are what the Users page sh
 
 ### Who may create whom
 
-Only Super Admin (`platform_admin`) and FI Admin (`institution_admin`) may invite. Extra engine roles (`read_only`, `agent_dealer`) stay off the portal invite form. The same map applies to `PATCH` role — you cannot promote someone into a role you are not allowed to create.
+Super Admin, BTI Ops, and FI Admin may invite. Extra engine roles (`read_only`, `agent_dealer`) stay off the portal invite form. The same map applies to `PATCH` role — you cannot promote someone into a role you are not allowed to create. FI Admin invite is allowed only when the institution `lifecycle_status` is `active`.
 
 | Creator | May invite |
 |---------|------------|
 | Super Admin | Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon |
 | Super Admin must **not** | FI Ops, FI Approver (FI desk staff are created by the FI Admin) |
+| BTI Ops | FI Admin, and only for an **Active** FI |
+| BTI Ops must **not** | Super Admin, BTI Ops, BTI Finance, FI Ops, FI Approver |
 | FI Admin (own tenant) | FI Admin, FI Ops, FI Approver, Shariah, Recon |
 | FI Admin must **not** | Super Admin, BTI Ops, BTI Finance |
 | Everyone else | Nobody |
@@ -111,7 +113,7 @@ FI API Client and Sedania stay technical identities, not portal invites. Super A
 | Role | Permissions |
 |------|-------------|
 | `platform_admin` | `read`, `write_bti_ops`, `manage_credentials`, `manage_integrations`, `manage_institutions`, `manage_billing`, `reconcile`, `view_metrics`, `view_shariah`, `export_data`, `api_submit` — **not** `write_ops`, **not** `approve_txn` |
-| `bti_ops` | `read`, `write_ops`, `write_bti_ops`, `view_metrics`, `view_shariah`, `export_data` |
+| `bti_ops` | `read`, `write_ops`, `write_bti_ops`, `manage_credentials`, `view_metrics`, `view_shariah`, `export_data` |
 | `bti_finance` | `read`, `manage_billing`, `view_metrics`, `export_data` |
 | `institution_admin` | `read`, `write_ops`, `approve_txn`, `manage_credentials`, `manage_integrations`, `view_metrics`, `view_shariah`, `export_data` |
 | `institution_ops` | `read`, `write_ops`, `view_metrics`, `view_shariah` |
@@ -180,9 +182,44 @@ POST   /api/v1/ops/auth/users/{id}/reset-password
 DELETE /api/v1/ops/auth/users/{id}
 ```
 
-Requires `manage_credentials` **and** the invite rules (`INVITE_TARGETS_BY_CREATOR` in `rbac.py`). Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah, and Recon. Super Admin cannot invite FI Ops or FI Approver. FI Admin cannot invite BTI-internal roles.
+Requires `manage_credentials` **and** the invite rules (`INVITE_TARGETS_BY_CREATOR` in `rbac.py`). Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah, and Recon. Super Admin cannot invite FI Ops or FI Approver. BTI Ops may invite FI Admin only, and only when the FI is Active. FI Admin cannot invite BTI-internal roles.
 
 **Invite flow:** create generates a temporary password, sets `must_change_password=true`, emails it via SMTP when `SMTP_HOST` is set (local copy under `CUSTOMER_MAIL_DIR/ops_invites/`). When SMTP succeeds, `temporary_password` is omitted from the API response. When SMTP is off or fails, the password is returned once for out-of-band share. Reset-password uses the same delivery. Deactivated users (`active=false`) cannot log in.
+
+**Mock / client contract** (same JSON in Swagger). Auth: `Authorization: Bearer <session>` or `X-API-Key`.
+
+BTI Super Admin or BTI Ops invites FI Admin after the FI is Active:
+
+```
+POST /api/v1/ops/auth/users
+{
+  "email": "fi.lead@bank.example",
+  "full_name": "Amina Otieno",
+  "role": "institution_admin",
+  "institution_id": "<active-fi-uuid>"
+}
+```
+
+`201` includes `id`, `email`, `role`, `institution_id`, `must_change_password: true`. `temporary_password` is present only when SMTP did not send.
+
+| Status | When |
+|--------|------|
+| `201` | FI is `active`; caller may invite that role |
+| `400` | FI is `draft`, `pending_approval`, dormant, or deactivated |
+| `403` | BTI Ops invites FI Ops / FI Approver, or FI Admin invites a BTI role |
+
+FI Admin invites desk staff in their own tenant (`institution_id` comes from the session):
+
+```
+POST /api/v1/ops/auth/users
+{
+  "email": "desk.ops@bank.example",
+  "full_name": "Desk Ops",
+  "role": "institution_ops"
+}
+```
+
+Allowed FI Admin `role` values: `institution_admin`, `institution_ops`, `fi_approver`, `shariah_officer`, `reconciler`. List/manage: `GET /api/v1/ops/auth/users`, `PATCH /api/v1/ops/auth/users/{id}`, `POST /api/v1/ops/auth/users/{id}/reset-password`.
 
 ---
 
@@ -459,7 +496,7 @@ Re-seed anytime: `python -m tawarruq.cli seed-ops-users`. Existing emails are le
 4. Rotate seed passwords for BTI Ops, Finance, and the default FI users (or disable unused seeds).
 5. **Onboard FI** for each customer institution (Super Admin activate, or BTI Ops submit then Super Admin approve). See [FI_ONBOARDING.md](FI_ONBOARDING.md).
 6. On each **Active** FI: set `approval_steps`, `approval_limit_amount`, `billing_fee_bps` on Manage.
-7. Invite the FI Admin under **Users** only after the FI is Active. That FI Admin then invites FI Ops and FI Approver (and optional amount cap). Super Admin does not create FI desk staff.
+7. Super Admin or BTI Ops invites the FI Admin under **Users** only after the FI is Active. That FI Admin then invites FI Ops and FI Approver (and optional amount cap). Super Admin and BTI Ops do not create FI desk staff.
 8. Super Admin issues an `api_client` key on **Webhooks** if the FI submits trades over API.
 
 ### FI Ops runs a Kenya deal
@@ -493,7 +530,7 @@ python -m pytest tests/test_institution_onboarding.py tests/test_controls.py tes
 
 `tests/test_controls.py` covers: Super Admin cannot create applications; queue + self-approve blocked; amount cap; tenant suspend; billing + recon; BTI ops retry; TOTP round-trip.
 
-`tests/test_invite_matrix.py` and `tests/test_ops_login.py` cover who may invite whom: Super Admin may invite FI Admin but not FI Operations or FI Approver; FI Admin cannot invite BTI roles or create API keys; FI Ops cannot invite anyone.
+`tests/test_invite_matrix.py` and `tests/test_ops_login.py` cover who may invite whom: Super Admin and BTI Ops may invite FI Admin but not FI Operations or FI Approver; BTI Ops cannot invite until the FI is Active; FI Admin cannot invite BTI roles or create API keys; FI Ops cannot invite anyone.
 
 `tests/test_institution_onboarding.py` covers Super Admin activate + invite, BTI Ops pending then Super Admin approve, FI Admin cannot onboard other tenants, and incomplete KYC rejected on submit.
 

@@ -431,7 +431,7 @@ def build() -> Path:
             ["write_bti_ops", "Cross-tenant operational exceptions", "BTI ops, Super Admin"],
             ["approve_txn", "Maker-checker authorization", "FI approver, FI admin (not Super Admin)"],
             ["export_data", "CSV / Shariah pack downloads", "Super Admin, BTI ops, finance, Shariah, reconciler, FI admin"],
-            ["manage_credentials", "Portal users and webhooks; API key create is Super Admin only", "FI admin, Super Admin"],
+            ["manage_credentials", "Portal users and webhooks; API key create is Super Admin only", "FI admin, Super Admin, BTI Ops"],
             ["manage_integrations", "Partner credential profiles", "FI admin, Super Admin"],
             ["manage_institutions", "Tenant lifecycle", "Super Admin only"],
             ["manage_billing", "Fees and invoices", "BTI finance, Super Admin"],

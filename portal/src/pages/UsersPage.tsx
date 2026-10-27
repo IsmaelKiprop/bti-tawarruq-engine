@@ -6,6 +6,7 @@ import { IconManage } from "../components/icons";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
 import { isActiveInstitution } from "../config/fiKyc";
 import {
+  canAssignInviteInstitution,
   defaultInviteRole,
   inviteNeedsInstitution,
   inviteRoleOptions,
@@ -29,7 +30,7 @@ export function UsersPage() {
   const [tempPassword, setTempPassword] = useState("");
   const [approvalLimit, setApprovalLimit] = useState("");
   const [query, setQuery] = useState("");
-  const isPlatform = user?.role === "platform_admin";
+  const canPickInstitution = canAssignInviteInstitution(user?.role);
 
   const roleOptions = useMemo(() => inviteRoleOptions(user?.role), [user?.role]);
 
@@ -42,7 +43,7 @@ export function UsersPage() {
     try {
       const [users, books] = await Promise.all([
         api.listOpsUsers(),
-        isPlatform ? api.listInstitutions().catch(() => [] as Institution[]) : Promise.resolve([] as Institution[]),
+        canPickInstitution ? api.listInstitutions().catch(() => [] as Institution[]) : Promise.resolve([] as Institution[]),
       ]);
       setItems(users);
       const activeBooks = books.filter(isActiveInstitution);
@@ -59,7 +60,7 @@ export function UsersPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlatform]);
+  }, [canPickInstitution]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -84,7 +85,7 @@ export function UsersPage() {
         email,
         full_name: fullName,
         role,
-        institution_id: isPlatform && inviteNeedsInstitution(role) ? institutionId || null : undefined,
+        institution_id: canPickInstitution && inviteNeedsInstitution(role) ? institutionId || null : undefined,
         approval_limit_amount: approvalLimit.trim() || null,
       });
       setMessage(created.invite_message || "User invited.");
@@ -108,7 +109,7 @@ export function UsersPage() {
         <div>
           <h2 className="m-0 text-lg font-semibold">Users</h2>
           <p className="muted m-0 mt-1 text-sm">
-            {filtered.length} of {items.length} portal logins
+            {filtered.length} of {items.length} portal logins. Invite FI Admin only for Active institutions.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -168,7 +169,7 @@ export function UsersPage() {
                 ))}
               </select>
             </label>
-            {isPlatform && inviteNeedsInstitution(role) ? (
+            {canPickInstitution && inviteNeedsInstitution(role) ? (
               <label>
                 Institution
                 <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)} required>

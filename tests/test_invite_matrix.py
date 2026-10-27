@@ -45,11 +45,24 @@ def test_fi_admin_invite_targets():
         assert not may_invite(actor, role)
 
 
+def test_bti_ops_invite_targets():
+    actor = ApiKeyRole.BTI_OPS
+    assert INVITE_TARGETS_BY_CREATOR[actor] == {ApiKeyRole.INSTITUTION_ADMIN}
+    assert may_invite(actor, ApiKeyRole.INSTITUTION_ADMIN)
+    for role in (
+        ApiKeyRole.PLATFORM_ADMIN,
+        ApiKeyRole.BTI_OPS,
+        ApiKeyRole.BTI_FINANCE,
+        ApiKeyRole.INSTITUTION_OPS,
+        ApiKeyRole.FI_APPROVER,
+    ):
+        assert not may_invite(actor, role)
+
+
 def test_non_creators_cannot_invite():
     for actor in (
         ApiKeyRole.INSTITUTION_OPS,
         ApiKeyRole.FI_APPROVER,
-        ApiKeyRole.BTI_OPS,
         ApiKeyRole.BTI_FINANCE,
         ApiKeyRole.SHARIAH_OFFICER,
         ApiKeyRole.RECONCILER,

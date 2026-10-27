@@ -57,11 +57,12 @@ Local lab can set `AUTH_ENABLED=false` so unauthenticated mock flows still run. 
 
 ## Users, invites, and API keys
 
-Only **Super Admin** (`platform_admin`) and **FI Admin** (`institution_admin`) may invite portal users. The same map applies to `PATCH` role. Extra engine roles (`read_only`, `agent_dealer`) stay off the invite form. FI API Client is a machine identity, not a portal invite.
+**Super Admin**, **BTI Ops**, and **FI Admin** may invite portal users. The same map applies to `PATCH` role. Extra engine roles (`read_only`, `agent_dealer`) stay off the invite form. FI API Client is a machine identity, not a portal invite. Invite FI Admin only when the FI is **Active**.
 
 | Caller | May invite | Must not invite |
 |--------|------------|-----------------|
 | Super Admin | Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah / Audit, Reconciliation | FI Ops, FI Approver, Read only, Agent dealer, API client |
+| BTI Ops | FI Admin (Active FI only) | Super Admin, BTI roles, FI Ops, FI Approver |
 | FI Admin (own tenant) | FI Admin, FI Ops, FI Approver, Shariah, Recon | Super Admin, BTI Ops, BTI Finance |
 | Everyone else | — | Anyone |
 
@@ -168,7 +169,7 @@ Vite proxies `/api` to `http://127.0.0.1:8000`. Nav is permission-based.
 | `/` | Super Admin — FI charts and onboard CTA. Other roles: uptime |
 | `/institutions/onboard` | Super Admin, BTI Ops — customer FI KYC wizard |
 | `/institutions` | Super Admin, BTI Ops — directory and lifecycle |
-| `/users` | Super Admin, FI Admin — invites (filtered by caller) |
+| `/users` | Super Admin, BTI Ops, FI Admin — invites (filtered by caller) |
 | `/webhooks` | Super Admin issues keys; FI Admin registers callbacks and requests BTI for a key |
 | `/integrations` | Super Admin, FI Admin — Daraja / MNO secrets |
 | `/kenya` `/malaysia` `/sedania` | BTI Ops, FI Admin, FI Ops |
@@ -210,7 +211,7 @@ python -m tawarruq.cli serve --reload
 3. If `must_change_password`, call **`POST /ops/auth/change-password`**, then copy the new `access_token`
 4. **Authorize → BearerAuth** — paste the token only (no `Bearer ` prefix)
 5. `GET /institutions` — copy an **Active** `id` (draft / pending FIs reject FI Admin invite)
-6. Super Admin: `POST /ops/auth/users` with `role: institution_admin` and that `institution_id`. Inviting `institution_ops` or `fi_approver` as Super Admin must 403
+6. Super Admin or BTI Ops: `POST /ops/auth/users` with `role: institution_admin` and that `institution_id`. Inviting `institution_ops` or `fi_approver` as Super Admin or BTI Ops must 403
 7. Log in as that FI Admin, Authorize, invite `institution_ops` or `fi_approver`. FI Admin inviting `bti_ops` must 403
 8. Super Admin: `POST /institutions/{id}/api-keys` with `role: api_client`. The same call as FI Admin must 403
 

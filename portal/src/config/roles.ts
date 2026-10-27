@@ -38,6 +38,7 @@ export const INVITE_TARGETS_BY_CREATOR: Record<string, OpsRole[]> = {
     "shariah_officer",
     "reconciler",
   ],
+  bti_ops: ["institution_admin"],
   institution_admin: [
     "institution_admin",
     "institution_ops",
@@ -85,12 +86,17 @@ export function inviteRoleOptions(creatorRole?: string | null) {
 }
 
 export function defaultInviteRole(creatorRole?: string | null): OpsRole {
-  if (creatorRole === "platform_admin") return "institution_admin";
+  if (creatorRole === "platform_admin" || creatorRole === "bti_ops") return "institution_admin";
   return "institution_ops";
 }
 
 export function inviteNeedsInstitution(role: string): boolean {
   return !PLATFORM_SCOPED_INVITE_ROLES.includes(role as OpsRole);
+}
+
+/** Super Admin and BTI Ops pick the Active FI when inviting FI Admin. */
+export function canAssignInviteInstitution(creatorRole?: string | null): boolean {
+  return creatorRole === "platform_admin" || creatorRole === "bti_ops";
 }
 
 type NavVisibility = {

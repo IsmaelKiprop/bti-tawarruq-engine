@@ -500,9 +500,10 @@ def get_ops_user(user_id: str, request: Request, db: Session = Depends(get_db)) 
     description=(
         "Requires manage_credentials. Super Admin may invite platform_admin, institution_admin, "
         "bti_ops, shariah_officer, bti_finance, reconciler (not institution_ops or fi_approver). "
+        "BTI Ops may invite institution_admin only, and only when the FI is Active. "
         "FI Admin may invite institution_admin, institution_ops, fi_approver, shariah_officer, "
         "reconciler for their own tenant. Tenant-scoped roles need institution_id when the caller "
-        "is Super Admin."
+        "is Super Admin or BTI Ops."
     ),
 )
 def create_ops_user_endpoint(
@@ -566,6 +567,9 @@ def _managed_user(request: Request, db: Session, user_id: str) -> OpsUser:
     target = db.get(OpsUser, user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    actor = get_request_role(request)
+    if actor == ApiKeyRole.BTI_OPS and target.role in {r.value for r in BTI_INTERNAL_ROLES}:
+        raise HTTPException(status_code=403, detail="BTI Ops cannot manage BTI internal users")
     if not can_cross_tenant(request):
         tenant_id = get_tenant_institution_id(request)
         if target.role in {r.value for r in BTI_INTERNAL_ROLES}:

@@ -184,7 +184,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Approval limit is the maximum deal amount that person may approve. Set it on FI Approver. The engine uses the lower of this and the institution limit.",
       "Staff set their own name and HR fields on Settings. Admins can override the same fields on User management.",
     ],
-    note: "Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah / Audit, and Reconciliation. FI Admin invites FI Ops, FI Approver, and the other FI desk roles for their institution. Super Admin does not invite FI Ops or FI Approver. API keys are Super Admin only.",
+    note: "Super Admin and BTI Ops invite FI Admin only after the FI is Active. Super Admin may also invite Super Admin, BTI Ops, BTI Finance, Shariah / Audit, and Reconciliation. FI Admin invites FI Ops, FI Approver, and the other FI desk roles for their institution. Super Admin and BTI Ops do not invite FI Ops or FI Approver. API keys are Super Admin only.",
   },
   "/settings": {
     title: "What settings cover",

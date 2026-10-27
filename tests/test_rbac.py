@@ -244,6 +244,7 @@ def test_bti_ops_cross_tenant_without_manage_institutions(client, monkeypatch):
     assert me.status_code == 200
     perms = me.json()["permissions"]
     assert "write_bti_ops" in perms
+    assert "manage_credentials" in perms
     assert "manage_institutions" not in perms
 
     blocked = client.post(

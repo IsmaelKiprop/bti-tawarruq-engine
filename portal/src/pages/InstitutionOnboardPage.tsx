@@ -108,6 +108,7 @@ export function InstitutionOnboardPage() {
   const { institutionId } = useParams();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === "platform_admin";
+  const canInviteFiAdmin = isSuperAdmin || user?.role === "bti_ops";
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FiKycForm>(emptyFiKyc);
   const [record, setRecord] = useState<InstitutionOnboarding | null>(null);
@@ -655,13 +656,13 @@ export function InstitutionOnboardPage() {
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onDecide("approve")}>
                 {busy ? "Approving…" : "Approve and activate"}
               </button>
-            ) : record?.lifecycle_status === "active" && isSuperAdmin ? (
+            ) : record?.lifecycle_status === "active" && canInviteFiAdmin ? (
               <Link className="btn btn-primary" to="/users">
                 Invite FI Admin
               </Link>
             ) : record?.lifecycle_status === "active" ? (
               <p className="m-0 self-center text-sm text-muted">
-                This institution is already active. Super Admin invites FI Admin from Users.
+                This institution is already active. Super Admin or BTI Ops invites FI Admin from Users.
               </p>
             ) : (
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onSubmit()}>

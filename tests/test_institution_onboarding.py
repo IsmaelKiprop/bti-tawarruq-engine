@@ -126,17 +126,16 @@ def test_bti_ops_submit_needs_super_admin_and_blocks_invite(client, monkeypatch)
     assert submitted.status_code == 200, submitted.text
     assert submitted.json()["lifecycle_status"] == "pending_approval"
 
-    blocked = client.post(
-        "/api/v1/ops/auth/users",
-        headers=admin_headers,
-        json={
-            "email": "fi.lead@rift.example",
-            "full_name": "FI Lead",
-            "role": "institution_admin",
-            "institution_id": fi_id,
-        },
-    )
+    invite_body = {
+        "email": "fi.lead@rift.example",
+        "full_name": "FI Lead",
+        "role": "institution_admin",
+        "institution_id": fi_id,
+    }
+    blocked = client.post("/api/v1/ops/auth/users", headers=admin_headers, json=invite_body)
     assert blocked.status_code == 400
+    ops_blocked = client.post("/api/v1/ops/auth/users", headers=ops_headers, json=invite_body)
+    assert ops_blocked.status_code == 400
 
     decided = client.post(
         f"/api/v1/institutions/{fi_id}/onboarding/decide",
@@ -146,16 +145,19 @@ def test_bti_ops_submit_needs_super_admin_and_blocks_invite(client, monkeypatch)
     assert decided.status_code == 200, decided.text
     assert decided.json()["lifecycle_status"] == "active"
 
-    invite = client.post(
+    desk_denied = client.post(
         "/api/v1/ops/auth/users",
-        headers=admin_headers,
+        headers=ops_headers,
         json={
-            "email": "fi.lead@rift.example",
-            "full_name": "FI Lead",
-            "role": "institution_admin",
+            "email": "desk.ops@rift.example",
+            "full_name": "FI Ops",
+            "role": "institution_ops",
             "institution_id": fi_id,
         },
     )
+    assert desk_denied.status_code == 403
+
+    invite = client.post("/api/v1/ops/auth/users", headers=ops_headers, json=invite_body)
     assert invite.status_code in {200, 201}, invite.text
     get_settings.cache_clear()
 

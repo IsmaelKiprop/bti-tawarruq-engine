@@ -4,13 +4,13 @@ import { api, type AuditEvent, type Institution, type OpsUserRecord } from "../a
 import { useAuth } from "../auth/AuthContext";
 import { Alert, LoadingPanel, PageShell } from "../components/PageShell";
 import { isActiveInstitution } from "../config/fiKyc";
-import { inviteNeedsInstitution, inviteRoleOptions, roleLabel } from "../config/roles";
+import { canAssignInviteInstitution, inviteNeedsInstitution, inviteRoleOptions, roleLabel } from "../config/roles";
 
 export function UserManagementPage() {
   const { userId = "" } = useParams();
   const navigate = useNavigate();
   const { user: self } = useAuth();
-  const isPlatform = self?.role === "platform_admin";
+  const canPickInstitution = canAssignInviteInstitution(self?.role);
   const roleOptions = useMemo(() => inviteRoleOptions(self?.role), [self?.role]);
 
   const [item, setItem] = useState<OpsUserRecord | null>(null);
@@ -55,7 +55,7 @@ export function UserManagementPage() {
     try {
       const [record, books, events] = await Promise.all([
         api.getOpsUser(userId),
-        isPlatform ? api.listInstitutions().catch(() => [] as Institution[]) : Promise.resolve([] as Institution[]),
+        canPickInstitution ? api.listInstitutions().catch(() => [] as Institution[]) : Promise.resolve([] as Institution[]),
         api.getAudit(userId).catch(() => [] as AuditEvent[]),
       ]);
       hydrate(record);
@@ -75,7 +75,7 @@ export function UserManagementPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, isPlatform]);
+  }, [userId, canPickInstitution]);
 
   async function onSaveProfile(event: FormEvent) {
     event.preventDefault();
@@ -88,7 +88,7 @@ export function UserManagementPage() {
         full_name: fullName,
         email,
         role,
-        institution_id: isPlatform && inviteNeedsInstitution(role) ? institutionId || null : undefined,
+        institution_id: canPickInstitution && inviteNeedsInstitution(role) ? institutionId || null : undefined,
         approval_limit_amount: approvalLimit.trim() || null,
         job_title: jobTitle.trim() || null,
         department: department.trim() || null,
@@ -223,7 +223,7 @@ export function UserManagementPage() {
                   ))}
                 </select>
               </label>
-              {isPlatform && inviteNeedsInstitution(role) ? (
+              {canPickInstitution && inviteNeedsInstitution(role) ? (
                 <label>
                   Institution
                   <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)}>

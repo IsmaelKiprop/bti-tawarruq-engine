@@ -110,7 +110,7 @@ Open http://localhost:8000/docs (`AUTH_ENABLED=true`). Use **Authorize** after l
 2. If `must_change_password` is true, run **`POST /ops/auth/change-password`**, then copy the new `access_token`.
 3. Click **Authorize** → **BearerAuth** → paste the token (no `Bearer ` prefix) → Authorize.
 4. **`GET /institutions`** — copy an **Active** `id`. Draft / pending FIs reject FI Admin invite.
-5. **`POST /ops/auth/users`** as Super Admin with `role: institution_admin` and that `institution_id`. Super Admin inviting `institution_ops` or `fi_approver` returns 403.
+5. **`POST /ops/auth/users`** as Super Admin or BTI Ops with `role: institution_admin` and that `institution_id`. Inviting `institution_ops` or `fi_approver` as Super Admin or BTI Ops returns 403.
 6. Log in as the new FI Admin, change password, Authorize with that token, then **`POST /ops/auth/users`** with `role: institution_ops` or `fi_approver`. FI Admin inviting `bti_ops` returns 403.
 7. Switch back to Super Admin and **`POST /institutions/{id}/api-keys`** with `role: api_client`. The same call as FI Admin returns 403.
 

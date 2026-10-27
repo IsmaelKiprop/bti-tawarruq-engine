@@ -11,11 +11,11 @@ This slice stores KYC fields and document **references** (filename or ticket id)
 | Actor | Start / save / submit | Approve or return | Set Active / Dormant / Deactivated | Invite FI Admin |
 |-------|------------------------|-------------------|------------------------------------|-----------------|
 | Super Admin | Yes. Submit activates. | Yes | Yes | Only when lifecycle is `active` |
-| BTI Ops | Yes. Submit goes to `pending_approval`. | No | No | No |
-| FI Admin | No | No | No | Own tenant after Active |
+| BTI Ops | Yes. Submit goes to `pending_approval`. | No | No | Only when lifecycle is `active` |
+| FI Admin | No | No | No | Own tenant after Active (FI desk roles) |
 | Everyone else | No | No | No | No |
 
-FI roles only see their own tenant. Do not invite FI desk users onto a draft or pending FI.
+FI roles only see their own tenant. Do not invite FI Admin or FI desk users onto a draft or pending FI. After Active, Super Admin or BTI Ops invites FI Admin. That FI Admin invites FI Operations, FI Approver, and other FI desk roles in their tenancy.
 
 ## Portal
 
@@ -28,7 +28,7 @@ Tester-shell nav: Dashboard, Onboard FI, Institutions, Users, Settings, then Ops
 | Resume KYC | `/institutions/:id/onboard` | Continue a draft or review a pending / active profile |
 | Directory | `/institutions` | Search, lifecycle filter, resume / approve, link to Manage |
 | Manage | `/institutions/:id` | Engine settings only |
-| Users | `/users` | Invite FI Admin. The institution dropdown lists **Active** FIs only. |
+| Users | `/users` | Super Admin and BTI Ops invite FI Admin. Dropdown lists **Active** FIs only. FI Admin invites own-tenant desk roles. |
 
 Super Admin home is Dashboard. Super Admin CTA on Review: **Activate institution**. BTI Ops CTA: **Submit for Super Admin approval**. Wizard CTAs: **Previous**, **Save draft**, **Next**.
 

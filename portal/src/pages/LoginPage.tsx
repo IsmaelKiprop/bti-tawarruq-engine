@@ -3,7 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { BrandLogo } from "../components/BrandLogo";
-import { getDeploymentProfile, isOnprem } from "../config/deployment";
+import { getDeploymentProfile } from "../config/deployment";
 import { getHomePath } from "../config/roles";
 
 export function LoginPage() {
@@ -11,7 +11,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const brand = getDeploymentProfile().brandName;
-  const [email, setEmail] = useState(isOnprem() ? "" : "admin@buruujfintech.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaToken, setMfaToken] = useState("");
   const [mfaMethod, setMfaMethod] = useState<"totp" | "email" | null>(null);
@@ -118,6 +118,7 @@ export function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="email"
                 autoComplete="username"
                 required
               />
