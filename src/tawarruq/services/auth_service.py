@@ -42,6 +42,7 @@ def create_api_key(
         key_prefix=prefix,
         key_hash=key_hash,
         hmac_secret=secrets.token_urlsafe(32),
+        reveal_key=raw_key if role == ApiKeyRole.API_CLIENT else None,
         role=role.value,
     )
     db.add(record)

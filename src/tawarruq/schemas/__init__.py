@@ -572,7 +572,11 @@ class ApiClientRequestRead(BaseModel):
     status: str
     message: str
     requested_at: datetime | None = None
+    issued_at: datetime | None = None
     key_count: int = 0
+    key_prefix: str | None = None
+    api_key: str | None = None
+    hmac_secret: str | None = None
 
 
 class ApiClientRequestListItem(ApiClientRequestRead):

@@ -85,7 +85,7 @@ Keep `POST /institutions` (name / code) for seeds and tests. Portal onboarding u
 | POST | `/institutions/{id}/onboarding/submit` | Super Admin or BTI Ops | Super Admin → `active` + `APPROVED`. BTI Ops → `pending_approval` + `UNDER_REVIEW` |
 | POST | `/institutions/{id}/onboarding/decide` | Super Admin | `{ "decision": "approve" \| "return" \| "reject", "reason"? }` |
 | PATCH | `/institutions/{id}/lifecycle` | Super Admin | `{ "lifecycle_status": "active" \| "dormant" \| "deactivated" }` |
-| GET / POST | `/institutions/{id}/api-keys/request` | FI Admin (own tenant) | Request API Client. Super Admin issues `POST /institutions/{id}/api-keys` |
+| GET / POST | `/institutions/{id}/api-keys/request` | FI Admin (own tenant) | Request API Client. GET is `requested` (pending) or `issued` with `api_key` + `hmac_secret` to copy. Super Admin issues `POST /institutions/{id}/api-keys` |
 
 `fi_id` is the engine institution UUID. It is not typed on the form.
 

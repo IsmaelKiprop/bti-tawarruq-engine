@@ -474,7 +474,11 @@ export interface ApiClientRequest {
   status: "none" | "requested" | "issued" | string;
   message: string;
   requested_at?: string | null;
+  issued_at?: string | null;
   key_count: number;
+  key_prefix?: string | null;
+  api_key?: string | null;
+  hmac_secret?: string | null;
 }
 
 export interface ApiClientRequestItem extends ApiClientRequest {

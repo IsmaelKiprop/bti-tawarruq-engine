@@ -419,7 +419,7 @@ Nav is permission-based. Super Admin does **not** see every write desk.
 | `/` | session | Super Admin: FI charts + onboard. Other roles: uptime |
 | `/institutions/onboard` | `manage_institutions` or `write_bti_ops` | Super Admin, BTI Ops |
 | `/institutions` | `manage_institutions` or `write_bti_ops` | Super Admin, BTI Ops — directory. Manage stays Super Admin |
-| `/institution` | FI Admin session | Own KYC profile and Request API Client |
+| `/institution` | FI Admin session | Own KYC profile. Request API Client shows Pending, then Copy after Super Admin issues |
 | `/users` | `manage_credentials` | Super Admin, FI Admin |
 | `/integrations` | `manage_integrations` | Super Admin, FI Admin |
 | `/webhooks` | `manage_credentials` | Super Admin, FI Admin |

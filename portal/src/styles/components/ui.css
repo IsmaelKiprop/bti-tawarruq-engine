@@ -114,6 +114,77 @@
   border-color: color-mix(in srgb, var(--color-info) 35%, var(--color-border));
 }
 
+.secret-copy-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.95rem 1.05rem;
+}
+
+.secret-copy-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.secret-copy-head h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.95rem;
+}
+
+.secret-copy-head .muted {
+  font-size: 0.8125rem;
+}
+
+.secret-copy-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.secret-copy-row {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.secret-copy-row > span {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.secret-copy-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.secret-copy-field .btn {
+  min-width: 5.75rem;
+}
+
+.secret-copy-value {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface-elevated);
+  color: var(--color-foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  padding: 0.55rem 0.7rem;
+}
+
+.secret-copy-value:focus {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  outline-offset: 1px;
+}
+
 .empty-state {
   padding: 1.25rem 0.25rem;
   color: var(--color-muted);

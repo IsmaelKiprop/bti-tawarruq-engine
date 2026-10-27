@@ -4,6 +4,7 @@ import { api, type ApiClientRequestItem, type Institution } from "../api/client"
 import { useAuth } from "../auth/AuthContext";
 import { IconManage } from "../components/icons";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
+import { SecretCopyPanel } from "../components/SecretCopyPanel";
 import { lifecycleLabel } from "../config/fiKyc";
 import { getBsasMode } from "../config/institutions";
 
@@ -148,15 +149,14 @@ export function InstitutionsPage() {
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
       {issuedKey ? (
-        <Alert tone="info">
-          API key (copy once): <strong>{issuedKey}</strong>
-          {issuedHmac ? (
-            <>
-              <br />
-              HMAC secret (copy once): <strong>{issuedHmac}</strong>
-            </>
-          ) : null}
-        </Alert>
+        <SecretCopyPanel
+          title="API client issued"
+          note="Copy these for the FI. They also appear on FI profile."
+          secrets={[
+            { id: "key", label: "API key", value: issuedKey },
+            { id: "hmac", label: "HMAC secret", value: issuedHmac },
+          ]}
+        />
       ) : null}
 
       <section className="panel">
@@ -229,7 +229,7 @@ export function InstitutionsPage() {
                               disabled={busyId === item.id}
                               onClick={() => void onIssueKey(item)}
                             >
-                              {busyId === item.id ? "Issuing…" : "Issue API client"}
+                              {busyId === item.id ? "Issuing…" : item.status === "issued" ? "Re-issue API client" : "Issue API client"}
                             </button>
                           ) : null}
                           {canManage && status === "pending_approval" ? (

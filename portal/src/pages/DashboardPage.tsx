@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, fetchHealth, type ApiClientRequestItem, type HealthPayload, type InstitutionSummary, type OpsMetrics } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
+import { SecretCopyPanel } from "../components/SecretCopyPanel";
 import { INSTITUTION_TYPES, REGULATORS } from "../config/fiKyc";
 
 const kpiClass =
@@ -256,15 +257,14 @@ export function DashboardPage() {
       ) : null}
 
       {isSuperAdmin && issuedKey ? (
-        <Alert tone="info">
-          API client for {issuedName} (copy once): <strong>{issuedKey}</strong>
-          {issuedHmac ? (
-            <>
-              <br />
-              HMAC secret (copy once): <strong>{issuedHmac}</strong>
-            </>
-          ) : null}
-        </Alert>
+        <SecretCopyPanel
+          title={`API client issued${issuedName ? ` · ${issuedName}` : ""}`}
+          note="Copy these for the FI. They also appear on FI profile."
+          secrets={[
+            { id: "key", label: "API key", value: issuedKey },
+            { id: "hmac", label: "HMAC secret", value: issuedHmac },
+          ]}
+        />
       ) : null}
 
       {isSuperAdmin && apiRequests.length > 0 ? (
@@ -297,7 +297,7 @@ export function DashboardPage() {
                         disabled={busyId === item.institution_id}
                         onClick={() => void onIssueKey(item)}
                       >
-                        {busyId === item.institution_id ? "Issuing…" : "Issue key"}
+                        {busyId === item.institution_id ? "Issuing…" : item.status === "issued" ? "Re-issue key" : "Issue key"}
                       </button>
                     </td>
                   </tr>

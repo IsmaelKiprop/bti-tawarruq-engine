@@ -45,6 +45,7 @@ def init_db() -> None:
     _ensure_control_schema()
     _ensure_sedania_financing_columns()
     _ensure_institution_kyc_columns()
+    _ensure_api_key_reveal_column()
     register_append_only_guards()
 
 
@@ -242,6 +243,20 @@ def _ensure_api_key_hmac_column() -> None:
         return
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE api_keys ADD COLUMN hmac_secret VARCHAR(64)"))
+
+
+def _ensure_api_key_reveal_column() -> None:
+    """Keep the issued API client key so FI Admin can copy it from FI profile."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "api_keys" not in inspector.get_table_names():
+        return
+    columns = {col["name"] for col in inspector.get_columns("api_keys")}
+    if "reveal_key" in columns:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE api_keys ADD COLUMN reveal_key VARCHAR(128)"))
 
 
 def _ensure_mobile_account_reset_columns() -> None:

@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { api, type ApiKeyRecord, type Institution, type Webhook } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
+import { SecretCopyPanel } from "../components/SecretCopyPanel";
 
 export function WebhooksPage() {
   const { user } = useAuth();
@@ -95,17 +96,22 @@ export function WebhooksPage() {
     <PageShell wide>
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
-      {secret ? <Alert tone="info">Webhook secret (copy once): {secret}</Alert> : null}
+      {secret ? (
+        <SecretCopyPanel
+          title="Webhook secret"
+          note="Copy now. It is not shown again."
+          secrets={[{ id: "webhook", label: "Signing secret", value: secret }]}
+        />
+      ) : null}
       {issuedKey ? (
-        <Alert tone="info">
-          API key (copy once): <strong>{issuedKey}</strong>
-          {issuedHmac ? (
-            <>
-              <br />
-              HMAC secret (copy once): <strong>{issuedHmac}</strong>
-            </>
-          ) : null}
-        </Alert>
+        <SecretCopyPanel
+          title="API client issued"
+          note="Copy these for the FI. They also appear on FI profile."
+          secrets={[
+            { id: "key", label: "API key", value: issuedKey },
+            { id: "hmac", label: "HMAC secret", value: issuedHmac },
+          ]}
+        />
       ) : null}
 
       {isSuperAdmin ? (

@@ -206,17 +206,22 @@ def list_api_client_requests(request: Request, db: Session = Depends(get_db)) ->
         if not institution:
             continue
         keys = [key for key in list_api_keys(db, institution.id) if key.role == ApiKeyRole.API_CLIENT.value]
-        if keys:
+        latest = max(keys, key=lambda key: key.created_at) if keys else None
+        if latest and latest.reveal_key:
             continue
         items.append(
             ApiClientRequestListItem(
                 institution_id=institution.id,
                 name=institution.name,
                 code=institution.code,
-                status="requested",
-                message="FI Admin requested an API client key.",
+                status="requested" if not latest else "issued",
+                message=(
+                    "FI Admin requested an API client key."
+                    if not latest
+                    else "Issued, but FI Admin cannot copy it yet. Issue again so it appears on FI profile."
+                ),
                 requested_at=event.timestamp,
-                key_count=0,
+                key_count=len(keys),
             )
         )
     return items

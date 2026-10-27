@@ -320,18 +320,22 @@ API_CLIENT_REQUEST_ACTION = "institution.api_client.requested"
 
 def _api_client_request_state(db: Session, institution_id: str) -> ApiClientRequestRead:
     keys = [key for key in list_api_keys(db, institution_id) if key.role == ApiKeyRole.API_CLIENT.value]
+    latest = max(keys, key=lambda key: key.created_at) if keys else None
     last = (
         db.query(AuditEvent)
         .filter(AuditEvent.entity_id == institution_id, AuditEvent.action == API_CLIENT_REQUEST_ACTION)
         .order_by(AuditEvent.timestamp.desc())
         .first()
     )
-    if keys:
+    if latest:
         status = "issued"
-        message = "An API client key is already issued. Super Admin can rotate it from Webhooks."
+        if latest.reveal_key:
+            message = "API client issued. Copy the key and HMAC secret for your core banking integration."
+        else:
+            message = "API client issued. The full key is not stored for this older key. Ask Super Admin to issue a new one."
     elif last:
         status = "requested"
-        message = "Request sent. Super Admin will issue the API client key."
+        message = "Pending Super Admin. You will see the key here after it is issued."
     else:
         status = "none"
         message = "No API client requested yet."
@@ -340,7 +344,11 @@ def _api_client_request_state(db: Session, institution_id: str) -> ApiClientRequ
         status=status,
         message=message,
         requested_at=last.timestamp if last else None,
+        issued_at=latest.created_at if latest else None,
         key_count=len(keys),
+        key_prefix=latest.key_prefix if latest else None,
+        api_key=latest.reveal_key if latest else None,
+        hmac_secret=latest.hmac_secret if latest else None,
     )
 
 
@@ -381,7 +389,7 @@ def request_api_client(
     if institution.lifecycle_status != "active" or not institution.active:
         raise HTTPException(status_code=400, detail="Request an API client only after this financial institution is active")
     current = _api_client_request_state(db, institution_id)
-    if current.status == "issued":
+    if current.status == "issued" and current.api_key:
         raise HTTPException(status_code=400, detail=current.message)
     if current.status == "requested":
         return current

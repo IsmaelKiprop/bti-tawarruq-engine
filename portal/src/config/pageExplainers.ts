@@ -181,7 +181,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
     dealSteps: [
       "Read the KYC BTI captured when the institution was onboarded.",
       "Request API Client when your core banking or app needs a machine key.",
-      "Super Admin issues the key on Webhooks and shares it out of band.",
+      "While Super Admin reviews it, this page shows Pending. After they issue it, copy the key and HMAC here.",
     ],
     note: "Draft and pending FIs cannot request an API client.",
   },

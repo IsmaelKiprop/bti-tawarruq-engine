@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type ApiClientRequest, type InstitutionOnboarding } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, LoadingPanel, PageShell } from "../components/PageShell";
+import { SecretCopyPanel } from "../components/SecretCopyPanel";
 import { formFromOnboarding, lifecycleLabel, WIZARD_STEPS } from "../config/fiKyc";
 
 function text(value: unknown): string {
@@ -54,6 +55,22 @@ export function InstitutionProfilePage() {
   useEffect(() => {
     void load();
   }, [institutionId]);
+
+  useEffect(() => {
+    if (!institutionId || requestState?.status !== "requested") return;
+    const timer = window.setInterval(async () => {
+      try {
+        const next = await api.getApiClientRequest(institutionId);
+        setRequestState(next);
+        if (next.status === "issued") {
+          setMessage(next.message);
+        }
+      } catch {
+        /* keep the last known request state */
+      }
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [institutionId, requestState?.status]);
 
   async function onRequestKey() {
     if (!institutionId) return;
@@ -164,9 +181,31 @@ export function InstitutionProfilePage() {
       </header>
 
       {error ? <Alert tone="error">{error}</Alert> : null}
-      {message ? <Alert tone="success">{message}</Alert> : null}
-      {requestState?.status === "requested" ? <Alert tone="info">{requestState.message}</Alert> : null}
-      {requestState?.status === "issued" ? <Alert tone="info">{requestState.message}</Alert> : null}
+      {message && requestState?.status !== "issued" && requestState?.status !== "requested" ? (
+        <Alert tone="success">{message}</Alert>
+      ) : null}
+
+      {requestState?.status === "requested" ? (
+        <section className="rounded-sm border border-border bg-surface p-3">
+          <p className="m-0 text-[0.7rem] uppercase tracking-wide text-muted">API client</p>
+          <strong className="mt-1 block text-sm">Pending Super Admin</strong>
+          <p className="muted m-0 mt-1 text-sm">{requestState.message}</p>
+          {requestState.requested_at ? (
+            <p className="muted m-0 mt-1 text-xs">Requested {new Date(requestState.requested_at).toLocaleString()}</p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {requestState?.status === "issued" ? (
+        <SecretCopyPanel
+          title="API client issued"
+          note={requestState.message}
+          secrets={[
+            { id: "key", label: "API key", value: requestState.api_key || "" },
+            { id: "hmac", label: "HMAC secret", value: requestState.hmac_secret || "" },
+          ]}
+        />
+      ) : null}
 
       {loading ? <LoadingPanel rows={6} /> : null}
 

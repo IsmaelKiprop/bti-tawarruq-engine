@@ -236,4 +236,20 @@ def test_fi_admin_can_request_api_client_on_active_fi(client, monkeypatch):
     queued = client.get("/api/v1/institutions/api-client-requests", headers=admin_headers)
     assert queued.status_code == 200, queued.text
     assert any(row["institution_id"] == mine for row in queued.json())
+    pending = client.get(f"/api/v1/institutions/{mine}/api-keys/request", headers=fi_headers)
+    assert pending.status_code == 200
+    assert pending.json()["status"] == "requested"
+    assert pending.json()["api_key"] is None
+    issued = client.post(
+        f"/api/v1/institutions/{mine}/api-keys",
+        headers=admin_headers,
+        json={"name": "dib-api-client", "role": "api_client"},
+    )
+    assert issued.status_code == 201, issued.text
+    shown = client.get(f"/api/v1/institutions/{mine}/api-keys/request", headers=fi_headers)
+    assert shown.status_code == 200
+    body = shown.json()
+    assert body["status"] == "issued"
+    assert body["api_key"] == issued.json()["api_key"]
+    assert body["hmac_secret"] == issued.json()["hmac_secret"]
     get_settings.cache_clear()
