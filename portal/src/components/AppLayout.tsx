@@ -23,6 +23,12 @@ function isNavActive(pathname: string, to: string, end?: boolean) {
   if (to === "/applications") {
     return pathname === "/applications" || (pathname.startsWith("/applications/") && pathname !== "/applications/new");
   }
+  if (to === "/institutions/onboard") {
+    return pathname === "/institutions/onboard" || pathname.endsWith("/onboard");
+  }
+  if (to === "/institutions") {
+    return pathname === "/institutions" || (pathname.startsWith("/institutions/") && !pathname.endsWith("/onboard"));
+  }
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 

@@ -22,9 +22,10 @@ Public surfaces: ops portal (`ops.buruujfintech.com` / local `:5173`), API (`api
 | **No-Inah guardrail** | Blocks financier self-liquidation and originating MNO pool buybacks |
 | **Shariah audit** | Append-only hash chain, ORM immutability, optional Python mirror, CSV / pack export |
 | **Live integrations** | M-Pesa Daraja (B2C + STK), Safaricom / Airtel airtime, Airtel Money, broker OTC |
-| **Multi-tenant** | Institutions, per-tenant credentials, webhooks, Super Admin–issued API keys |
+| **Multi-tenant** | Institutions, per-tenant credentials, webhooks, Super Admin-issued API keys |
+| **FI onboarding** | KYC wizard: Super Admin activate is immediate; BTI Ops waits for Super Admin. Invite FI Admin only when Active |
 | **Users & controls** | RBAC, who-may-invite rules, maker-checker, amount limits, tenant suspend, TOTP, invoices, recon |
-| **Ops portal** | Role-aware nav: desks, Users, Webhooks, Approvals, Billing, Reconciliation, MFA |
+| **Ops portal** | Role-aware nav: Dashboard FI charts, Onboard FI, Institutions, Users, then Ops Monitor and Audit |
 | **Amanah worker** | Auto-advances Kenya / Malaysia legs after eligibility or offer acceptance |
 | **Expo mobile** | Buruuj Lend (`mobile/`) — email MFA, FI invite / approve, customer journey |
 | **Tests** | pytest: flows, Shariah, No-Inah, RBAC, invites, maker-checker, billing, auth |
@@ -66,7 +67,7 @@ Only **Super Admin** (`platform_admin`) and **FI Admin** (`institution_admin`) m
 
 | Role | Engine code | Typical home |
 |------|-------------|--------------|
-| BTI Super Admin | `platform_admin` | Institutions (no trade execution) |
+| BTI Super Admin | `platform_admin` | Dashboard (FI charts + onboard). No trade execution |
 | BTI Operations | `bti_ops` | Kenya / Malaysia / Ops Monitor |
 | BTI Finance | `bti_finance` | Billing |
 | FI Administrator | `institution_admin` | Dashboard, Users |
@@ -79,7 +80,9 @@ Only **Super Admin** (`platform_admin`) and **FI Admin** (`institution_admin`) m
 
 **API keys:** Super Admin only, on **Webhooks** (`POST /api/v1/institutions/{id}/api-keys`). Prefer `api_client`. FI Admin cannot create keys — request BTI to onboard. Copy the key and HMAC secret once.
 
-**Invite flow:** `POST /api/v1/ops/auth/users` generates a temporary password, emails it when `SMTP_HOST` is set, and forces a change on first login. Super Admin must send `institution_id` when inviting a tenant role.
+**Invite flow:** `POST /api/v1/ops/auth/users` generates a temporary password, emails it when `SMTP_HOST` is set, and forces a change on first login. Super Admin must send `institution_id` when inviting a tenant role. Invite FI Admin only after the institution lifecycle is `active`.
+
+**FI onboarding:** Super Admin (or BTI Ops, then Super Admin approve) is the only path to a new customer FI. Portal: [docs/FI_ONBOARDING.md](docs/FI_ONBOARDING.md).
 
 Full catalogue: [docs/USERS_ACCESS_CONTROLS.md](docs/USERS_ACCESS_CONTROLS.md) and [docs/BTI_Tawarruq_Users_ver_001.docx](docs/BTI_Tawarruq_Users_ver_001.docx).
 
@@ -162,7 +165,9 @@ Vite proxies `/api` to `http://127.0.0.1:8000`. Nav is permission-based.
 
 | Page | Who |
 |------|-----|
-| `/institutions` | Super Admin — tenants, suspend, approval steps, fee bps |
+| `/` | Super Admin — FI charts and onboard CTA. Other roles: uptime |
+| `/institutions/onboard` | Super Admin, BTI Ops — customer FI KYC wizard |
+| `/institutions` | Super Admin, BTI Ops — directory and lifecycle |
 | `/users` | Super Admin, FI Admin — invites (filtered by caller) |
 | `/webhooks` | Super Admin issues keys; FI Admin registers callbacks and requests BTI for a key |
 | `/integrations` | Super Admin, FI Admin — Daraja / MNO secrets |
@@ -204,7 +209,7 @@ python -m tawarruq.cli serve --reload
 2. **Production Ops → `POST /ops/auth/login`** (bootstrap email / password from `.env`)
 3. If `must_change_password`, call **`POST /ops/auth/change-password`**, then copy the new `access_token`
 4. **Authorize → BearerAuth** — paste the token only (no `Bearer ` prefix)
-5. `GET /institutions` — copy an `id`
+5. `GET /institutions` — copy an **Active** `id` (draft / pending FIs reject FI Admin invite)
 6. Super Admin: `POST /ops/auth/users` with `role: institution_admin` and that `institution_id`. Inviting `institution_ops` or `fi_approver` as Super Admin must 403
 7. Log in as that FI Admin, Authorize, invite `institution_ops` or `fi_approver`. FI Admin inviting `bti_ops` must 403
 8. Super Admin: `POST /institutions/{id}/api-keys` with `role: api_client`. The same call as FI Admin must 403
@@ -219,7 +224,7 @@ docker compose up --build
 
 API `:8000`, Postgres `:5432`, Shariah audit `:8001`, portal image on `:15173`. For local portal against compose API, run `npm run dev` in `portal/` (proxies to `:8000`).
 
-Set `AUTH_ENABLED=true` in compose. Alembic through `011` (controls, billing, MFA). SQLite `init_db` also adds missing columns; Postgres datetime columns use `TIMESTAMP`.
+Set `AUTH_ENABLED=true` in compose. Alembic through `015` (FI KYC profiles + lifecycle). SQLite `init_db` also adds missing columns; Postgres datetime columns use `TIMESTAMP`.
 
 ### Mobile
 
@@ -247,6 +252,10 @@ Prefix all paths with `/api/v1`.
 | GET/POST | `/ops/auth/users` | Invite — Super Admin / FI Admin only |
 | PATCH | `/ops/auth/users/{id}` | Role change uses the same invite rules |
 | POST | `/institutions/{id}/api-keys` | Super Admin only |
+| POST | `/institutions/onboarding` | Super Admin or BTI Ops — start KYC draft |
+| POST | `/institutions/{id}/onboarding/submit` | Super Admin activates; BTI Ops waits for approve |
+| POST | `/institutions/{id}/onboarding/decide` | Super Admin: approve / return / reject |
+| GET | `/institutions/summary` | Super Admin dashboard charts |
 
 ### Kenya
 
@@ -321,7 +330,7 @@ Partner keys (Daraja, MNO, Airtel, broker): [docs/INTEGRATIONS.md](docs/INTEGRAT
 
 ```powershell
 $env:PYTHONPATH="src"
-python -m pytest tests/test_invite_matrix.py tests/test_ops_login.py tests/test_rbac.py tests/test_controls.py -q
+python -m pytest tests/test_institution_onboarding.py tests/test_invite_matrix.py tests/test_ops_login.py tests/test_rbac.py tests/test_controls.py -q
 pytest -v
 ```
 
@@ -353,6 +362,7 @@ bti-tawarruq-engine/
 
 | Doc | Contents |
 |-----|----------|
+| [docs/FI_ONBOARDING.md](docs/FI_ONBOARDING.md) | Customer FI KYC wizard, lifecycle, dashboard, deploy |
 | [docs/USERS_ACCESS_CONTROLS.md](docs/USERS_ACCESS_CONTROLS.md) | Roles, invites, keys, maker-checker, billing, recon, MFA |
 | [docs/BTI_Tawarruq_Users_ver_001.docx](docs/BTI_Tawarruq_Users_ver_001.docx) | Stakeholder catalogue (`python scripts/build_users_doc.py`) |
 | [docs/KENYA_FLOW.md](docs/KENYA_FLOW.md) | Kenya eight steps, No-Inah, mobile mapping |

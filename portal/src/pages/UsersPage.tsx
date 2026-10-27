@@ -4,6 +4,7 @@ import { api, type Institution, type OpsUserRecord } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { IconManage } from "../components/icons";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
+import { isActiveInstitution } from "../config/fiKyc";
 import {
   defaultInviteRole,
   inviteNeedsInstitution,
@@ -44,8 +45,9 @@ export function UsersPage() {
         isPlatform ? api.listInstitutions().catch(() => [] as Institution[]) : Promise.resolve([] as Institution[]),
       ]);
       setItems(users);
-      setInstitutions(books);
-      if (!institutionId && books[0]) setInstitutionId(books[0].id);
+      const activeBooks = books.filter(isActiveInstitution);
+      setInstitutions(activeBooks);
+      if (!institutionId && activeBooks[0]) setInstitutionId(activeBooks[0].id);
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load users");
@@ -170,6 +172,7 @@ export function UsersPage() {
               <label>
                 Institution
                 <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)} required>
+                  {institutions.length === 0 ? <option value="">No active institution</option> : null}
                   {institutions.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name}

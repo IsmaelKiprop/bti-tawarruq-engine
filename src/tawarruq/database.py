@@ -44,6 +44,7 @@ def init_db() -> None:
     _ensure_mobile_push_token_column()
     _ensure_control_schema()
     _ensure_sedania_financing_columns()
+    _ensure_institution_kyc_columns()
     register_append_only_guards()
 
 
@@ -452,3 +453,21 @@ def _ensure_sedania_financing_columns() -> None:
                 conn.execute(text(ddl))
         if "path" not in existing:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tawarruq_executions_path ON tawarruq_executions (path)"))
+
+
+def _ensure_institution_kyc_columns() -> None:
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "institutions" not in tables:
+        return
+    existing = {col["name"] for col in inspector.get_columns("institutions")}
+    with engine.begin() as conn:
+        if "lifecycle_status" not in existing:
+            conn.execute(
+                text("ALTER TABLE institutions ADD COLUMN lifecycle_status VARCHAR(32) DEFAULT 'active' NOT NULL")
+            )
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_institutions_lifecycle_status ON institutions (lifecycle_status)")
+            )

@@ -96,6 +96,7 @@ export function inviteNeedsInstitution(role: string): boolean {
 type NavVisibility = {
   to: string;
   permission?: string;
+  anyPermissions?: string[];
   roles?: OpsRole[];
   excludeRoles?: OpsRole[];
   product?: ProductModule;
@@ -122,7 +123,7 @@ const ROLE_PROFILES: Record<string, RoleProfile> = {
     showApiDocs: true,
     showWriteActions: false,
     showShariah: true,
-    homePath: "/institutions",
+    homePath: "/",
   },
   bti_ops: {
     label: "BTI Ops",
@@ -253,7 +254,7 @@ export const AUDIT_ROLES: OpsRole[] = [
 /** Temporary tester shell: hide product desks until BTI Admin signs off. */
 export const TESTER_SHELL = true;
 
-const TESTER_VISIBLE_PATHS = ["/", "/ops", "/institutions", "/users", "/audit", "/settings"] as const;
+const TESTER_VISIBLE_PATHS = ["/", "/ops", "/institutions", "/institutions/onboard", "/users", "/audit", "/settings"] as const;
 
 export function isTesterVisiblePath(to: string): boolean {
   const path = to.split("?")[0] || "/";
@@ -285,6 +286,10 @@ export function canSeeNavItem(
   }
   if (item.excludeRoles?.includes(user.role as OpsRole)) return false;
   if (item.roles?.length && !item.roles.includes(user.role as OpsRole)) return false;
-  if (item.permission && !user.permissions.includes(item.permission)) return false;
+  if (item.anyPermissions?.length) {
+    if (!item.anyPermissions.some((permission) => user.permissions.includes(permission))) return false;
+  } else if (item.permission && !user.permissions.includes(item.permission)) {
+    return false;
+  }
   return true;
 }

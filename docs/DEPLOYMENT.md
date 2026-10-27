@@ -2,7 +2,7 @@
 
 The product is a Python API, an nginx portal, and Postgres. Docker Compose is the **reference installer**, not a requirement of the engine. Tenancy and backups are decided by **how many Postgres instances you run**, not by containers.
 
-Customer-server steps: [ONPREM.md](ONPREM.md). Ledger behaviour: [SHARIAH_AUDIT.md](SHARIAH_AUDIT.md). BTI VPS: [PRODUCTION_OPS.md](PRODUCTION_OPS.md).
+Customer-server steps: [ONPREM.md](ONPREM.md). Ledger behaviour: [SHARIAH_AUDIT.md](SHARIAH_AUDIT.md). BTI VPS: [PRODUCTION_OPS.md](PRODUCTION_OPS.md). Customer FI KYC (Alembic `015`): [FI_ONBOARDING.md](FI_ONBOARDING.md).
 
 ## What an install actually is
 

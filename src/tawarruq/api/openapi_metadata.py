@@ -153,6 +153,8 @@ In Swagger (`/docs`): `POST /ops/auth/login` → copy `access_token` → **Autho
 
 **API keys** (`POST /institutions/{id}/api-keys`): Super Admin only. FI Admin cannot issue keys; request BTI to onboard. Preferred machine role is `api_client`.
 
+**FI onboarding:** `POST /institutions/onboarding` then `POST /institutions/{id}/onboarding/submit`. Super Admin activate is immediate. BTI Ops submit waits for Super Admin (`POST /institutions/{id}/onboarding/decide`). Invite FI Admin only when `lifecycle_status` is `active`. See `docs/FI_ONBOARDING.md`.
+
 ---
 
 ### Swagger quick test (Kenya mock)
@@ -170,7 +172,7 @@ OPENAPI_TAGS = [
     },
     {
         "name": "Institutions",
-        "description": "Banks/Saccos. Each tenant has BSAS mode, API keys (Super Admin creates keys), and integration profile.",
+        "description": "Customer FIs. KYC onboarding, lifecycle (draft / pending / active / dormant / deactivated), BSAS mode, API keys (Super Admin creates keys), and integration profile.",
     },
     {
         "name": "Applications",

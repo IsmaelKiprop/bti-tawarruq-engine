@@ -362,10 +362,92 @@ export interface Institution {
   code: string;
   bsas_mode: string;
   active?: boolean;
+  lifecycle_status?: string;
   approval_steps?: string;
   approval_limit_amount?: string | null;
   billing_fee_bps?: number;
   created_at: string;
+}
+
+export interface InstitutionOnboarding extends Institution {
+  legal_registered_name?: string | null;
+  trading_name?: string | null;
+  institution_type?: string | null;
+  other_institution_type?: string | null;
+  registration_number?: string | null;
+  incorporation_date?: string | null;
+  incorporation_country?: string | null;
+  kra_pin?: string | null;
+  registered_address_line1?: string | null;
+  registered_address_line2?: string | null;
+  registered_county?: string | null;
+  registered_postal_code?: string | null;
+  physical_address?: string | null;
+  website_url?: string | null;
+  support_email?: string | null;
+  main_telephone?: string | null;
+  business_description?: string | null;
+  primary_regulator?: string | null;
+  regulator_other_name?: string | null;
+  licence_number?: string | null;
+  licence_issue_date?: string | null;
+  licence_expiry_date?: string | null;
+  licence_status?: string | null;
+  regulator_register_url?: string | null;
+  ownership_structure_summary?: string | null;
+  parent_company_name?: string | null;
+  related_entities?: unknown;
+  owners_and_shareholders?: unknown;
+  ownership_percentage?: string | null;
+  ubo_details?: unknown;
+  directors_board_members?: unknown;
+  ceo_managing_director_name?: string | null;
+  senior_management_details?: unknown;
+  pep_screening_status?: string | null;
+  sanctions_screening_status?: string | null;
+  adverse_media_screening_status?: string | null;
+  primary_contact_full_name?: string | null;
+  primary_contact_title?: string | null;
+  primary_contact_work_email?: string | null;
+  primary_contact_phone?: string | null;
+  compliance_officer_name?: string | null;
+  compliance_officer_email?: string | null;
+  authorized_signatories?: unknown;
+  representative_id_type?: string | null;
+  representative_id_number?: string | null;
+  representative_identity_verification_status?: string | null;
+  authority_to_act_document_id?: string | null;
+  settlement_bank_name?: string | null;
+  settlement_account_name?: string | null;
+  settlement_branch?: string | null;
+  settlement_account_number?: string | null;
+  settlement_currency?: string | null;
+  settlement_account_verification_status?: string | null;
+  settlement_account_evidence_document_id?: string | null;
+  expected_monthly_transaction_count?: number | null;
+  expected_monthly_transaction_value?: string | null;
+  typical_transaction_amount?: string | null;
+  maximum_transaction_amount?: string | null;
+  target_go_live_date?: string | null;
+  commercial_agreement_status?: string | null;
+  pricing_schedule_reference?: string | null;
+  dispute_contact_email?: string | null;
+  application_status?: string | null;
+  submission_date?: string | null;
+  approval_decision?: string | null;
+  approval_reason?: string | null;
+  activation_date?: string | null;
+}
+
+export interface InstitutionSummary {
+  total: number;
+  by_type: Record<string, number>;
+  by_regulator: Record<string, number>;
+  by_month: Record<string, number>;
+  by_lifecycle: Record<string, number>;
+  active: number;
+  dormant: number;
+  deactivated: number;
 }
 
 export interface Webhook {
@@ -1085,6 +1167,36 @@ export const api = {
     }),
   deleteInstitution: (institutionId: string) =>
     request<void>(`/institutions/${institutionId}`, { method: "DELETE" }),
+  getInstitutionSummary: () => request<InstitutionSummary>("/institutions/summary"),
+  startInstitutionOnboarding: (body: Record<string, unknown>) =>
+    request<InstitutionOnboarding>("/institutions/onboarding", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  getInstitutionOnboarding: (institutionId: string) =>
+    request<InstitutionOnboarding>(`/institutions/${institutionId}/onboarding`),
+  saveInstitutionOnboarding: (institutionId: string, body: Record<string, unknown>) =>
+    request<InstitutionOnboarding>(`/institutions/${institutionId}/onboarding`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  submitInstitutionOnboarding: (institutionId: string) =>
+    request<InstitutionOnboarding>(`/institutions/${institutionId}/onboarding/submit`, {
+      method: "POST",
+    }),
+  decideInstitutionOnboarding: (
+    institutionId: string,
+    body: { decision: "approve" | "return" | "reject"; reason?: string },
+  ) =>
+    request<InstitutionOnboarding>(`/institutions/${institutionId}/onboarding/decide`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  setInstitutionLifecycle: (institutionId: string, lifecycle_status: string) =>
+    request<Institution>(`/institutions/${institutionId}/lifecycle`, {
+      method: "PATCH",
+      body: JSON.stringify({ lifecycle_status }),
+    }),
   listWebhooks: (institutionId?: string) =>
     request<Webhook[]>(`/webhooks${institutionId ? `?institution_id=${institutionId}` : ""}`),
   registerWebhook: (body: { institution_id: string; url: string; events: string[] }) =>

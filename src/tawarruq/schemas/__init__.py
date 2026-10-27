@@ -26,10 +26,166 @@ class InstitutionRead(BaseModel):
     code: str
     bsas_mode: str = Field(..., description='Default BSAS integration mode for new transactions')
     active: bool = True
+    lifecycle_status: str = 'active'
     approval_steps: str = 'murabaha,liquidation,disbursement'
     approval_limit_amount: Decimal | None = None
     billing_fee_bps: int = 25
     created_at: datetime
+
+
+class InstitutionOnboardingWrite(BaseModel):
+    legal_registered_name: str | None = None
+    code: str | None = None
+    trading_name: str | None = None
+    institution_type: str | None = None
+    other_institution_type: str | None = None
+    registration_number: str | None = None
+    incorporation_date: str | None = None
+    incorporation_country: str | None = None
+    kra_pin: str | None = None
+    registered_address_line1: str | None = None
+    registered_address_line2: str | None = None
+    registered_county: str | None = None
+    registered_postal_code: str | None = None
+    physical_address: str | None = None
+    website_url: str | None = None
+    support_email: str | None = None
+    main_telephone: str | None = None
+    business_description: str | None = None
+    primary_regulator: str | None = None
+    regulator_other_name: str | None = None
+    licence_number: str | None = None
+    licence_issue_date: str | None = None
+    licence_expiry_date: str | None = None
+    licence_status: str | None = None
+    regulator_register_url: str | None = None
+    ownership_structure_summary: str | None = None
+    parent_company_name: str | None = None
+    related_entities: list | None = None
+    owners_and_shareholders: list | None = None
+    ownership_percentage: Decimal | str | None = None
+    ubo_details: list | None = None
+    directors_board_members: list | None = None
+    ceo_managing_director_name: str | None = None
+    senior_management_details: list | None = None
+    pep_screening_status: str | None = None
+    sanctions_screening_status: str | None = None
+    adverse_media_screening_status: str | None = None
+    primary_contact_full_name: str | None = None
+    primary_contact_title: str | None = None
+    primary_contact_work_email: str | None = None
+    primary_contact_phone: str | None = None
+    compliance_officer_name: str | None = None
+    compliance_officer_email: str | None = None
+    authorized_signatories: list | None = None
+    representative_id_type: str | None = None
+    representative_id_number: str | None = None
+    representative_identity_verification_status: str | None = None
+    authority_to_act_document_id: str | None = None
+    settlement_bank_name: str | None = None
+    settlement_account_name: str | None = None
+    settlement_branch: str | None = None
+    settlement_account_number: str | None = None
+    settlement_currency: str | None = None
+    settlement_account_verification_status: str | None = None
+    settlement_account_evidence_document_id: str | None = None
+    expected_monthly_transaction_count: int | None = None
+    expected_monthly_transaction_value: Decimal | str | None = None
+    typical_transaction_amount: Decimal | str | None = None
+    maximum_transaction_amount: Decimal | str | None = None
+    target_go_live_date: str | None = None
+    commercial_agreement_status: str | None = None
+    pricing_schedule_reference: str | None = None
+    dispute_contact_email: str | None = None
+
+
+class InstitutionOnboardingRead(InstitutionRead):
+    trading_name: str | None = None
+    institution_type: str | None = None
+    other_institution_type: str | None = None
+    registration_number: str | None = None
+    incorporation_date: str | None = None
+    incorporation_country: str | None = None
+    kra_pin: str | None = None
+    registered_address_line1: str | None = None
+    registered_address_line2: str | None = None
+    registered_county: str | None = None
+    registered_postal_code: str | None = None
+    physical_address: str | None = None
+    website_url: str | None = None
+    support_email: str | None = None
+    main_telephone: str | None = None
+    business_description: str | None = None
+    primary_regulator: str | None = None
+    regulator_other_name: str | None = None
+    licence_number: str | None = None
+    licence_issue_date: str | None = None
+    licence_expiry_date: str | None = None
+    licence_status: str | None = None
+    regulator_register_url: str | None = None
+    ownership_structure_summary: str | None = None
+    parent_company_name: str | None = None
+    related_entities: list | None = None
+    owners_and_shareholders: list | None = None
+    ownership_percentage: Decimal | None = None
+    ubo_details: list | None = None
+    directors_board_members: list | None = None
+    ceo_managing_director_name: str | None = None
+    senior_management_details: list | None = None
+    pep_screening_status: str | None = None
+    sanctions_screening_status: str | None = None
+    adverse_media_screening_status: str | None = None
+    primary_contact_full_name: str | None = None
+    primary_contact_title: str | None = None
+    primary_contact_work_email: str | None = None
+    primary_contact_phone: str | None = None
+    compliance_officer_name: str | None = None
+    compliance_officer_email: str | None = None
+    authorized_signatories: list | None = None
+    representative_id_type: str | None = None
+    representative_id_number: str | None = None
+    representative_identity_verification_status: str | None = None
+    authority_to_act_document_id: str | None = None
+    settlement_bank_name: str | None = None
+    settlement_account_name: str | None = None
+    settlement_branch: str | None = None
+    settlement_account_number: str | None = None
+    settlement_currency: str | None = None
+    settlement_account_verification_status: str | None = None
+    settlement_account_evidence_document_id: str | None = None
+    expected_monthly_transaction_count: int | None = None
+    expected_monthly_transaction_value: Decimal | None = None
+    typical_transaction_amount: Decimal | None = None
+    maximum_transaction_amount: Decimal | None = None
+    target_go_live_date: str | None = None
+    commercial_agreement_status: str | None = None
+    pricing_schedule_reference: str | None = None
+    dispute_contact_email: str | None = None
+    application_status: str | None = None
+    submission_date: datetime | None = None
+    approval_decision: str | None = None
+    approval_reason: str | None = None
+    activation_date: str | None = None
+
+
+class InstitutionOnboardingDecision(BaseModel):
+    decision: str = Field(..., description='approve | return | reject')
+    reason: str | None = None
+
+
+class InstitutionLifecycleUpdate(BaseModel):
+    lifecycle_status: str = Field(..., description='active | dormant | deactivated')
+
+
+class InstitutionSummaryRead(BaseModel):
+    total: int
+    by_type: dict[str, int]
+    by_regulator: dict[str, int]
+    by_month: dict[str, int]
+    by_lifecycle: dict[str, int]
+    active: int
+    dormant: int
+    deactivated: int
 
 class ApplicationCreate(BaseModel):
     model_config = ConfigDict(json_schema_extra={'examples': [{'amount_requested': '150000.00', 'term_months': 12, 'purpose': 'Working capital for inventory purchase'}]})

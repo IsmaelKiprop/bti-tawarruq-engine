@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type AuditEvent, type Institution, type OpsUserRecord } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, LoadingPanel, PageShell } from "../components/PageShell";
+import { isActiveInstitution } from "../config/fiKyc";
 import { inviteNeedsInstitution, inviteRoleOptions, roleLabel } from "../config/roles";
 
 export function UserManagementPage() {
@@ -58,7 +59,9 @@ export function UserManagementPage() {
         api.getAudit(userId).catch(() => [] as AuditEvent[]),
       ]);
       hydrate(record);
-      setInstitutions(books);
+      setInstitutions(
+        books.filter((book) => isActiveInstitution(book) || book.id === record.institution_id),
+      );
       setAudit(events);
       setError("");
     } catch (err) {

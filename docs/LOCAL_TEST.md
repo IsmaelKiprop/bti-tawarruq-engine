@@ -109,7 +109,7 @@ Open http://localhost:8000/docs (`AUTH_ENABLED=true`). Use **Authorize** after l
 1. **Production Ops → `POST /ops/auth/login`** with Super Admin (`OPS_BOOTSTRAP_ADMIN_EMAIL` / `OPS_BOOTSTRAP_ADMIN_PASSWORD`). Copy `access_token`.
 2. If `must_change_password` is true, run **`POST /ops/auth/change-password`**, then copy the new `access_token`.
 3. Click **Authorize** → **BearerAuth** → paste the token (no `Bearer ` prefix) → Authorize.
-4. **`GET /institutions`** — copy an `id`.
+4. **`GET /institutions`** — copy an **Active** `id`. Draft / pending FIs reject FI Admin invite.
 5. **`POST /ops/auth/users`** as Super Admin with `role: institution_admin` and that `institution_id`. Super Admin inviting `institution_ops` or `fi_approver` returns 403.
 6. Log in as the new FI Admin, change password, Authorize with that token, then **`POST /ops/auth/users`** with `role: institution_ops` or `fi_approver`. FI Admin inviting `bti_ops` returns 403.
 7. Switch back to Super Admin and **`POST /institutions/{id}/api-keys`** with `role: api_client`. The same call as FI Admin returns 403.
@@ -117,6 +117,23 @@ Open http://localhost:8000/docs (`AUTH_ENABLED=true`). Use **Authorize** after l
 Seeded FI Admin (`fi.admin@…` from `OPS_SEED_EMAIL_DOMAIN`) can skip step 5 if that user already exists. Password is in `data/ops_seed_credentials.txt` unless it was already changed.
 
 Who may invite whom: [USERS_ACCESS_CONTROLS.md](USERS_ACCESS_CONTROLS.md).
+
+---
+
+## 4c. FI onboarding (portal)
+
+Compose portal: http://127.0.0.1:15173. Full field list and APIs: [FI_ONBOARDING.md](FI_ONBOARDING.md).
+
+1. Super Admin signs in. Dashboard shows FI charts and **Onboard financial institution**.
+2. Complete the seven KYC pages (Identity through Review). Drafts can be incomplete. Submit as Super Admin to **Activate institution**.
+3. Repeat for a second type (for example SACCO) and confirm the dashboard pies and monthly bar update.
+4. Institutions is a directory: search, lifecycle filter, Resume KYC, Manage for engine settings. There is no 4-field register form.
+5. Users: invite FI Admin only for an Active FI.
+6. Optional: BTI Ops starts a draft and **Submit for Super Admin approval**. Super Admin approves from the directory or Review.
+
+```powershell
+python -m pytest tests/test_institution_onboarding.py tests/test_rbac.py tests/test_invite_matrix.py -q
+```
 
 ---
 
@@ -130,7 +147,10 @@ npm run dev
 
 Open http://localhost:5173
 
-- **Kenya MNO Flow** — demo runner (mock mode)
+- **Dashboard** — Super Admin FI charts and onboard CTA
+- **Onboard FI** — customer institution KYC wizard
+- **Institutions** — directory and lifecycle (Manage = engine settings)
+- **Kenya MNO Flow** — demo runner (mock mode; hidden while tester shell is on)
 - **Integrations** — per-institution Daraja/MNO config
 - **Application detail** — Shariah audit, business steps
 

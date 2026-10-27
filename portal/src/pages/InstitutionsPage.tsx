@@ -1,37 +1,34 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Institution } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { IconManage } from "../components/icons";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { BSAS_MODE_ORDER, getBsasMode } from "../config/institutions";
+import { lifecycleLabel } from "../config/fiKyc";
+import { getBsasMode } from "../config/institutions";
 
-function formatApprovalSteps(raw?: string | null) {
-  const parts = (raw || "")
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  return parts.length ? parts.join(", ") : "None";
-}
+const LIFECYCLE_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "draft", label: "Draft" },
+  { value: "pending_approval", label: "Pending approval" },
+  { value: "dormant", label: "Dormant" },
+  { value: "deactivated", label: "Deactivated" },
+];
 
 export function InstitutionsPage() {
   const { user } = useAuth();
   const canManage = user?.role === "platform_admin" || Boolean(user?.permissions.includes("manage_institutions"));
+  const canOnboard =
+    canManage || user?.role === "bti_ops" || Boolean(user?.permissions.includes("write_bti_ops"));
 
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [createdId, setCreatedId] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
   const [query, setQuery] = useState("");
-
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [bsasMode, setBsasMode] = useState("manual_bridge");
-  const [createLimit, setCreateLimit] = useState("");
-  const [createSteps, setCreateSteps] = useState("murabaha,liquidation,disbursement");
-  const [busy, setBusy] = useState(false);
+  const [lifecycle, setLifecycle] = useState("all");
+  const [busyId, setBusyId] = useState("");
 
   async function load() {
     setLoading(true);
@@ -51,39 +48,30 @@ export function InstitutionsPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return institutions;
-    return institutions.filter((item) =>
-      [item.name, item.code, item.bsas_mode, item.approval_steps].filter(Boolean).join(" ").toLowerCase().includes(q),
-    );
-  }, [institutions, query]);
+    return institutions.filter((item) => {
+      const status = item.lifecycle_status || (item.active === false ? "deactivated" : "active");
+      if (lifecycle !== "all" && status !== lifecycle) return false;
+      if (!q) return true;
+      return [item.name, item.code, status, item.bsas_mode].filter(Boolean).join(" ").toLowerCase().includes(q);
+    });
+  }, [institutions, query, lifecycle]);
 
-  async function onCreate(event: FormEvent) {
-    event.preventDefault();
-    if (!canManage) return;
-    setBusy(true);
+  async function onDecide(id: string, decision: "approve" | "return") {
+    setBusyId(id);
     setError("");
     setMessage("");
-    setCreatedId("");
     try {
-      const created = await api.createInstitution({
-        name: name.trim(),
-        code: code.trim().toUpperCase(),
-        bsas_mode: bsasMode,
-        approval_limit_amount: createLimit.trim() || null,
-        approval_steps: createSteps.trim() || "murabaha,liquidation,disbursement",
-      });
-      setCreatedId(created.id);
-      setMessage(`${created.name} (${created.code}) registered.`);
-      setName("");
-      setCode("");
-      setCreateLimit("");
-      setCreateSteps("murabaha,liquidation,disbursement");
-      setCreateOpen(false);
+      const done = await api.decideInstitutionOnboarding(id, { decision });
+      setMessage(
+        decision === "approve"
+          ? `${done.name} is active. Invite its FI Admin from Users.`
+          : `${done.name} was returned to draft.`,
+      );
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create institution");
+      setError(err instanceof Error ? err.message : "Decision failed");
     } finally {
-      setBusy(false);
+      setBusyId("");
     }
   }
 
@@ -93,11 +81,11 @@ export function InstitutionsPage() {
         <div>
           <h2 className="m-0 text-lg font-semibold">Institutions</h2>
           <p className="muted m-0 mt-1 text-sm">
-            {filtered.length} of {institutions.length} client banks / SACCOs
+            Customer financial institutions. Onboarding is a separate wizard. Engine settings stay on Manage.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <label className="flex min-w-[12rem] flex-col gap-1 text-xs uppercase tracking-wide text-muted">
+          <label className="flex min-w-[10rem] flex-col gap-1 text-xs uppercase tracking-wide text-muted">
             Search
             <input
               className="rounded-sm border border-border bg-surface-elevated px-2.5 py-1.5 text-sm normal-case tracking-normal text-foreground"
@@ -106,104 +94,54 @@ export function InstitutionsPage() {
               placeholder="Name, code…"
             />
           </label>
-          {canManage ? (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => setCreateOpen((open) => !open)}
-              aria-expanded={createOpen}
+          <label className="flex min-w-[10rem] flex-col gap-1 text-xs uppercase tracking-wide text-muted">
+            Lifecycle
+            <select
+              className="rounded-sm border border-border bg-surface-elevated px-2.5 py-1.5 text-sm normal-case tracking-normal text-foreground"
+              value={lifecycle}
+              onChange={(e) => setLifecycle(e.target.value)}
             >
-              {createOpen ? "Hide register" : "Register institution"}
-            </button>
+              {LIFECYCLE_FILTERS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {canOnboard ? (
+            <Link className="btn btn-primary btn-sm" to="/institutions/onboard">
+              Onboard financial institution
+            </Link>
           ) : null}
         </div>
       </header>
 
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
-      {createdId ? (
-        <div className="flex flex-wrap gap-2">
-          <Link className="btn btn-primary btn-sm" to={`/institutions/${createdId}`}>
-            Manage institution
-          </Link>
-          <Link className="btn btn-secondary btn-sm" to={`/integrations?institution=${createdId}`}>
-            Integrations
-          </Link>
-          <Link className="btn btn-secondary btn-sm" to={`/users?institution=${createdId}`}>
-            Users
-          </Link>
-        </div>
-      ) : null}
-
-      {createOpen ? (
-        <section className="panel">
-          <h2>Register institution</h2>
-          {!canManage ? (
-            <Alert tone="error">Only platform admins can register institutions.</Alert>
-          ) : (
-            <form className="grid-2" onSubmit={onCreate}>
-              <label>
-                Display name
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Mwalimu National SACCO"
-                  required
-                />
-              </label>
-              <label>
-                Institution code
-                <input
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="MWALIMU"
-                  required
-                />
-              </label>
-              <label>
-                Malaysia desk mode
-                <select className="select-input" value={bsasMode} onChange={(e) => setBsasMode(e.target.value)}>
-                  {BSAS_MODE_ORDER.map((id) => (
-                    <option key={id} value={id}>
-                      {getBsasMode(id).label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Maker-checker steps
-                <input
-                  value={createSteps}
-                  onChange={(e) => setCreateSteps(e.target.value)}
-                  placeholder="murabaha,liquidation,disbursement"
-                />
-              </label>
-              <label>
-                Approval limit (optional)
-                <input
-                  value={createLimit}
-                  onChange={(e) => setCreateLimit(e.target.value)}
-                  placeholder="e.g. 500000"
-                />
-              </label>
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                {busy ? "Creating…" : "Create institution"}
-              </button>
-            </form>
-          )}
-        </section>
-      ) : null}
 
       <section className="panel">
         <div className="panel-header">
           <div>
             <h2>Directory</h2>
+            <p className="muted m-0 text-sm">
+              {filtered.length} of {institutions.length} customer institutions
+            </p>
           </div>
         </div>
         {loading ? (
           <LoadingPanel rows={4} />
         ) : filtered.length === 0 ? (
-          <EmptyState title="No institutions" description="Register a bank or SACCO, or clear the search." />
+          <EmptyState
+            title="No customer institutions"
+            description="Onboard a bank, SACCO, or other financial institution to start this book."
+            action={
+              canOnboard ? (
+                <Link className="btn btn-primary btn-sm" to="/institutions/onboard">
+                  Onboard financial institution
+                </Link>
+              ) : undefined
+            }
+          />
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -211,39 +149,71 @@ export function InstitutionsPage() {
                 <tr>
                   <th>Name</th>
                   <th>Code</th>
-                  <th>Malaysia desk</th>
-                  <th>Maker-checker</th>
-                  <th>Limit</th>
-                  <th>Status</th>
-                  <th className="w-[1%]">Manage</th>
+                  <th>Engine settings</th>
+                  <th>Lifecycle</th>
+                  <th className="w-[1%]">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      <div className="font-medium">{item.name}</div>
-                      <div className="meta">{new Date(item.created_at).toLocaleDateString()}</div>
-                    </td>
-                    <td>
-                      <code>{item.code}</code>
-                    </td>
-                    <td>{getBsasMode(item.bsas_mode).label}</td>
-                    <td className="text-sm text-muted">{formatApprovalSteps(item.approval_steps)}</td>
-                    <td>{item.approval_limit_amount || "—"}</td>
-                    <td>{item.active === false ? "Suspended" : "Active"}</td>
-                    <td>
-                      <Link
-                        to={`/institutions/${item.id}`}
-                        className="icon-btn"
-                        aria-label={`Manage ${item.name}`}
-                        title="Manage institution"
-                      >
-                        <IconManage size={16} />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((item) => {
+                  const status = item.lifecycle_status || (item.active === false ? "deactivated" : "active");
+                  return (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="font-medium">{item.name}</div>
+                        <div className="meta">{new Date(item.created_at).toLocaleDateString()}</div>
+                      </td>
+                      <td>
+                        <code>{item.code}</code>
+                      </td>
+                      <td className="text-sm text-muted">{getBsasMode(item.bsas_mode).label}</td>
+                      <td>{lifecycleLabel(status, item.active)}</td>
+                      <td>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {canOnboard && (status === "draft" || status === "pending_approval") ? (
+                            <Link className="btn btn-secondary btn-sm" to={`/institutions/${item.id}/onboard`}>
+                              Resume KYC
+                            </Link>
+                          ) : (
+                            <Link className="btn btn-secondary btn-sm" to={`/institutions/${item.id}/onboard`}>
+                              Profile
+                            </Link>
+                          )}
+                          {canManage && status === "pending_approval" ? (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                disabled={busyId === item.id}
+                                onClick={() => void onDecide(item.id, "approve")}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                disabled={busyId === item.id}
+                                onClick={() => void onDecide(item.id, "return")}
+                              >
+                                Return
+                              </button>
+                            </>
+                          ) : null}
+                          {canManage ? (
+                            <Link
+                              to={`/institutions/${item.id}`}
+                              className="icon-btn"
+                              aria-label={`Manage ${item.name}`}
+                              title="Engine settings"
+                            >
+                              <IconManage size={16} />
+                            </Link>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

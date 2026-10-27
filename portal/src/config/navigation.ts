@@ -11,6 +11,7 @@ import {
   IconMonitor,
   IconNewApplication,
   IconRepayments,
+  IconSettings,
   IconShariah,
   IconTransactions,
   IconUsers,
@@ -27,6 +28,7 @@ export interface NavItem {
   /** Shown under the label so people know what the page is for before clicking. */
   hint?: string;
   permission?: string;
+  anyPermissions?: string[];
   roles?: OpsRole[];
   excludeRoles?: OpsRole[];
   /** Temporarily omit from the sidebar without removing the route. */
@@ -48,14 +50,25 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "overview",
     label: "Overview",
     items: [
-      { to: "/", label: "Dashboard", Icon: IconDashboard, end: true, hint: "Whole process at a glance" },
+      { to: "/", label: "Dashboard", Icon: IconDashboard, end: true, hint: "Customer FI charts and onboarding" },
       {
-        to: "/ops",
-        label: "Ops Monitor",
-        Icon: IconMonitor,
-        hint: "Engine telemetry for your role",
-        permission: "view_metrics",
+        to: "/institutions/onboard",
+        label: "Onboard FI",
+        Icon: IconNewApplication,
+        hint: "KYC wizard for a customer institution",
+        anyPermissions: ["manage_institutions", "write_bti_ops"],
+        hideOnOnprem: true,
       },
+      {
+        to: "/institutions",
+        label: "Institutions",
+        Icon: IconInstitutions,
+        hint: "Customer institution directory",
+        anyPermissions: ["manage_institutions", "write_bti_ops"],
+        hideOnOnprem: true,
+      },
+      { to: "/users", label: "Users", Icon: IconUsers, hint: "Roles and portal logins", permission: "manage_credentials" },
+      { to: "/settings", label: "Settings", Icon: IconSettings, hint: "Your profile and security" },
       {
         to: "/customer",
         label: "Customer Journey",
@@ -86,8 +99,6 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "setup",
     label: "Setup & access",
     items: [
-      { to: "/institutions", label: "Institutions", Icon: IconInstitutions, hint: "Onboard a bank or SACCO", permission: "manage_institutions", hideOnOnprem: true },
-      { to: "/users", label: "Users", Icon: IconUsers, hint: "Roles and portal logins", permission: "manage_credentials" },
       {
         to: "/integrations",
         label: "Integrations",
@@ -196,6 +207,19 @@ export const NAV_SECTIONS: NavSection[] = [
         excludeRoles: ["agent_dealer"],
         hidden: true,
       },
+    ],
+  },
+  {
+    id: "oversight",
+    label: "Oversight",
+    items: [
+      {
+        to: "/ops",
+        label: "Ops Monitor",
+        Icon: IconMonitor,
+        hint: "Engine telemetry for your role",
+        permission: "view_metrics",
+      },
       {
         to: "/audit",
         label: "Audit trail",
@@ -212,7 +236,7 @@ export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((section) => section.it
 export const ROUTE_META: Record<string, { title: string; description: string }> = {
   "/": {
     title: "Dashboard",
-    description: "Institution count and engine uptime",
+    description: "Customer FI charts, lifecycle counts, and engine uptime",
   },
   "/documentation": {
     title: "Documentation",
@@ -248,11 +272,19 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
   },
   "/institutions": {
     title: "Institutions",
-    description: "Client banks and SACCOs; manage profile, controls, and audit per tenant",
+    description: "Customer financial institution directory and lifecycle",
+  },
+  "/institutions/onboard": {
+    title: "Onboard financial institution",
+    description: "KYC wizard for a customer bank, SACCO, or other financial institution",
   },
   "/institutions/:institutionId": {
     title: "Institution management",
-    description: "Tenant profile, maker-checker, billing fee, and audit trail",
+    description: "Engine settings: BSAS mode, maker-checker, billing fee",
+  },
+  "/institutions/:institutionId/onboard": {
+    title: "Onboard financial institution",
+    description: "Resume customer institution KYC",
   },
   "/users": {
     title: "Users",
@@ -355,11 +387,14 @@ export function getRouteMeta(pathname: string, role?: string | null) {
       }
     );
   }
+  if (pathname === "/institutions/onboard" || pathname.endsWith("/onboard")) {
+    return ROUTE_META["/institutions/onboard"];
+  }
   if (pathname.startsWith("/institutions/") && pathname !== "/institutions") {
     return (
       ROUTE_META["/institutions/:institutionId"] || {
         title: "Institution management",
-        description: "Tenant profile, maker-checker, billing fee, and audit trail",
+        description: "Engine settings: BSAS mode, maker-checker, billing fee",
       }
     );
   }

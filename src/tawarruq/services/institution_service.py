@@ -40,6 +40,10 @@ def update_institution(
         institution.bsas_mode = bsas_mode
     if active is not None:
         institution.active = bool(active)
+        if institution.active:
+            institution.lifecycle_status = "active"
+        elif getattr(institution, "lifecycle_status", "active") == "active":
+            institution.lifecycle_status = "deactivated"
     if approval_steps is not None:
         parts = [part.strip().lower() for part in approval_steps.split(",") if part.strip()]
         unknown = [part for part in parts if part not in VALID_APPROVAL_STEPS]

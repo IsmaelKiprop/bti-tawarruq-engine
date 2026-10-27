@@ -356,6 +356,11 @@ def create_ops_user(
         raise ValueError(f"User already exists: {email_norm}")
     if role not in PORTAL_ASSIGNABLE_ROLES:
         raise ValueError(f"Role {role.value} cannot be used for portal logins")
+    if institution_id:
+        from tawarruq.models.institution import Institution
+        from tawarruq.services.institution_onboarding_service import assert_institution_invitable
+
+        assert_institution_invitable(db.get(Institution, institution_id))
     # Reconciler may be BTI-wide (null institution) or tenant-scoped.
     if role not in PLATFORM_SCOPED_ROLES and role != ApiKeyRole.RECONCILER and not institution_id:
         raise ValueError("institution_id is required for bank and SACCO roles")

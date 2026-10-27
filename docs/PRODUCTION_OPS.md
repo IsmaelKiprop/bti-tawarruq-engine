@@ -2,7 +2,7 @@
 
 This guide covers production auth flags, monitoring, and CI/CD deploy for the Buruuj Tawarruq engine.
 
-Complete users, maker-checker, billing, reconciliation, and MFA documentation: **[USERS_ACCESS_CONTROLS.md](USERS_ACCESS_CONTROLS.md)**. Stakeholder catalogue: `docs/BTI_Tawarruq_Users_ver_001.docx`.
+Complete users, maker-checker, billing, reconciliation, and MFA documentation: **[USERS_ACCESS_CONTROLS.md](USERS_ACCESS_CONTROLS.md)**. Customer FI KYC: **[FI_ONBOARDING.md](FI_ONBOARDING.md)**. Stakeholder catalogue: `docs/BTI_Tawarruq_Users_ver_001.docx`.
 
 ## Role-based access control (RBAC)
 
@@ -11,7 +11,7 @@ When `AUTH_ENABLED=true`, protected routes require an ops session Bearer token o
 | Role | Doc category | Scope | Core permissions |
 |------|--------------|-------|------------------|
 | `platform_admin` | BTI Platform Super Administrator | Platform | Tenant lifecycle, credentials, billing, retries (`write_bti_ops`). **No** `write_ops` / `approve_txn` — admin access does not execute trades |
-| `bti_ops` | BTI Tawarruq Operations Officer | Platform | Cross-tenant ops (`write_ops`, `write_bti_ops`) — not tenant lifecycle |
+| `bti_ops` | BTI Tawarruq Operations Officer | Platform | Cross-tenant ops (`write_ops`, `write_bti_ops`). May start FI KYC; Super Admin must approve |
 | `bti_finance` | BTI Finance / Billing Officer | Platform | `manage_billing` (no trade execution) |
 | `institution_admin` | FI Administrator | Own tenant | Ops + users/integrations + `approve_txn`. Cannot create API keys |
 | `institution_ops` | FI Operations Officer | Own tenant | Initiate/monitor (`write_ops`) |
@@ -31,7 +31,7 @@ curl -X POST http://localhost:8000/api/v1/institutions/{id}/api-keys \
   -d '{"name":"fi-core-banking","role":"api_client"}'
 ```
 
-Only Super Admin (`platform_admin`) can create API keys or register new institutions. Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah / Audit, and Reconciliation. Super Admin does not invite FI Operations or FI Approver. FI Admin invites FI desk staff (FI Admin, FI Operations, FI Approver, Shariah / Audit, Reconciliation) for their own tenant.
+Only Super Admin (`platform_admin`) can create API keys or activate a customer FI. Super Admin or BTI Ops may start KYC on **Onboard FI**; Super Admin activate is immediate, BTI Ops submit waits for Super Admin. Super Admin may invite Super Admin, BTI Ops, BTI Finance, FI Admin, Shariah / Audit, and Reconciliation after the FI is Active. Super Admin does not invite FI Operations or FI Approver. FI Admin invites FI desk staff (FI Admin, FI Operations, FI Approver, Shariah / Audit, Reconciliation) for their own tenant.
 
 ### Portal auth (email + password)
 
@@ -41,7 +41,7 @@ With `AUTH_ENABLED=true`, the ops portal uses a login page (not pasted API keys)
 2. Bootstrap / seed passwords come from `OPS_BOOTSTRAP_*` and `OPS_SEED_PASSWORD`. New secrets are appended to `data/ops_seed_credentials.txt` (gitignored).
 3. Sign in at `/login`. Temporary passwords force `/change-password` before any other page.
 4. Re-run anytime: `python -m tawarruq.cli seed-ops-users`
-5. Super Admin invites BTI staff and the FI Admin under **Users**. That FI Admin then invites FI Operations and FI Approver.
+5. Super Admin onboards the customer FI (or approves a BTI Ops submit), then invites BTI staff and the FI Admin under **Users**. That FI Admin then invites FI Operations and FI Approver.
 6. Machine clients use `X-API-Key` (`api_client` role preferred). Super Admin issues the key on **Webhooks**; FI Admin requests BTI to onboard.
 7. Privileged portal roles (Super Admin, BTI Ops, BTI Finance) should enroll TOTP at `/mfa-enroll`. After enrollment, login requires the authenticator code.
 8. Murabaha, liquidation, and disbursement are maker-checker gated when `AUTH_ENABLED=true`. FI Ops queues the step; FI Approvers act on **Approvals**. Amount limits on the institution or the approver are enforced. The initiator cannot be the sole approver.
@@ -69,7 +69,7 @@ OPS_BOOTSTRAP_ADMIN_PASSWORD=ChangeMeNow!123
 CALLBACK_AUTH_TOKEN=your-callback-secret   # optional, for inbound Daraja/MNO webhooks
 ```
 
-Run Alembic through `011` (controls, billing, MFA columns). SQLite `init_db` adds missing columns automatically:
+Run Alembic through `015` (FI KYC profiles + lifecycle). If the database has schema from `init_db` and no `alembic_version` row, `alembic stamp 014` then `upgrade head`. SQLite `init_db` adds missing columns automatically:
 
 ```bash
 alembic upgrade head
@@ -141,7 +141,7 @@ Services:
 - [ ] Postgres `DATABASE_URL` (not SQLite)
 - [ ] On-prem: Shariah **mirror** on Postgres `tawarruq_audit`, or disable the mirror — do not rely on Compose SQLite as the only extra copy ([DEPLOYMENT.md](DEPLOYMENT.md#shariah-audit-stores-packaging-gap))
 - [ ] `AUTH_ENABLED=true`
-- [ ] Alembic `011` applied (approvals, billing, MFA columns)
+- [ ] Alembic `015` applied (FI KYC + lifecycle; includes `011` controls)
 - [ ] Super Admin password rotated and TOTP enrolled
 - [ ] Create `platform_admin` + per-institution keys / FI Approver
 - [ ] Configure real Daraja / MNO / BSAS credentials

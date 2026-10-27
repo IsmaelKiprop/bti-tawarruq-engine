@@ -28,11 +28,24 @@ export const APPROVAL_LIMIT_DASHBOARD =
 export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   "/": {
     title: "What this dashboard is",
-    lead: "Institution count and engine uptime for your role.",
+    lead: "Super Admin sees customer institution charts and a primary onboard action. Other roles see engine uptime for their scope.",
     dealTitle: "How you use it",
     dealSteps: [
-      "Confirm the engine is up, then open Institutions, Users, Audit, or Ops Monitor if your role allows.",
+      "Onboard a customer financial institution first if the book is empty.",
+      "Read type and regulator charts, monthly onboarding, and Active / Dormant / Deactivated counts.",
+      "Invite FI Admin only after the institution is Active.",
     ],
+  },
+  "/institutions/onboard": {
+    title: "What FI onboarding is",
+    lead: "A KYC wizard for a customer financial institution. Super Admin activate is immediate. BTI Ops submit waits for Super Admin approval.",
+    dealTitle: "How you use it",
+    dealSteps: [
+      "Complete Identity, Regulatory, Ownership, Representatives, Settlement, then Commercial.",
+      "Save drafts at any time. Mandatory fields are checked only when you submit.",
+      "Super Admin: Activate institution. BTI Ops: Submit for Super Admin approval.",
+    ],
+    note: "Document fields take a reference (filename or ticket id) in this slice. File upload comes later.",
   },
   "/sedania": {
     title: "What Sedania Financing is",
@@ -150,16 +163,15 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   },
   "/institutions": {
     title: "What an institution is",
-    lead: "A client bank or SACCO on Buruuj's engine. Buruuj Fintech is the operator and is not a row here. The directory is lean; open Manage for profile, controls, and audit.",
-    dealTitle: "What you set when you register",
+    lead: "A customer financial institution on BTI's engine. BTI is the operator and is not a row here. Onboarding lives on the KYC wizard. Manage holds engine settings only.",
+    dealTitle: "How you use the directory",
     dealSteps: [
-      "Name and code identify the bank on certificates, APIs, and audit.",
-      "Malaysia desk mode is the default for palm-oil trades. Kenya float uses Integrations, not this field.",
-      "Maker-checker steps decide which deal actions wait for an FI Approver: murabaha (sale to customer), liquidation (spot sale), disbursement (payout). Default is all three. Remove a word if that step should run immediately.",
-      "Approval limit is the bank-wide cap for those queued deals. Leave blank for no institution cap. An FI Approver also has a personal limit on Users. The engine uses the lower of the two.",
-      "Use Manage for edits, suspend/activate, billing fee, Integrations, Users, and the tenant audit trail.",
+      "Onboard a bank, SACCO, or other financial institution from Onboard FI.",
+      "Filter by lifecycle: draft, pending approval, active, dormant, or deactivated.",
+      "Resume KYC on drafts. Super Admin approves BTI Ops submissions from this list.",
+      "Open Manage for BSAS mode, deal maker-checker, billing fee, and tenant audit.",
     ],
-    note: "DEFAULT is the demo book. You can rename it. You cannot delete it. After create, open Manage → Integrations, then invite FI Admin on Users.",
+    note: "Invite FI Admin only after the institution is Active. Deal maker-checker stays on Manage, not on the KYC wizard.",
   },
   "/users": {
     title: "What a user is",
@@ -258,10 +270,20 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
 export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
   "/": {
     title: "How the dashboard works",
-    intro: "Read uptime, and the FI count if you manage institutions.",
+    intro: "Super Admin starts with customer FI charts. Other roles read uptime.",
     steps: [
-      { n: 1, title: "Check uptime", body: "The engine reports whether it is healthy." },
-      { n: 2, title: "Open a page you can access", body: "Institutions, Users, Audit, or Ops Monitor stay role-gated." },
+      { n: 1, title: "Onboard first", body: "If there is no customer institution, use Onboard FI." },
+      { n: 2, title: "Read the book", body: "Type, regulator, monthly onboarding, and Active / Dormant / Deactivated." },
+      { n: 3, title: "Staff after Active", body: "Invite FI Admin from Users only when the institution is Active." },
+    ],
+  },
+  "/institutions/onboard": {
+    title: "How FI onboarding works",
+    intro: "One KYC category per page. Super Admin activate is immediate. BTI Ops waits for Super Admin.",
+    steps: [
+      { n: 1, title: "Capture KYC", body: "Identity through Commercial. Drafts can be incomplete." },
+      { n: 2, title: "Submit", body: "Mandatory fields and formats are checked here." },
+      { n: 3, title: "Activate or wait", body: "Super Admin goes live now. BTI Ops waits for approve." },
     ],
   },
   "/ops": {
@@ -349,14 +371,14 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
     ],
   },
   "/institutions": {
-    title: "How onboarding works",
-    intro: "Create the tenant before any customer or deal. Register is collapsed on the directory; open Manage for dual control, fees, and audit.",
+    title: "How the directory works",
+    intro: "Onboarding is the KYC wizard. This page is the customer institution directory.",
     steps: [
-      { n: 1, title: "Register the bank", body: "Use Register institution for name, code, Malaysia desk, maker-checker steps, and optional approval limit." },
-      { n: 2, title: "Manage", body: "Edit profile, suspend, set billing fee, and review the tenant audit trail." },
-      { n: 3, title: "Integrations & users", body: "From Manage, open Integrations for Kenya partners, then invite FI Admin on Users." },
+      { n: 1, title: "Onboard", body: "Open Onboard FI. Super Admin activate is immediate. BTI Ops submit waits for Super Admin." },
+      { n: 2, title: "Directory", body: "Search and filter by lifecycle. Resume drafts. Approve pending submissions." },
+      { n: 3, title: "Manage later", body: "Engine settings (BSAS, deal maker-checker, fee) stay on Manage. Invite FI Admin only after Active." },
     ],
-    note: "FI Operations queues the listed steps. FI Approver decides on Approvals. The initiator cannot approve their own item.",
+    note: "Deal maker-checker is for Murabaha, liquidation, and disbursement. It is not used on FI onboarding.",
   },
   "/users": {
     title: "How access works",

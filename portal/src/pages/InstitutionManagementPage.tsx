@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type AuditGroup, type Institution } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, LoadingPanel, PageShell } from "../components/PageShell";
+import { lifecycleLabel } from "../config/fiKyc";
 import { BSAS_MODE_ORDER, getBsasMode } from "../config/institutions";
 
 export function InstitutionManagementPage() {
@@ -21,7 +22,7 @@ export function InstitutionManagementPage() {
 
   const [editName, setEditName] = useState("");
   const [editMode, setEditMode] = useState("manual_bridge");
-  const [editActive, setEditActive] = useState(true);
+  const [editLifecycle, setEditLifecycle] = useState("active");
   const [editSteps, setEditSteps] = useState("murabaha,liquidation,disbursement");
   const [editLimit, setEditLimit] = useState("");
   const [editFeeBps, setEditFeeBps] = useState("25");
@@ -32,7 +33,7 @@ export function InstitutionManagementPage() {
     setItem(record);
     setEditName(record.name);
     setEditMode(record.bsas_mode || "manual_bridge");
-    setEditActive(record.active !== false);
+    setEditLifecycle(record.lifecycle_status || (record.active === false ? "deactivated" : "active"));
     setEditSteps(record.approval_steps || "murabaha,liquidation,disbursement");
     setEditLimit(record.approval_limit_amount || "");
     setEditFeeBps(String(record.billing_fee_bps ?? 25));
@@ -71,10 +72,13 @@ export function InstitutionManagementPage() {
     setError("");
     setMessage("");
     try {
+      if (["active", "dormant", "deactivated"].includes(editLifecycle) && editLifecycle !== item.lifecycle_status) {
+        await api.setInstitutionLifecycle(item.id, editLifecycle);
+      }
       const updated = await api.updateInstitution(item.id, {
         name: editName.trim(),
         bsas_mode: editMode,
-        active: editActive,
+        active: editLifecycle === "active",
         approval_steps: editSteps,
         approval_limit_amount: editLimit.trim() || null,
         billing_fee_bps: Number(editFeeBps),
@@ -142,10 +146,13 @@ export function InstitutionManagementPage() {
           <h2 className="m-0 mt-1 text-lg font-semibold">{item.name}</h2>
           <p className="muted m-0 mt-1 text-sm">
             <code>{item.code}</code> · {getBsasMode(item.bsas_mode).label} ·{" "}
-            {item.active === false ? "Suspended" : "Active"}
+            {lifecycleLabel(item.lifecycle_status, item.active)}
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
+          <Link className="btn btn-secondary btn-sm" to={`/institutions/${item.id}/onboard`}>
+            KYC profile
+          </Link>
           <Link className="btn btn-secondary btn-sm" to={`/integrations?institution=${item.id}`}>
             Integrations
           </Link>
@@ -203,14 +210,15 @@ export function InstitutionManagementPage() {
                 </select>
               </label>
               <label>
-                Tenant status
+                Lifecycle
                 <select
-                  value={editActive ? "active" : "suspended"}
-                  onChange={(e) => setEditActive(e.target.value === "active")}
+                  value={editLifecycle}
+                  onChange={(e) => setEditLifecycle(e.target.value)}
                   disabled={!canManage}
                 >
                   <option value="active">Active</option>
-                  <option value="suspended">Suspended</option>
+                  <option value="dormant">Dormant</option>
+                  <option value="deactivated">Deactivated</option>
                 </select>
               </label>
               <label>

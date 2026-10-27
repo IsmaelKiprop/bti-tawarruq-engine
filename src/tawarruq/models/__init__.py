@@ -8,6 +8,7 @@ from tawarruq.models.customer import Customer, LiquidityPool
 from tawarruq.models.disbursement import Disbursement
 from tawarruq.models.execution import CertificateVault, TawarruqExecution
 from tawarruq.models.institution import Institution
+from tawarruq.models.institution_profile import InstitutionProfile
 from tawarruq.models.institution_integration import InstitutionIntegration
 from tawarruq.models.integration import ApiKey, WebhookSubscription
 from tawarruq.models.kenya_flow import (
@@ -40,6 +41,7 @@ __all__ = [
     "TawarruqExecution",
     "AuditEvent",
     "Institution",
+    "InstitutionProfile",
     "InstitutionIntegration",
     "WebhookSubscription",
     "ApiKey",

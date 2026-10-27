@@ -10,12 +10,14 @@ from tawarruq.api.deps import (
     require_write_ops,
     tenant_filter_institution_id,
 )
+from tawarruq.services.rbac import get_request_role, has_permission
 from tawarruq.database import get_db
 from tawarruq.enums import AuditActor, LegNumber, TransactionMode
 from tawarruq.models.audit import AuditEvent
 from tawarruq.models.application import FinancingApplication
 from tawarruq.models.customer import Customer
 from tawarruq.models.institution import Institution
+from tawarruq.models.institution_profile import InstitutionProfile
 from tawarruq.models.transaction import CommodityTransaction
 from tawarruq.schemas import (
     ApplicationCreate,
@@ -25,7 +27,12 @@ from tawarruq.schemas import (
     DisbursementRead,
     ErrorResponse,
     InstitutionCreate,
+    InstitutionLifecycleUpdate,
+    InstitutionOnboardingDecision,
+    InstitutionOnboardingRead,
+    InstitutionOnboardingWrite,
     InstitutionRead,
+    InstitutionSummaryRead,
     MalaysiaFlowStatusRead,
     ManualBridgeConfirm,
     OfferCreate,
@@ -33,7 +40,13 @@ from tawarruq.schemas import (
     TransactionCreate,
     TransactionRead,
 )
-from tawarruq.services import application_service, institution_service, malaysia_flow_service, transaction_service
+from tawarruq.services import (
+    application_service,
+    institution_onboarding_service,
+    institution_service,
+    malaysia_flow_service,
+    transaction_service,
+)
 from tawarruq.services.audit_query_service import query_audit_events
 from tawarruq.services.audit_service import log_audit
 
@@ -52,8 +65,12 @@ COMMON_ERRORS: dict = {
     summary="List institutions",
     description="Returns all registered banks/Saccos. Each institution has a default BSAS backend mode.",
 )
-def list_institutions(db: Session = Depends(get_db)) -> list[InstitutionRead]:
-    return db.query(Institution).order_by(Institution.name).all()
+def list_institutions(request: Request, db: Session = Depends(get_db)) -> list[InstitutionRead]:
+    query = db.query(Institution)
+    scoped = tenant_filter_institution_id(request, None)
+    if scoped:
+        query = query.filter(Institution.id == scoped)
+    return query.order_by(Institution.name).all()
 
 
 @router.post(
@@ -91,6 +108,8 @@ def create_institution(
         bsas_mode=payload.bsas_mode,
         approval_limit_amount=payload.approval_limit_amount,
         approval_steps=",".join(step_parts) or "murabaha,liquidation,disbursement",
+        lifecycle_status="active",
+        active=True,
     )
     db.add(institution)
     db.flush()
@@ -108,6 +127,222 @@ def create_institution(
     )
     db.commit()
     db.refresh(institution)
+    return institution
+
+
+def _require_onboard(request: Request) -> None:
+    if has_permission(request, "manage_institutions") or has_permission(request, "write_bti_ops"):
+        return
+    require_manage_institutions(request)
+
+
+def _date_text(value) -> str | None:
+    if value is None:
+        return None
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+
+def _onboarding_read(institution: Institution, profile: InstitutionProfile | None) -> InstitutionOnboardingRead:
+    base = InstitutionRead.model_validate(institution).model_dump()
+    extra = {}
+    if profile:
+        for field in institution_onboarding_service.PROFILE_FIELDS:
+            extra[field] = getattr(profile, field, None)
+        extra["application_status"] = profile.application_status
+        extra["submission_date"] = profile.submission_date
+        extra["approval_decision"] = profile.approval_decision
+        extra["approval_reason"] = profile.approval_reason
+        extra["activation_date"] = _date_text(profile.activation_date)
+        for key in ("incorporation_date", "licence_issue_date", "licence_expiry_date", "target_go_live_date"):
+            extra[key] = _date_text(extra.get(key))
+    return InstitutionOnboardingRead(**base, **extra)
+
+
+@router.get(
+    "/institutions/summary",
+    response_model=InstitutionSummaryRead,
+    tags=["Institutions"],
+    summary="FI directory charts for Super Admin",
+)
+def institution_summary(request: Request, db: Session = Depends(get_db)) -> InstitutionSummaryRead:
+    require_manage_institutions(request)
+    return InstitutionSummaryRead(**institution_onboarding_service.summarize_institutions(db))
+
+
+@router.post(
+    "/institutions/onboarding",
+    response_model=InstitutionOnboardingRead,
+    status_code=201,
+    tags=["Institutions"],
+    summary="Start FI KYC onboarding",
+)
+def start_institution_onboarding(
+    payload: InstitutionOnboardingWrite, request: Request, db: Session = Depends(get_db)
+) -> InstitutionOnboardingRead:
+    _require_onboard(request)
+    fields = payload.model_dump(exclude_unset=True)
+    name = fields.pop("legal_registered_name", None)
+    code = fields.pop("code", None)
+    try:
+        institution, profile = institution_onboarding_service.start_onboarding(
+            db,
+            legal_name=name or "",
+            code=code,
+            actor_id=getattr(request.state, "ops_user_id", None),
+            profile_fields=fields,
+        )
+        db.commit()
+        db.refresh(institution)
+        db.refresh(profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _onboarding_read(institution, profile)
+
+
+@router.get(
+    "/institutions/{institution_id}/onboarding",
+    response_model=InstitutionOnboardingRead,
+    tags=["Institutions"],
+    summary="Read FI KYC onboarding",
+)
+def get_institution_onboarding(
+    institution_id: str, request: Request, db: Session = Depends(get_db)
+) -> InstitutionOnboardingRead:
+    _require_onboard(request)
+    require_tenant_access(request, institution_id)
+    institution = db.get(Institution, institution_id)
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    profile = db.get(InstitutionProfile, institution_id)
+    return _onboarding_read(institution, profile)
+
+
+@router.patch(
+    "/institutions/{institution_id}/onboarding",
+    response_model=InstitutionOnboardingRead,
+    tags=["Institutions"],
+    summary="Save FI KYC draft",
+)
+def patch_institution_onboarding(
+    institution_id: str,
+    payload: InstitutionOnboardingWrite,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> InstitutionOnboardingRead:
+    _require_onboard(request)
+    require_tenant_access(request, institution_id)
+    institution = db.get(Institution, institution_id)
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    fields = payload.model_dump(exclude_unset=True)
+    name = fields.pop("legal_registered_name", None)
+    code = fields.pop("code", None)
+    try:
+        institution, profile = institution_onboarding_service.save_onboarding(
+            db,
+            institution,
+            legal_name=name,
+            code=code,
+            actor_id=getattr(request.state, "ops_user_id", None),
+            profile_fields=fields,
+        )
+        db.commit()
+        db.refresh(institution)
+        db.refresh(profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _onboarding_read(institution, profile)
+
+
+@router.post(
+    "/institutions/{institution_id}/onboarding/submit",
+    response_model=InstitutionOnboardingRead,
+    tags=["Institutions"],
+    summary="Submit FI KYC. Super Admin activates; BTI Ops waits for approval.",
+)
+def submit_institution_onboarding(
+    institution_id: str, request: Request, db: Session = Depends(get_db)
+) -> InstitutionOnboardingRead:
+    _require_onboard(request)
+    require_tenant_access(request, institution_id)
+    institution = db.get(Institution, institution_id)
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    role = get_request_role(request)
+    try:
+        institution, profile = institution_onboarding_service.submit_onboarding(
+            db,
+            institution,
+            actor_id=getattr(request.state, "ops_user_id", None),
+            role=role.value if role else None,
+        )
+        db.commit()
+        db.refresh(institution)
+        db.refresh(profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _onboarding_read(institution, profile)
+
+
+@router.post(
+    "/institutions/{institution_id}/onboarding/decide",
+    response_model=InstitutionOnboardingRead,
+    tags=["Institutions"],
+    summary="Super Admin approve, return, or reject a BTI Ops onboarding",
+)
+def decide_institution_onboarding(
+    institution_id: str,
+    payload: InstitutionOnboardingDecision,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> InstitutionOnboardingRead:
+    require_manage_institutions(request)
+    institution = db.get(Institution, institution_id)
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    try:
+        institution, profile = institution_onboarding_service.decide_onboarding(
+            db,
+            institution,
+            decision=payload.decision.strip().lower(),
+            reason=payload.reason,
+            actor_id=getattr(request.state, "ops_user_id", None),
+        )
+        db.commit()
+        db.refresh(institution)
+        db.refresh(profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _onboarding_read(institution, profile)
+
+
+@router.patch(
+    "/institutions/{institution_id}/lifecycle",
+    response_model=InstitutionRead,
+    tags=["Institutions"],
+    summary="Set Active, Dormant, or Deactivated",
+)
+def patch_institution_lifecycle(
+    institution_id: str,
+    payload: InstitutionLifecycleUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> InstitutionRead:
+    require_manage_institutions(request)
+    institution = db.get(Institution, institution_id)
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    try:
+        institution = institution_onboarding_service.set_lifecycle(
+            db,
+            institution,
+            status=payload.lifecycle_status.strip().lower(),
+            actor_id=getattr(request.state, "ops_user_id", None),
+        )
+        db.commit()
+        db.refresh(institution)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return institution
 
 

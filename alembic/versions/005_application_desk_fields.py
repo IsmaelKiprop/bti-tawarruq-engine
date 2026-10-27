@@ -5,7 +5,7 @@ import sqlalchemy as sa
 
 
 revision = "005_application_desk_fields"
-down_revision = "004_api_key_roles"
+down_revision = "004"
 branch_labels = None
 depends_on = None
 

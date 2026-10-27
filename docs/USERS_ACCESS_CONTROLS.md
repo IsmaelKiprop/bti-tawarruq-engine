@@ -4,7 +4,7 @@ Complete operator and engineer guide for the live identity, permission, maker-ch
 
 Companion stakeholder catalogue: [BTI_Tawarruq_Users_ver_001.docx](BTI_Tawarruq_Users_ver_001.docx) (regenerate with `python scripts/build_users_doc.py`). Production deploy and monitoring remain in [PRODUCTION_OPS.md](PRODUCTION_OPS.md).
 
-**Status:** implemented in `bti-tawarruq-engine` (Alembic `011`). Production VPS must pull, rebuild, and run `alembic upgrade head` (or restart SQLite so `init_db` adds the columns). Existing emails, including `admin@buruujfintech.com`, are never overwritten by seed.
+**Status:** implemented in `bti-tawarruq-engine` (Alembic `015` for FI KYC; `011` for controls). Production VPS must pull, rebuild, and run `alembic upgrade head` (or restart SQLite so `init_db` adds the columns). Existing emails, including `admin@buruujfintech.com`, are never overwritten by seed. Customer FI KYC: [FI_ONBOARDING.md](FI_ONBOARDING.md).
 
 ---
 
@@ -31,7 +31,7 @@ There is **one** identity and permission framework. The portal does not ship a s
 | Super Admin is not a trade desk | `platform_admin` has **no** `write_ops` and **no** `approve_txn` |
 | Maker-checker | `write_ops` queues Murabaha / liquidation / disbursement; `approve_txn` executes; initiator cannot self-approve |
 | Amount limits | `min(institution.approval_limit_amount, user.approval_limit_amount)` when both set |
-| Tenant suspend | `Institution.active = false` blocks writes (Super Admin may PATCH the institution) |
+| Tenant suspend | `lifecycle_status` not `active` (and `active = false`) blocks writes. Super Admin sets lifecycle on Manage |
 | Privileged MFA | Super Admin, BTI Ops, BTI Finance enroll TOTP; login requires the code after enroll |
 | Export by role | `export_data` on Shariah pack, audit CSV, billing CSV, recon CSV |
 | Exceptions are auditable | Kenya/Malaysia retries require `write_bti_ops` and write an audit row |
@@ -61,7 +61,7 @@ Engine codes are the stable API values. Product names are what the Users page sh
 
 | Product name | Engine role | Scope | Home page |
 |--------------|-------------|-------|-----------|
-| BTI Platform Super Admin | `platform_admin` | Platform | `/institutions` |
+| BTI Platform Super Admin | `platform_admin` | Platform | `/` (FI charts + onboard) |
 | BTI Tawarruq Operations | `bti_ops` | Platform | `/ops` |
 | BTI Finance / Billing | `bti_finance` | Platform | `/billing` |
 | FI Administrator | `institution_admin` | Own tenant | `/` |
@@ -93,11 +93,11 @@ FI API Client and Sedania stay technical identities, not portal invites. Super A
 |------------|---------|
 | `read` | View tenant-scoped records |
 | `write_ops` | Initiate and progress desks (queues checker steps when auth is on) |
-| `write_bti_ops` | Cross-tenant operational exceptions (failed-leg retry) |
+| `write_bti_ops` | Cross-tenant operational exceptions (failed-leg retry) and start / submit FI KYC (Super Admin must still approve) |
 | `approve_txn` | Approve or reject queued Murabaha / liquidation / disbursement |
 | `manage_credentials` | Portal users and webhooks. API key **create** is Super Admin only |
 | `manage_integrations` | Partner credential profiles |
-| `manage_institutions` | Tenant lifecycle, suspend, approval policy, fee bps |
+| `manage_institutions` | Tenant lifecycle, FI KYC activate / decide, suspend, approval policy, fee bps |
 | `manage_billing` | Generate / pay / list invoices |
 | `reconcile` | Scan and resolve settlement items |
 | `view_metrics` | Ops Monitor |
@@ -379,7 +379,9 @@ Nav is permission-based. Super Admin does **not** see every write desk.
 
 | Page | Permission / roles | Who |
 |------|-------------------|-----|
-| `/institutions` | `manage_institutions` | Super Admin |
+| `/` | session | Super Admin: FI charts + onboard. Other roles: uptime |
+| `/institutions/onboard` | `manage_institutions` or `write_bti_ops` | Super Admin, BTI Ops |
+| `/institutions` | `manage_institutions` or `write_bti_ops` | Super Admin, BTI Ops — directory. Manage stays Super Admin |
 | `/users` | `manage_credentials` | Super Admin, FI Admin |
 | `/integrations` | `manage_integrations` | Super Admin, FI Admin |
 | `/webhooks` | `manage_credentials` | Super Admin, FI Admin |
@@ -397,9 +399,11 @@ Nav is permission-based. Super Admin does **not** see every write desk.
 
 ## 13. Data model
 
-Alembic revision **`011_controls_billing_mfa`**. SQLite `init_db` also ALTERs missing columns.
+Alembic revision **`015_institution_kyc_profile`** (controls remain on `011`). SQLite `init_db` also ALTERs missing columns.
 
-**`institutions`:** `active`, `approval_steps`, `approval_limit_amount`, `billing_fee_bps`
+**`institutions`:** `active`, `lifecycle_status` (`draft` / `pending_approval` / `active` / `dormant` / `deactivated`), `approval_steps`, `approval_limit_amount`, `billing_fee_bps`
+
+**`institution_profiles`:** 1:1 KYC (identity, regulator, ownership JSON, representatives, settlement, commercial, workflow)
 
 **`ops_users`:** `approval_limit_amount`, `mfa_secret`, `mfa_enabled`
 
@@ -449,13 +453,14 @@ Re-seed anytime: `python -m tawarruq.cli seed-ops-users`. Existing emails are le
 
 ### First production day
 
-1. `alembic upgrade head` (must include `011`).
+1. `alembic upgrade head` (must include `015`). If `alembic_version` is missing, `alembic stamp 014` then upgrade.
 2. Confirm `AUTH_ENABLED=true` and a strong `OPS_SESSION_SECRET`.
 3. Sign in as Super Admin → change password → enroll TOTP at `/mfa-enroll`.
 4. Rotate seed passwords for BTI Ops, Finance, and the default FI users (or disable unused seeds).
-5. On each live FI: set `approval_steps`, `approval_limit_amount`, `billing_fee_bps`.
-6. Invite the FI Admin under **Users**. That FI Admin then invites FI Ops and FI Approver (and optional amount cap). Super Admin does not create FI desk staff.
-7. Super Admin issues an `api_client` key on **Webhooks** if the FI submits trades over API.
+5. **Onboard FI** for each customer institution (Super Admin activate, or BTI Ops submit then Super Admin approve). See [FI_ONBOARDING.md](FI_ONBOARDING.md).
+6. On each **Active** FI: set `approval_steps`, `approval_limit_amount`, `billing_fee_bps` on Manage.
+7. Invite the FI Admin under **Users** only after the FI is Active. That FI Admin then invites FI Ops and FI Approver (and optional amount cap). Super Admin does not create FI desk staff.
+8. Super Admin issues an `api_client` key on **Webhooks** if the FI submits trades over API.
 
 ### FI Ops runs a Kenya deal
 
@@ -466,7 +471,7 @@ Re-seed anytime: `python -m tawarruq.cli seed-ops-users`. Existing emails are le
 
 ### Suspend a tenant
 
-Institutions → uncheck active (or `PATCH { "active": false }`). Ops users bound to that institution cannot write. Super Admin unsuspends with the same PATCH.
+Institutions → Manage → set lifecycle to Dormant or Deactivated (`PATCH /institutions/{id}/lifecycle`). `active` stays false unless lifecycle is `active`. Ops users bound to that institution cannot write. Super Admin restores with lifecycle `active`.
 
 ### Month-end billing
 
@@ -483,12 +488,14 @@ Reconciler → **Scan trades vs settlement** → filter mismatch/outstanding →
 ```powershell
 cd bti-tawarruq-engine
 $env:PYTHONPATH="src"
-python -m pytest tests/test_controls.py tests/test_rbac.py tests/test_ops_login.py tests/test_invite_matrix.py tests/test_auth_scope.py tests/test_kenya_flow.py tests/test_api.py -q
+python -m pytest tests/test_institution_onboarding.py tests/test_controls.py tests/test_rbac.py tests/test_ops_login.py tests/test_invite_matrix.py tests/test_auth_scope.py tests/test_kenya_flow.py tests/test_api.py -q
 ```
 
 `tests/test_controls.py` covers: Super Admin cannot create applications; queue + self-approve blocked; amount cap; tenant suspend; billing + recon; BTI ops retry; TOTP round-trip.
 
 `tests/test_invite_matrix.py` and `tests/test_ops_login.py` cover who may invite whom: Super Admin may invite FI Admin but not FI Operations or FI Approver; FI Admin cannot invite BTI roles or create API keys; FI Ops cannot invite anyone.
+
+`tests/test_institution_onboarding.py` covers Super Admin activate + invite, BTI Ops pending then Super Admin approve, FI Admin cannot onboard other tenants, and incomplete KYC rejected on submit.
 
 Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it false so they execute immediately.
 
@@ -506,9 +513,10 @@ Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it 
 | TOTP | `src/tawarruq/services/totp_service.py` |
 | HTTP | `src/tawarruq/api/routes_controls.py`, `routes_ops.py`, `routes_extended.py` (API keys Super Admin only) |
 | OpenAPI / Swagger | `src/tawarruq/api/openapi_metadata.py` — invite rules and Super Admin key create |
-| Models | `src/tawarruq/models/controls.py`, `institution.py`, `ops_user.py` |
-| Migration | `alembic/versions/011_controls_billing_mfa.py` |
-| Portal | `portal/src/config/roles.ts`, `UsersPage`, `WebhooksPage`, `navigation.ts`, pages `ApprovalsPage`, `BillingPage`, `ReconciliationPage`, `MfaEnrollPage`, `LoginPage` |
+| Models | `src/tawarruq/models/controls.py`, `institution.py`, `institution_profile.py`, `ops_user.py` |
+| Migration | `alembic/versions/011_controls_billing_mfa.py`, `015_institution_kyc_profile.py` |
+| FI onboarding | `src/tawarruq/services/institution_onboarding_service.py`, `portal/src/pages/InstitutionOnboardPage.tsx` |
+| Portal | `portal/src/config/roles.ts`, `UsersPage`, `WebhooksPage`, `navigation.ts`, pages `DashboardPage`, `InstitutionsPage`, `ApprovalsPage`, `BillingPage`, `ReconciliationPage`, `MfaEnrollPage`, `LoginPage` |
 | Catalogue generator | `scripts/build_users_doc.py` |
 
 ---

@@ -10,6 +10,7 @@ import { ChangePasswordPage } from "./pages/ChangePasswordPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { InstitutionIntegrationsPage } from "./pages/InstitutionIntegrationsPage";
 import { InstitutionManagementPage } from "./pages/InstitutionManagementPage";
+import { InstitutionOnboardPage } from "./pages/InstitutionOnboardPage";
 import { InstitutionsPage } from "./pages/InstitutionsPage";
 import { KenyaFlowPage } from "./pages/KenyaFlowPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -91,8 +92,12 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="kenya" element={<KenyaFlowPage />} />
                 <Route path="repayments" element={<RepaymentsPage />} />
               </Route>
-              <Route element={<RequirePermission permission="manage_institutions" />}>
+              <Route element={<RequireAnyPermission permissions={["manage_institutions", "write_bti_ops"]} />}>
+                <Route path="institutions/onboard" element={<InstitutionOnboardPage />} />
+                <Route path="institutions/:institutionId/onboard" element={<InstitutionOnboardPage />} />
                 <Route path="institutions" element={<InstitutionsPage />} />
+              </Route>
+              <Route element={<RequirePermission permission="manage_institutions" />}>
                 <Route path="institutions/:institutionId" element={<InstitutionManagementPage />} />
               </Route>
               <Route element={<RequirePermission permission="manage_credentials" />}>

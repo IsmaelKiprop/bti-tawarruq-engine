@@ -74,8 +74,9 @@ export function SettingsPage() {
 
   const roleLinks = useMemo(() => {
     const links: { to: string; label: string; hint: string }[] = [];
-    if (user?.permissions.includes("manage_institutions") && !isOnprem()) {
-      links.push({ to: "/institutions", label: "Institutions", hint: "Tenant banks and SACCO onboarding" });
+    if ((user?.permissions.includes("manage_institutions") || user?.permissions.includes("write_bti_ops")) && !isOnprem()) {
+      links.push({ to: "/institutions/onboard", label: "Onboard FI", hint: "KYC wizard for a customer institution" });
+      links.push({ to: "/institutions", label: "Institutions", hint: "Customer institution directory" });
     }
     if (user?.permissions.includes("manage_credentials")) {
       links.push({ to: "/users", label: "Users & roles", hint: "Invite portal logins for your scope" });

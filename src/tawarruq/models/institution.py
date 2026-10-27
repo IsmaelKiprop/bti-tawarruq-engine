@@ -17,6 +17,7 @@ class Institution(Base):
     code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
     bsas_mode: Mapped[str] = mapped_column(String(32), default=TransactionMode.MANUAL_BRIDGE)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(String(32), default="active", nullable=False, index=True)
     approval_steps: Mapped[str] = mapped_column(
         String(256), default="murabaha,liquidation,disbursement", nullable=False
     )
