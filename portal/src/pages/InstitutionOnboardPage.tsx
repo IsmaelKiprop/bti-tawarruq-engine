@@ -15,7 +15,11 @@ import {
   WIZARD_STEPS,
   emptyFiKyc,
   formFromOnboarding,
+  isStepComplete,
+  maxReachableStep,
   payloadFromForm,
+  stepErrors,
+  wizardGated,
   type FiKycForm,
   type KycPerson,
 } from "../config/fiKyc";
@@ -26,15 +30,23 @@ const labelClass = "flex min-w-0 flex-col gap-1 text-xs uppercase tracking-wide 
 
 function Field({
   label,
+  required,
+  error,
   children,
 }: {
   label: string;
+  required?: boolean;
+  error?: string;
   children: ReactNode;
 }) {
   return (
-    <label className={labelClass}>
-      {label}
+    <label className={`${labelClass}${error ? " [&_input]:border-destructive [&_select]:border-destructive [&_textarea]:border-destructive" : ""}`}>
+      <span>
+        {label}
+        {required ? <span className="text-destructive"> *</span> : null}
+      </span>
       {children}
+      {error ? <span className="normal-case tracking-normal text-destructive">{error}</span> : null}
     </label>
   );
 }
@@ -43,10 +55,12 @@ function PeopleEditor({
   rows,
   onChange,
   nameLabel,
+  error,
 }: {
   rows: KycPerson[];
   onChange: (rows: KycPerson[]) => void;
   nameLabel: string;
+  error?: string;
 }) {
   return (
     <div className="grid gap-2">
@@ -85,6 +99,7 @@ function PeopleEditor({
       <button type="button" className="btn btn-secondary btn-sm w-fit" onClick={() => onChange([...rows, { name: "", title: "" }])}>
         Add
       </button>
+      {error ? <p className="m-0 text-xs normal-case text-destructive">{error}</p> : null}
     </div>
   );
 }
@@ -100,8 +115,11 @@ export function InstitutionOnboardPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [showErrors, setShowErrors] = useState(false);
 
   const set = (patch: Partial<FiKycForm>) => setForm((prev) => ({ ...prev, ...patch }));
+  const gating = wizardGated(record?.lifecycle_status);
+  const reachable = gating ? maxReachableStep(form) : WIZARD_STEPS.length - 1;
 
   useEffect(() => {
     if (!institutionId) return;
@@ -111,7 +129,10 @@ export function InstitutionOnboardPage() {
       .then((data) => {
         if (!alive) return;
         setRecord(data);
-        setForm(formFromOnboarding(data as unknown as Record<string, unknown>));
+        const loaded = formFromOnboarding(data as unknown as Record<string, unknown>);
+        setForm(loaded);
+        setStep(wizardGated(data.lifecycle_status) ? maxReachableStep(loaded) : WIZARD_STEPS.length - 1);
+        setShowErrors(false);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load onboarding"))
       .finally(() => {
@@ -134,11 +155,43 @@ export function InstitutionOnboardPage() {
     return created;
   }
 
-  async function onNext() {
+  function goToStep(index: number) {
+    if (index < 0 || index >= WIZARD_STEPS.length) return;
+    if (index > reachable) {
+      setShowErrors(true);
+      setError("Complete this page before moving ahead.");
+      return;
+    }
+    setShowErrors(false);
+    setError("");
+    setStep(index);
+  }
+
+  async function onSaveDraft() {
     setBusy(true);
     setError("");
     try {
       await persist();
+      setMessage("Draft saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save draft");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onNext() {
+    const currentId = WIZARD_STEPS[step].id;
+    if (gating && !isStepComplete(currentId, form)) {
+      setShowErrors(true);
+      setError("Complete the required fields on this page before continuing.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await persist();
+      setShowErrors(false);
       setStep((n) => Math.min(n + 1, WIZARD_STEPS.length - 1));
       setMessage("Draft saved.");
     } catch (err) {
@@ -149,6 +202,13 @@ export function InstitutionOnboardPage() {
   }
 
   async function onSubmit() {
+    const missing = WIZARD_STEPS.find((item) => item.id !== "review" && !isStepComplete(item.id, form));
+    if (missing) {
+      setStep(WIZARD_STEPS.findIndex((item) => item.id === missing.id));
+      setShowErrors(true);
+      setError("Complete the required fields before submitting.");
+      return;
+    }
     setBusy(true);
     setError("");
     setMessage("");
@@ -192,6 +252,8 @@ export function InstitutionOnboardPage() {
 
   const stepId = WIZARD_STEPS[step].id;
   const submitLabel = isSuperAdmin ? "Activate institution" : "Submit for Super Admin approval";
+  const errors = useMemo(() => (showErrors ? stepErrors(stepId, form) : {}), [showErrors, stepId, form]);
+  const currentComplete = isStepComplete(stepId, form);
 
   const reviewRows = useMemo(
     () => [
@@ -212,7 +274,7 @@ export function InstitutionOnboardPage() {
         <div>
           <h2 className="m-0 text-lg font-semibold">Onboard financial institution</h2>
           <p className="muted m-0 mt-1 text-sm">
-            BTI customer KYC. Each category is one page. Drafts can be incomplete.
+            Complete each page before Next. You cannot skip ahead. Save draft keeps incomplete work.
           </p>
         </div>
         <Link className="btn btn-secondary btn-sm" to="/institutions">
@@ -220,20 +282,42 @@ export function InstitutionOnboardPage() {
         </Link>
       </header>
 
-      <ol className="m-0 flex list-none flex-wrap gap-1.5 p-0">
-        {WIZARD_STEPS.map((item, index) => (
-          <li key={item.id}>
-            <button
-              type="button"
-              className={`rounded-sm border px-2 py-1 text-xs ${
-                index === step ? "border-foreground bg-surface-elevated text-foreground" : "border-border text-muted"
-              }`}
-              onClick={() => setStep(index)}
-            >
-              {index + 1}. {item.title}
-            </button>
-          </li>
-        ))}
+      <ol className="m-0 flex list-none items-start p-0">
+        {WIZARD_STEPS.map((item, index) => {
+          const done = index < reachable && isStepComplete(item.id, form);
+          const current = index === step;
+          const locked = index > reachable;
+          const state = current ? "current" : done ? "done" : locked ? "locked" : "open";
+          return (
+            <li key={item.id} className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  className={`grid size-7 shrink-0 place-items-center rounded-full border text-xs ${
+                    current || done
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : locked
+                        ? "border-border text-muted"
+                        : "border-primary bg-surface text-primary"
+                  }`}
+                  data-state={state}
+                  aria-current={current ? "step" : undefined}
+                  disabled={locked}
+                  title={locked ? "Complete earlier pages first" : item.title}
+                  onClick={() => goToStep(index)}
+                >
+                  {done && !current ? "✓" : index + 1}
+                </button>
+                {index < WIZARD_STEPS.length - 1 ? (
+                  <span className={`mx-1 h-px min-w-2 flex-1 ${index < reachable ? "bg-primary" : "bg-border"}`} />
+                ) : null}
+              </div>
+              <span className={`hidden pr-2 text-[0.65rem] uppercase tracking-wide sm:block ${current ? "text-foreground" : "text-muted"}`}>
+                {item.title}
+              </span>
+            </li>
+          );
+        })}
       </ol>
 
       {error ? <Alert tone="error">{error}</Alert> : null}
@@ -242,9 +326,10 @@ export function InstitutionOnboardPage() {
 
       {!loading ? (
         <section className="rounded-sm border border-border bg-surface p-3">
+          <h3 className="m-0 mb-3 text-base font-semibold">{WIZARD_STEPS[step].title}</h3>
           {stepId === "identity" ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Legal registered name">
+              <Field label="Legal registered name" required error={errors.legal_registered_name}>
                 <input className={fieldClass} value={form.legal_registered_name} onChange={(e) => set({ legal_registered_name: e.target.value })} />
               </Field>
               <Field label="Institution code">
@@ -253,7 +338,7 @@ export function InstitutionOnboardPage() {
               <Field label="Trading name">
                 <input className={fieldClass} value={form.trading_name} onChange={(e) => set({ trading_name: e.target.value })} />
               </Field>
-              <Field label="Institution type">
+              <Field label="Institution type" required error={errors.institution_type}>
                 <select className={fieldClass} value={form.institution_type} onChange={(e) => set({ institution_type: e.target.value })}>
                   {INSTITUTION_TYPES.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -263,21 +348,21 @@ export function InstitutionOnboardPage() {
                 </select>
               </Field>
               {form.institution_type === "OTHER" ? (
-                <Field label="Other type">
+                <Field label="Other type" required error={errors.other_institution_type}>
                   <input className={fieldClass} value={form.other_institution_type} onChange={(e) => set({ other_institution_type: e.target.value })} />
                 </Field>
               ) : null}
-              <Field label="Registration number">
+              <Field label="Registration number" error={errors.registration_number}>
                 <input className={fieldClass} value={form.registration_number} onChange={(e) => set({ registration_number: e.target.value })} />
               </Field>
               <Field label="Incorporation date">
                 <input className={fieldClass} type="date" value={form.incorporation_date} onChange={(e) => set({ incorporation_date: e.target.value })} />
               </Field>
-              <Field label="Incorporation country">
+              <Field label="Incorporation country" error={errors.incorporation_country}>
                 <input className={fieldClass} value={form.incorporation_country} maxLength={2} onChange={(e) => set({ incorporation_country: e.target.value.toUpperCase() })} />
               </Field>
-              <Field label="KRA PIN">
-                <input className={fieldClass} value={form.kra_pin} onChange={(e) => set({ kra_pin: e.target.value.toUpperCase() })} />
+              <Field label="KRA PIN" error={errors.kra_pin}>
+                <input className={fieldClass} value={form.kra_pin} onChange={(e) => set({ kra_pin: e.target.value.toUpperCase() })} placeholder="A123456789Z" />
               </Field>
               <Field label="Registered address">
                 <input className={fieldClass} value={form.registered_address_line1} onChange={(e) => set({ registered_address_line1: e.target.value })} />
@@ -294,14 +379,14 @@ export function InstitutionOnboardPage() {
               <Field label="Physical address">
                 <input className={fieldClass} value={form.physical_address} onChange={(e) => set({ physical_address: e.target.value })} />
               </Field>
-              <Field label="Website">
-                <input className={fieldClass} value={form.website_url} onChange={(e) => set({ website_url: e.target.value })} />
+              <Field label="Website" error={errors.website_url}>
+                <input className={fieldClass} value={form.website_url} onChange={(e) => set({ website_url: e.target.value })} placeholder="https://" />
               </Field>
-              <Field label="Support email">
+              <Field label="Support email" required error={errors.support_email}>
                 <input className={fieldClass} type="email" value={form.support_email} onChange={(e) => set({ support_email: e.target.value })} />
               </Field>
-              <Field label="Main telephone">
-                <input className={fieldClass} value={form.main_telephone} onChange={(e) => set({ main_telephone: e.target.value })} />
+              <Field label="Main telephone" required error={errors.main_telephone}>
+                <input className={fieldClass} value={form.main_telephone} onChange={(e) => set({ main_telephone: e.target.value })} placeholder="+2547..." />
               </Field>
               <label className={`${labelClass} sm:col-span-2`}>
                 Business description
@@ -312,7 +397,7 @@ export function InstitutionOnboardPage() {
 
           {stepId === "regulatory" ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Primary regulator">
+              <Field label="Primary regulator" required error={errors.primary_regulator}>
                 <select className={fieldClass} value={form.primary_regulator} onChange={(e) => set({ primary_regulator: e.target.value })}>
                   {REGULATORS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -322,20 +407,20 @@ export function InstitutionOnboardPage() {
                 </select>
               </Field>
               {form.primary_regulator === "OTHER" ? (
-                <Field label="Regulator name">
+                <Field label="Regulator name" required error={errors.regulator_other_name}>
                   <input className={fieldClass} value={form.regulator_other_name} onChange={(e) => set({ regulator_other_name: e.target.value })} />
                 </Field>
               ) : null}
-              <Field label="Licence number">
+              <Field label="Licence number" required error={errors.licence_number}>
                 <input className={fieldClass} value={form.licence_number} onChange={(e) => set({ licence_number: e.target.value })} />
               </Field>
-              <Field label="Licence issue date">
+              <Field label="Licence issue date" required error={errors.licence_issue_date}>
                 <input className={fieldClass} type="date" value={form.licence_issue_date} onChange={(e) => set({ licence_issue_date: e.target.value })} />
               </Field>
               <Field label="Licence expiry date">
                 <input className={fieldClass} type="date" value={form.licence_expiry_date} onChange={(e) => set({ licence_expiry_date: e.target.value })} />
               </Field>
-              <Field label="Licence status">
+              <Field label="Licence status" required error={errors.licence_status}>
                 <select className={fieldClass} value={form.licence_status} onChange={(e) => set({ licence_status: e.target.value })}>
                   {LICENCE_STATUSES.map((opt) => (
                     <option key={opt} value={opt}>
@@ -344,8 +429,8 @@ export function InstitutionOnboardPage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Regulator register URL">
-                <input className={fieldClass} value={form.regulator_register_url} onChange={(e) => set({ regulator_register_url: e.target.value })} />
+              <Field label="Regulator register URL" error={errors.regulator_register_url}>
+                <input className={fieldClass} value={form.regulator_register_url} onChange={(e) => set({ regulator_register_url: e.target.value })} placeholder="https://" />
               </Field>
             </div>
           ) : null}
@@ -362,24 +447,24 @@ export function InstitutionOnboardPage() {
                 <Field label="Related entities">
                   <input className={fieldClass} value={form.related_entities} onChange={(e) => set({ related_entities: e.target.value })} placeholder="Comma separated" />
                 </Field>
-                <Field label="Ownership percentage">
+                <Field label="Ownership percentage" error={errors.ownership_percentage}>
                   <input className={fieldClass} value={form.ownership_percentage} onChange={(e) => set({ ownership_percentage: e.target.value })} />
                 </Field>
-                <Field label="CEO / managing director">
+                <Field label="CEO / managing director" required error={errors.ceo_managing_director_name}>
                   <input className={fieldClass} value={form.ceo_managing_director_name} onChange={(e) => set({ ceo_managing_director_name: e.target.value })} />
                 </Field>
               </div>
               <div>
-                <p className="m-0 mb-2 text-xs uppercase tracking-wide text-muted">Shareholders</p>
-                <PeopleEditor rows={form.owners_and_shareholders} onChange={(rows) => set({ owners_and_shareholders: rows })} nameLabel="Shareholder" />
+                <p className="m-0 mb-2 text-xs uppercase tracking-wide text-muted">Shareholders *</p>
+                <PeopleEditor rows={form.owners_and_shareholders} onChange={(rows) => set({ owners_and_shareholders: rows })} nameLabel="Shareholder" error={errors.owners_and_shareholders} />
               </div>
               <div>
-                <p className="m-0 mb-2 text-xs uppercase tracking-wide text-muted">Ultimate beneficial owners</p>
-                <PeopleEditor rows={form.ubo_details} onChange={(rows) => set({ ubo_details: rows })} nameLabel="UBO" />
+                <p className="m-0 mb-2 text-xs uppercase tracking-wide text-muted">Ultimate beneficial owners *</p>
+                <PeopleEditor rows={form.ubo_details} onChange={(rows) => set({ ubo_details: rows })} nameLabel="UBO" error={errors.ubo_details} />
               </div>
               <div>
-                <p className="m-0 mb-2 text-xs uppercase tracking-wide text-muted">Board</p>
-                <PeopleEditor rows={form.directors_board_members} onChange={(rows) => set({ directors_board_members: rows })} nameLabel="Director" />
+                <p className="m-0 mb-2 text-xs uppercase tracking-wide text-muted">Board *</p>
+                <PeopleEditor rows={form.directors_board_members} onChange={(rows) => set({ directors_board_members: rows })} nameLabel="Director" error={errors.directors_board_members} />
               </div>
               <div>
                 <p className="m-0 mb-2 text-xs uppercase tracking-wide text-muted">Senior management</p>
@@ -404,25 +489,25 @@ export function InstitutionOnboardPage() {
           {stepId === "representatives" ? (
             <div className="grid gap-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Primary contact name">
+                <Field label="Primary contact name" required error={errors.primary_contact_full_name}>
                   <input className={fieldClass} value={form.primary_contact_full_name} onChange={(e) => set({ primary_contact_full_name: e.target.value })} />
                 </Field>
-                <Field label="Title">
+                <Field label="Title" required error={errors.primary_contact_title}>
                   <input className={fieldClass} value={form.primary_contact_title} onChange={(e) => set({ primary_contact_title: e.target.value })} />
                 </Field>
-                <Field label="Work email">
+                <Field label="Work email" required error={errors.primary_contact_work_email}>
                   <input className={fieldClass} type="email" value={form.primary_contact_work_email} onChange={(e) => set({ primary_contact_work_email: e.target.value })} />
                 </Field>
-                <Field label="Phone">
-                  <input className={fieldClass} value={form.primary_contact_phone} onChange={(e) => set({ primary_contact_phone: e.target.value })} />
+                <Field label="Phone" required error={errors.primary_contact_phone}>
+                  <input className={fieldClass} value={form.primary_contact_phone} onChange={(e) => set({ primary_contact_phone: e.target.value })} placeholder="+2547..." />
                 </Field>
                 <Field label="Compliance officer">
                   <input className={fieldClass} value={form.compliance_officer_name} onChange={(e) => set({ compliance_officer_name: e.target.value })} />
                 </Field>
-                <Field label="Compliance email">
+                <Field label="Compliance email" error={errors.compliance_officer_email}>
                   <input className={fieldClass} type="email" value={form.compliance_officer_email} onChange={(e) => set({ compliance_officer_email: e.target.value })} />
                 </Field>
-                <Field label="ID type">
+                <Field label="ID type" required error={errors.representative_id_type}>
                   <select className={fieldClass} value={form.representative_id_type} onChange={(e) => set({ representative_id_type: e.target.value })}>
                     {ID_TYPES.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -431,10 +516,10 @@ export function InstitutionOnboardPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="ID number">
+                <Field label="ID number" required error={errors.representative_id_number}>
                   <input className={fieldClass} value={form.representative_id_number} onChange={(e) => set({ representative_id_number: e.target.value })} />
                 </Field>
-                <Field label="Identity verification">
+                <Field label="Identity verification" required error={errors.representative_identity_verification_status}>
                   <select className={fieldClass} value={form.representative_identity_verification_status} onChange={(e) => set({ representative_identity_verification_status: e.target.value })}>
                     {VERIFY_STATUSES.map((opt) => (
                       <option key={opt} value={opt}>
@@ -443,35 +528,35 @@ export function InstitutionOnboardPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Authority to act (document reference)">
+                <Field label="Authority to act (document reference)" required error={errors.authority_to_act_document_id}>
                   <input className={fieldClass} value={form.authority_to_act_document_id} onChange={(e) => set({ authority_to_act_document_id: e.target.value })} />
                 </Field>
               </div>
               <div>
-                <p className="m-0 mb-2 text-xs uppercase tracking-wide text-muted">Authorized signatories</p>
-                <PeopleEditor rows={form.authorized_signatories} onChange={(rows) => set({ authorized_signatories: rows })} nameLabel="Signatory" />
+                <p className="m-0 mb-2 text-xs uppercase tracking-wide text-muted">Authorized signatories *</p>
+                <PeopleEditor rows={form.authorized_signatories} onChange={(rows) => set({ authorized_signatories: rows })} nameLabel="Signatory" error={errors.authorized_signatories} />
               </div>
             </div>
           ) : null}
 
           {stepId === "settlement" ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Settlement bank">
+              <Field label="Settlement bank" required error={errors.settlement_bank_name}>
                 <input className={fieldClass} value={form.settlement_bank_name} onChange={(e) => set({ settlement_bank_name: e.target.value })} />
               </Field>
-              <Field label="Account name">
+              <Field label="Account name" required error={errors.settlement_account_name}>
                 <input className={fieldClass} value={form.settlement_account_name} onChange={(e) => set({ settlement_account_name: e.target.value })} />
               </Field>
               <Field label="Branch">
                 <input className={fieldClass} value={form.settlement_branch} onChange={(e) => set({ settlement_branch: e.target.value })} />
               </Field>
-              <Field label="Account number">
+              <Field label="Account number" required error={errors.settlement_account_number}>
                 <input className={fieldClass} value={form.settlement_account_number} onChange={(e) => set({ settlement_account_number: e.target.value })} />
               </Field>
-              <Field label="Currency">
+              <Field label="Currency" required error={errors.settlement_currency}>
                 <input className={fieldClass} value={form.settlement_currency} maxLength={3} onChange={(e) => set({ settlement_currency: e.target.value.toUpperCase() })} />
               </Field>
-              <Field label="Verification status">
+              <Field label="Verification status" required error={errors.settlement_account_verification_status}>
                 <select className={fieldClass} value={form.settlement_account_verification_status} onChange={(e) => set({ settlement_account_verification_status: e.target.value })}>
                   {SETTLEMENT_VERIFY.map((opt) => (
                     <option key={opt} value={opt}>
@@ -488,22 +573,22 @@ export function InstitutionOnboardPage() {
 
           {stepId === "commercial" ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Expected monthly count">
+              <Field label="Expected monthly count" required error={errors.expected_monthly_transaction_count}>
                 <input className={fieldClass} value={form.expected_monthly_transaction_count} onChange={(e) => set({ expected_monthly_transaction_count: e.target.value })} />
               </Field>
-              <Field label="Expected monthly value">
+              <Field label="Expected monthly value" required error={errors.expected_monthly_transaction_value}>
                 <input className={fieldClass} value={form.expected_monthly_transaction_value} onChange={(e) => set({ expected_monthly_transaction_value: e.target.value })} />
               </Field>
-              <Field label="Typical transaction amount">
+              <Field label="Typical transaction amount" required error={errors.typical_transaction_amount}>
                 <input className={fieldClass} value={form.typical_transaction_amount} onChange={(e) => set({ typical_transaction_amount: e.target.value })} />
               </Field>
-              <Field label="Maximum transaction amount">
+              <Field label="Maximum transaction amount" required error={errors.maximum_transaction_amount}>
                 <input className={fieldClass} value={form.maximum_transaction_amount} onChange={(e) => set({ maximum_transaction_amount: e.target.value })} />
               </Field>
-              <Field label="Target go-live">
+              <Field label="Target go-live" required error={errors.target_go_live_date}>
                 <input className={fieldClass} type="date" value={form.target_go_live_date} onChange={(e) => set({ target_go_live_date: e.target.value })} />
               </Field>
-              <Field label="Commercial agreement">
+              <Field label="Commercial agreement" required error={errors.commercial_agreement_status}>
                 <select className={fieldClass} value={form.commercial_agreement_status} onChange={(e) => set({ commercial_agreement_status: e.target.value })}>
                   {AGREEMENT_STATUSES.map((opt) => (
                     <option key={opt} value={opt}>
@@ -515,7 +600,7 @@ export function InstitutionOnboardPage() {
               <Field label="Pricing schedule reference">
                 <input className={fieldClass} value={form.pricing_schedule_reference} onChange={(e) => set({ pricing_schedule_reference: e.target.value })} />
               </Field>
-              <Field label="Dispute contact email">
+              <Field label="Dispute contact email" error={errors.dispute_contact_email}>
                 <input className={fieldClass} type="email" value={form.dispute_contact_email} onChange={(e) => set({ dispute_contact_email: e.target.value })} />
               </Field>
             </div>
@@ -549,13 +634,22 @@ export function InstitutionOnboardPage() {
             </div>
           ) : null}
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" className="btn btn-secondary" disabled={step === 0 || busy} onClick={() => setStep((n) => n - 1)}>
-              Back
+          <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+            {gating && step < WIZARD_STEPS.length - 1 && !currentComplete ? (
+              <p className="m-0 text-sm text-muted">Fill required fields marked * to continue.</p>
+            ) : null}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+            <button type="button" className="btn btn-secondary" disabled={step === 0 || busy} onClick={() => goToStep(step - 1)}>
+              Previous
             </button>
+            {gating ? (
+              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void onSaveDraft()}>
+                {busy ? "Saving…" : "Save draft"}
+              </button>
+            ) : null}
             {step < WIZARD_STEPS.length - 1 ? (
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onNext()}>
-                {busy ? "Saving…" : "Save and continue"}
+                {busy ? "Saving…" : "Next"}
               </button>
             ) : record?.lifecycle_status === "pending_approval" && isSuperAdmin ? (
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void onDecide("approve")}>
@@ -574,6 +668,7 @@ export function InstitutionOnboardPage() {
                 {busy ? "Submitting…" : submitLabel}
               </button>
             )}
+            </div>
           </div>
         </section>
       ) : null}

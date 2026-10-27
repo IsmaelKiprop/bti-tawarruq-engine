@@ -75,6 +75,32 @@ export const WIZARD_STEPS = [
   { id: "review", title: "Review" },
 ] as const;
 
+export type WizardStepId = (typeof WIZARD_STEPS)[number]["id"];
+
+const EMAIL = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+const PHONE = /^\+[1-9]\d{7,14}$/;
+const NAME = /^[\p{L}\p{N}_][\p{L}\p{N}_\s.,'’&()/\\-]{1,198}$/u;
+const CONTACT = /^[\p{L}\p{N}_][\p{L}\p{N}_\s.'-]{1,149}$/u;
+const KRA = /^[A-Z]\d{9}[A-Z]$/;
+const COUNTRY = /^[A-Z]{2}$/;
+const CURRENCY = /^[A-Z]{3}$/;
+const URL = /^https?:\/\/[^\s/$.?#].[^\s]*$/;
+const REG_NO = /^[A-Za-z0-9][A-Za-z0-9./-]{1,49}$/;
+const LICENCE = /^[A-Za-z0-9./ -]{2,80}$/;
+const ACCOUNT = /^[A-Za-z0-9-]{4,34}$/;
+const ID_NO = /^[A-Za-z0-9/-]{3,40}$/;
+const COUNT = /^(0|[1-9]\d{0,8})$/;
+const MONEY = /^\d{1,15}(\.\d{1,2})?$/;
+const PCT = /^(100(\.0+)?|[0-9]{1,2}(\.[0-9]{1,4})?)$/;
+
+function text(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+function namedPeople(rows: KycPerson[]): boolean {
+  return rows.some((row) => row.name.trim());
+}
+
 export type KycPerson = { name: string; title?: string; notes?: string };
 
 export type FiKycForm = {
@@ -280,4 +306,96 @@ export function lifecycleLabel(status?: string | null, active?: boolean) {
 
 export function isActiveInstitution(item: { lifecycle_status?: string | null; active?: boolean }) {
   return (item.lifecycle_status || (item.active === false ? "deactivated" : "active")) === "active";
+}
+
+export function stepErrors(stepId: WizardStepId, form: FiKycForm): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const requireField = (key: keyof FiKycForm, label: string, pattern?: RegExp, invalid = `${label} is not valid`) => {
+    const value = text(form[key]);
+    if (!value) errors[key] = `${label} is required`;
+    else if (pattern && !pattern.test(value)) errors[key] = invalid;
+  };
+  const optionalFormat = (key: keyof FiKycForm, label: string, pattern: RegExp) => {
+    const value = text(form[key]);
+    if (value && !pattern.test(value)) errors[key] = `${label} is not valid`;
+  };
+
+  if (stepId === "identity") {
+    requireField("legal_registered_name", "Legal registered name", NAME);
+    requireField("institution_type", "Institution type");
+    if (form.institution_type === "OTHER") requireField("other_institution_type", "Other type");
+    requireField("support_email", "Support email", EMAIL);
+    requireField("main_telephone", "Main telephone", PHONE, "Use international format, for example +2547...");
+    optionalFormat("registration_number", "Registration number", REG_NO);
+    optionalFormat("incorporation_country", "Incorporation country", COUNTRY);
+    optionalFormat("kra_pin", "KRA PIN", KRA);
+    optionalFormat("website_url", "Website", URL);
+  }
+
+  if (stepId === "regulatory") {
+    requireField("primary_regulator", "Primary regulator");
+    if (form.primary_regulator === "OTHER") requireField("regulator_other_name", "Regulator name");
+    requireField("licence_number", "Licence number", LICENCE);
+    requireField("licence_issue_date", "Licence issue date");
+    requireField("licence_status", "Licence status");
+    optionalFormat("regulator_register_url", "Regulator register URL", URL);
+  }
+
+  if (stepId === "ownership") {
+    if (!namedPeople(form.owners_and_shareholders)) errors.owners_and_shareholders = "Add at least one shareholder";
+    if (!namedPeople(form.ubo_details)) errors.ubo_details = "Add at least one ultimate beneficial owner";
+    if (!namedPeople(form.directors_board_members)) errors.directors_board_members = "Add at least one board member";
+    requireField("ceo_managing_director_name", "CEO / managing director", CONTACT);
+    optionalFormat("ownership_percentage", "Ownership percentage", PCT);
+  }
+
+  if (stepId === "representatives") {
+    requireField("primary_contact_full_name", "Primary contact name", CONTACT);
+    requireField("primary_contact_title", "Title");
+    requireField("primary_contact_work_email", "Work email", EMAIL);
+    requireField("primary_contact_phone", "Phone", PHONE, "Use international format, for example +2547...");
+    optionalFormat("compliance_officer_email", "Compliance email", EMAIL);
+    if (!namedPeople(form.authorized_signatories)) errors.authorized_signatories = "Add at least one authorized signatory";
+    requireField("representative_id_type", "ID type");
+    requireField("representative_id_number", "ID number", ID_NO);
+    requireField("representative_identity_verification_status", "Identity verification");
+    requireField("authority_to_act_document_id", "Authority to act document reference");
+  }
+
+  if (stepId === "settlement") {
+    requireField("settlement_bank_name", "Settlement bank");
+    requireField("settlement_account_name", "Account name");
+    requireField("settlement_account_number", "Account number", ACCOUNT);
+    requireField("settlement_currency", "Currency", CURRENCY);
+    requireField("settlement_account_verification_status", "Verification status");
+  }
+
+  if (stepId === "commercial") {
+    requireField("expected_monthly_transaction_count", "Expected monthly count", COUNT);
+    requireField("expected_monthly_transaction_value", "Expected monthly value", MONEY);
+    requireField("typical_transaction_amount", "Typical transaction amount", MONEY);
+    requireField("maximum_transaction_amount", "Maximum transaction amount", MONEY);
+    requireField("target_go_live_date", "Target go-live");
+    requireField("commercial_agreement_status", "Commercial agreement");
+    optionalFormat("dispute_contact_email", "Dispute contact email", EMAIL);
+  }
+
+  return errors;
+}
+
+export function isStepComplete(stepId: WizardStepId, form: FiKycForm): boolean {
+  if (stepId === "review") return true;
+  return Object.keys(stepErrors(stepId, form)).length === 0;
+}
+
+export function maxReachableStep(form: FiKycForm): number {
+  for (let i = 0; i < WIZARD_STEPS.length; i += 1) {
+    const id = WIZARD_STEPS[i].id;
+    if (id === "review" || !isStepComplete(id, form)) return i;
+  }
+  return WIZARD_STEPS.length - 1;
+}
+
+export function wizardGated(lifecycle?: string | null): boolean {
+  return !lifecycle || lifecycle === "draft";
 }

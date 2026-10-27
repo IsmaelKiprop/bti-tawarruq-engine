@@ -42,7 +42,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
     dealTitle: "How you use it",
     dealSteps: [
       "Complete Identity, Regulatory, Ownership, Representatives, Settlement, then Commercial.",
-      "Save drafts at any time. Mandatory fields are checked only when you submit.",
+      "Next is blocked until the current page is complete. You cannot skip ahead. Save draft keeps incomplete work.",
       "Super Admin: Activate institution. BTI Ops: Submit for Super Admin approval.",
     ],
     note: "Document fields take a reference (filename or ticket id) in this slice. File upload comes later.",
@@ -281,8 +281,8 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
     title: "How FI onboarding works",
     intro: "One KYC category per page. Super Admin activate is immediate. BTI Ops waits for Super Admin.",
     steps: [
-      { n: 1, title: "Capture KYC", body: "Identity through Commercial. Drafts can be incomplete." },
-      { n: 2, title: "Submit", body: "Mandatory fields and formats are checked here." },
+      { n: 1, title: "Capture KYC", body: "Identity through Commercial. Next is blocked until the page is complete." },
+      { n: 2, title: "Submit", body: "Review, then Super Admin activates or BTI Ops submits for approval." },
       { n: 3, title: "Activate or wait", body: "Super Admin goes live now. BTI Ops waits for approve." },
     ],
   },

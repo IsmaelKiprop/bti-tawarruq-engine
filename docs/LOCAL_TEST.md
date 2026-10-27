@@ -125,7 +125,7 @@ Who may invite whom: [USERS_ACCESS_CONTROLS.md](USERS_ACCESS_CONTROLS.md).
 Compose portal: http://127.0.0.1:15173. Full field list and APIs: [FI_ONBOARDING.md](FI_ONBOARDING.md).
 
 1. Super Admin signs in. Dashboard shows FI charts and **Onboard financial institution**.
-2. Complete the seven KYC pages (Identity through Review). Drafts can be incomplete. Submit as Super Admin to **Activate institution**.
+2. Complete the seven KYC pages in order (Identity through Review). Next stays blocked until the current page’s required fields are filled. Submit as Super Admin to **Activate institution**.
 3. Repeat for a second type (for example SACCO) and confirm the dashboard pies and monthly bar update.
 4. Institutions is a directory: search, lifecycle filter, Resume KYC, Manage for engine settings. There is no 4-field register form.
 5. Users: invite FI Admin only for an Active FI.

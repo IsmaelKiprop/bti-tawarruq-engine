@@ -30,11 +30,11 @@ Tester-shell nav: Dashboard, Onboard FI, Institutions, Users, Settings, then Ops
 | Manage | `/institutions/:id` | Engine settings only |
 | Users | `/users` | Invite FI Admin. The institution dropdown lists **Active** FIs only. |
 
-Super Admin home is Dashboard. Super Admin CTA on Review: **Activate institution**. BTI Ops CTA: **Submit for Super Admin approval**.
+Super Admin home is Dashboard. Super Admin CTA on Review: **Activate institution**. BTI Ops CTA: **Submit for Super Admin approval**. Wizard CTAs: **Previous**, **Save draft**, **Next**.
 
 ### Wizard pages
 
-One KYC category per page. Drafts can be incomplete. Mandatory fields and formats are checked **on submit**, not on every save.
+One KYC category per page. **Next** is blocked until that page’s required fields are valid. You cannot skip ahead by clicking later steps. **Save draft** still stores incomplete work. Final submit re-checks the same rules.
 
 1. **Identity** — legal name (writes `institutions.name`), code (auto from name, editable), type, support email, main telephone, address, KRA PIN, website.
 2. **Regulatory** — primary regulator, licence number, issue / expiry, licence status, register URL.
