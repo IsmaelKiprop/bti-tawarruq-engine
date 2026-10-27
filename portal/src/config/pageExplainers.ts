@@ -34,6 +34,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Onboard a customer financial institution first if the book is empty.",
       "Read type and regulator charts, monthly onboarding, and Active / Dormant / Deactivated counts.",
       "Invite FI Admin only after the institution is Active.",
+      "API client requests from FI Admin appear on Dashboard. Issue the key there and copy it once.",
     ],
   },
   "/institutions/onboard": {

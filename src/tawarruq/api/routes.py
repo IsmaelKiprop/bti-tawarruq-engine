@@ -12,7 +12,7 @@ from tawarruq.api.deps import (
 )
 from tawarruq.services.rbac import get_request_role, has_permission
 from tawarruq.database import get_db
-from tawarruq.enums import AuditActor, LegNumber, TransactionMode
+from tawarruq.enums import ApiKeyRole, AuditActor, LegNumber, TransactionMode
 from tawarruq.models.audit import AuditEvent
 from tawarruq.models.application import FinancingApplication
 from tawarruq.models.customer import Customer
@@ -28,6 +28,7 @@ from tawarruq.schemas import (
     ErrorResponse,
     InstitutionCreate,
     InstitutionLifecycleUpdate,
+    ApiClientRequestListItem,
     InstitutionOnboardingDecision,
     InstitutionOnboardingRead,
     InstitutionOnboardingWrite,
@@ -177,6 +178,48 @@ def _onboarding_read(institution: Institution, profile: InstitutionProfile | Non
 def institution_summary(request: Request, db: Session = Depends(get_db)) -> InstitutionSummaryRead:
     require_manage_institutions(request)
     return InstitutionSummaryRead(**institution_onboarding_service.summarize_institutions(db))
+
+
+@router.get(
+    "/institutions/api-client-requests",
+    response_model=list[ApiClientRequestListItem],
+    tags=["Institutions"],
+    summary="Pending API client requests for Super Admin",
+)
+def list_api_client_requests(request: Request, db: Session = Depends(get_db)) -> list[ApiClientRequestListItem]:
+    require_manage_institutions(request)
+    from tawarruq.services.auth_service import list_api_keys
+
+    events = (
+        db.query(AuditEvent)
+        .filter(AuditEvent.action == "institution.api_client.requested")
+        .order_by(AuditEvent.timestamp.desc())
+        .all()
+    )
+    seen: set[str] = set()
+    items: list[ApiClientRequestListItem] = []
+    for event in events:
+        if event.entity_id in seen:
+            continue
+        seen.add(event.entity_id)
+        institution = db.get(Institution, event.entity_id)
+        if not institution:
+            continue
+        keys = [key for key in list_api_keys(db, institution.id) if key.role == ApiKeyRole.API_CLIENT.value]
+        if keys:
+            continue
+        items.append(
+            ApiClientRequestListItem(
+                institution_id=institution.id,
+                name=institution.name,
+                code=institution.code,
+                status="requested",
+                message="FI Admin requested an API client key.",
+                requested_at=event.timestamp,
+                key_count=0,
+            )
+        )
+    return items
 
 
 @router.post(

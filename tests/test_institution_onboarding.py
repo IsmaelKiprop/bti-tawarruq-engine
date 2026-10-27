@@ -233,4 +233,7 @@ def test_fi_admin_can_request_api_client_on_active_fi(client, monkeypatch):
     again = client.post(f"/api/v1/institutions/{mine}/api-keys/request", headers=fi_headers)
     assert again.status_code == 200
     assert again.json()["status"] == "requested"
+    queued = client.get("/api/v1/institutions/api-client-requests", headers=admin_headers)
+    assert queued.status_code == 200, queued.text
+    assert any(row["institution_id"] == mine for row in queued.json())
     get_settings.cache_clear()

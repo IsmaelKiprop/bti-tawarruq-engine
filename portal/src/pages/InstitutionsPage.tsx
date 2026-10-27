@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type Institution } from "../api/client";
+import { api, type ApiClientRequestItem, type Institution } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { IconManage } from "../components/icons";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
@@ -23,6 +23,9 @@ export function InstitutionsPage() {
     canManage || user?.role === "bti_ops" || Boolean(user?.permissions.includes("write_bti_ops"));
 
   const [institutions, setInstitutions] = useState<Institution[]>([]);
+  const [apiRequests, setApiRequests] = useState<ApiClientRequestItem[]>([]);
+  const [issuedKey, setIssuedKey] = useState("");
+  const [issuedHmac, setIssuedHmac] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -34,7 +37,12 @@ export function InstitutionsPage() {
     setLoading(true);
     setError("");
     try {
-      setInstitutions(await api.listInstitutions());
+      const [books, requests] = await Promise.all([
+        api.listInstitutions(),
+        canManage ? api.listApiClientRequests().catch(() => [] as ApiClientRequestItem[]) : Promise.resolve([] as ApiClientRequestItem[]),
+      ]);
+      setInstitutions(books);
+      setApiRequests(requests);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load institutions");
     } finally {
@@ -46,6 +54,8 @@ export function InstitutionsPage() {
     void load();
   }, []);
 
+  const requestedIds = useMemo(() => new Set(apiRequests.map((row) => row.institution_id)), [apiRequests]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return institutions.filter((item) => {
@@ -55,6 +65,25 @@ export function InstitutionsPage() {
       return [item.name, item.code, status, item.bsas_mode].filter(Boolean).join(" ").toLowerCase().includes(q);
     });
   }, [institutions, query, lifecycle]);
+
+  async function onIssueKey(item: Institution) {
+    setBusyId(item.id);
+    setError("");
+    setMessage("");
+    setIssuedKey("");
+    setIssuedHmac("");
+    try {
+      const created = await api.createApiKey(item.id, `${item.code}-api-client`, "api_client");
+      setIssuedKey(created.api_key);
+      setIssuedHmac(created.hmac_secret || "");
+      setMessage(`API client issued for ${item.name}. Copy the key once.`);
+      setApiRequests((prev) => prev.filter((row) => row.institution_id !== item.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to issue API client key");
+    } finally {
+      setBusyId("");
+    }
+  }
 
   async function onDecide(id: string, decision: "approve" | "return") {
     setBusyId(id);
@@ -118,6 +147,17 @@ export function InstitutionsPage() {
 
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
+      {issuedKey ? (
+        <Alert tone="info">
+          API key (copy once): <strong>{issuedKey}</strong>
+          {issuedHmac ? (
+            <>
+              <br />
+              HMAC secret (copy once): <strong>{issuedHmac}</strong>
+            </>
+          ) : null}
+        </Alert>
+      ) : null}
 
       <section className="panel">
         <div className="panel-header">
@@ -167,7 +207,10 @@ export function InstitutionsPage() {
                         <code>{item.code}</code>
                       </td>
                       <td className="text-sm text-muted">{getBsasMode(item.bsas_mode).label}</td>
-                      <td>{lifecycleLabel(status, item.active)}</td>
+                      <td>
+                        {lifecycleLabel(status, item.active)}
+                        {requestedIds.has(item.id) ? <div className="meta">API client requested</div> : null}
+                      </td>
                       <td>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {canOnboard && (status === "draft" || status === "pending_approval") ? (
@@ -179,6 +222,16 @@ export function InstitutionsPage() {
                               Profile
                             </Link>
                           )}
+                          {canManage && requestedIds.has(item.id) ? (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              disabled={busyId === item.id}
+                              onClick={() => void onIssueKey(item)}
+                            >
+                              {busyId === item.id ? "Issuing…" : "Issue API client"}
+                            </button>
+                          ) : null}
                           {canManage && status === "pending_approval" ? (
                             <>
                               <button

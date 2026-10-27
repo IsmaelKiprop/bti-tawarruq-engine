@@ -574,6 +574,11 @@ class ApiClientRequestRead(BaseModel):
     requested_at: datetime | None = None
     key_count: int = 0
 
+
+class ApiClientRequestListItem(ApiClientRequestRead):
+    name: str
+    code: str
+
 class CustomerSaleRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

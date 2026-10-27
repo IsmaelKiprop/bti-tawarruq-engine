@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, fetchHealth, type HealthPayload, type InstitutionSummary, type OpsMetrics } from "../api/client";
+import { api, fetchHealth, type ApiClientRequestItem, type HealthPayload, type InstitutionSummary, type OpsMetrics } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
 import { INSTITUTION_TYPES, REGULATORS } from "../config/fiKyc";
@@ -107,6 +107,11 @@ export function DashboardPage() {
   const [metrics, setMetrics] = useState<OpsMetrics | null>(null);
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [summary, setSummary] = useState<InstitutionSummary | null>(null);
+  const [apiRequests, setApiRequests] = useState<ApiClientRequestItem[]>([]);
+  const [issuedKey, setIssuedKey] = useState("");
+  const [issuedHmac, setIssuedHmac] = useState("");
+  const [issuedName, setIssuedName] = useState("");
+  const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -121,11 +126,18 @@ export function DashboardPage() {
       try {
         const metricsPromise = canViewMetrics ? api.getOpsMetrics().catch(() => null) : Promise.resolve(null);
         const summaryPromise = canSeeInstitutions ? api.getInstitutionSummary().catch(() => null) : Promise.resolve(null);
-        const [m, h, s] = await Promise.all([metricsPromise, fetchHealth().catch(() => null), summaryPromise]);
+        const requestsPromise = isSuperAdmin ? api.listApiClientRequests().catch(() => [] as ApiClientRequestItem[]) : Promise.resolve([] as ApiClientRequestItem[]);
+        const [m, h, s, requests] = await Promise.all([
+          metricsPromise,
+          fetchHealth().catch(() => null),
+          summaryPromise,
+          requestsPromise,
+        ]);
         if (!alive) return;
         setMetrics(m);
         setHealth(h);
         setSummary(s);
+        setApiRequests(requests);
         setError("");
       } catch (err) {
         if (!alive) return;
@@ -140,7 +152,25 @@ export function DashboardPage() {
       alive = false;
       window.clearInterval(timer);
     };
-  }, [canViewMetrics, canSeeInstitutions]);
+  }, [canViewMetrics, canSeeInstitutions, isSuperAdmin]);
+
+  async function onIssueKey(item: ApiClientRequestItem) {
+    setBusyId(item.institution_id);
+    setError("");
+    setIssuedKey("");
+    setIssuedHmac("");
+    try {
+      const created = await api.createApiKey(item.institution_id, `${item.code}-api-client`, "api_client");
+      setIssuedName(item.name);
+      setIssuedKey(created.api_key);
+      setIssuedHmac(created.hmac_secret || "");
+      setApiRequests((prev) => prev.filter((row) => row.institution_id !== item.institution_id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to issue API client key");
+    } finally {
+      setBusyId("");
+    }
+  }
 
   const uptimePct = health?.uptime_pct ?? (health?.status === "ok" ? 100 : 0);
   const typeSlices = useMemo(
@@ -223,6 +253,59 @@ export function DashboardPage() {
             </Link>
           }
         />
+      ) : null}
+
+      {isSuperAdmin && issuedKey ? (
+        <Alert tone="info">
+          API client for {issuedName} (copy once): <strong>{issuedKey}</strong>
+          {issuedHmac ? (
+            <>
+              <br />
+              HMAC secret (copy once): <strong>{issuedHmac}</strong>
+            </>
+          ) : null}
+        </Alert>
+      ) : null}
+
+      {isSuperAdmin && apiRequests.length > 0 ? (
+        <section className="mt-3 rounded-sm border border-border bg-surface p-3">
+          <h3 className="m-0 mb-2 text-sm font-semibold">API client requests</h3>
+          <p className="muted m-0 mb-3 text-sm">FI Admin asked for a machine key. Issue it here. Copy the key once.</p>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Institution</th>
+                  <th>Requested</th>
+                  <th className="w-[1%]" />
+                </tr>
+              </thead>
+              <tbody>
+                {apiRequests.map((item) => (
+                  <tr key={item.institution_id}>
+                    <td>
+                      <div className="font-medium">{item.name}</div>
+                      <code className="text-xs">{item.code}</code>
+                    </td>
+                    <td className="text-sm text-muted">
+                      {item.requested_at ? new Date(item.requested_at).toLocaleString() : "—"}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={busyId === item.institution_id}
+                        onClick={() => void onIssueKey(item)}
+                      >
+                        {busyId === item.institution_id ? "Issuing…" : "Issue key"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : null}
 
       {canSeeInstitutions && summary && summary.total > 0 ? (

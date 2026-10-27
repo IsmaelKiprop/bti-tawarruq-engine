@@ -477,6 +477,11 @@ export interface ApiClientRequest {
   key_count: number;
 }
 
+export interface ApiClientRequestItem extends ApiClientRequest {
+  name: string;
+  code: string;
+}
+
 export interface AuthContext {
   auth_enabled: boolean;
   authenticated: boolean;
@@ -1176,6 +1181,7 @@ export const api = {
   deleteInstitution: (institutionId: string) =>
     request<void>(`/institutions/${institutionId}`, { method: "DELETE" }),
   getInstitutionSummary: () => request<InstitutionSummary>("/institutions/summary"),
+  listApiClientRequests: () => request<ApiClientRequestItem[]>("/institutions/api-client-requests"),
   startInstitutionOnboarding: (body: Record<string, unknown>) =>
     request<InstitutionOnboarding>("/institutions/onboarding", {
       method: "POST",
