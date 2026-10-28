@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/client";
+import { api, type InstitutionCharge } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, PageShell } from "../components/PageShell";
 import { useTheme } from "../hooks/useTheme";
@@ -49,6 +49,99 @@ export function SettingsPage() {
     () => ["platform_admin", "bti_ops", "bti_finance"].includes(user?.role || ""),
     [user?.role],
   );
+  const isSuperAdmin = user?.role === "platform_admin";
+  const [sedaniaCharge, setSedaniaCharge] = useState("0.0035");
+  const [fiCharges, setFiCharges] = useState<InstitutionCharge[]>([]);
+  const [chargePassword, setChargePassword] = useState("");
+  const [chargeOtp, setChargeOtp] = useState("");
+  const [chargeDevCode, setChargeDevCode] = useState("");
+  const [platformBusy, setPlatformBusy] = useState(false);
+  const [platformMsg, setPlatformMsg] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
+
+  function applyPlatform(settings: { sedania_charge_pct: number; institutions?: InstitutionCharge[] }) {
+    setSedaniaCharge(String(settings.sedania_charge_pct));
+    setFiCharges(settings.institutions || []);
+  }
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    api
+      .getPlatformSettings()
+      .then(applyPlatform)
+      .catch((err) =>
+        setPlatformMsg({ tone: "error", text: err instanceof Error ? err.message : "Could not load platform settings" }),
+      );
+  }, [isSuperAdmin]);
+
+  function parsePct(raw: string, label: string): number | null {
+    const pct = Number(raw);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      setPlatformMsg({ tone: "error", text: `${label} must be between 0 and 100.` });
+      return null;
+    }
+    return pct;
+  }
+
+  async function onSendChargeOtp() {
+    if (!chargePassword.trim()) {
+      setPlatformMsg({ tone: "error", text: "Enter your password, then send the OTP." });
+      return;
+    }
+    setPlatformBusy(true);
+    setPlatformMsg(null);
+    setChargeDevCode("");
+    try {
+      const sent = await api.challengePlatformSettings(chargePassword);
+      setChargeDevCode(sent.dev_code || "");
+      setPlatformMsg({
+        tone: "info",
+        text: sent.smtp_sent
+          ? `OTP sent to ${sent.email || "your email"}.`
+          : sent.dev_code
+            ? `OTP (SMTP off): ${sent.dev_code}`
+            : "OTP issued.",
+      });
+    } catch (err) {
+      setPlatformMsg({ tone: "error", text: err instanceof Error ? err.message : "Could not send OTP" });
+    } finally {
+      setPlatformBusy(false);
+    }
+  }
+
+  async function onSavePlatform(event: FormEvent) {
+    event.preventDefault();
+    const sedania = parsePct(sedaniaCharge, "Sedania % Charge");
+    if (sedania == null) return;
+    const institutions: { id: string; bti_charge_pct: number }[] = [];
+    for (const item of fiCharges) {
+      const pct = parsePct(String(item.bti_charge_pct), `BTI % Charge for ${item.name}`);
+      if (pct == null) return;
+      institutions.push({ id: item.id, bti_charge_pct: pct });
+    }
+    if (!chargePassword.trim() || !chargeOtp.trim()) {
+      setPlatformMsg({ tone: "error", text: "Password and OTP are required to save charges." });
+      return;
+    }
+    setPlatformBusy(true);
+    setPlatformMsg(null);
+    try {
+      const saved = await api.updatePlatformSettings({
+        password: chargePassword,
+        otp_code: chargeOtp.trim(),
+        sedania_charge_pct: sedania,
+        institutions,
+      });
+      applyPlatform(saved);
+      setChargePassword("");
+      setChargeOtp("");
+      setChargeDevCode("");
+      setPlatformMsg({ tone: "success", text: "Charges saved." });
+    } catch (err) {
+      setPlatformMsg({ tone: "error", text: err instanceof Error ? err.message : "Could not save platform settings" });
+    } finally {
+      setPlatformBusy(false);
+    }
+  }
 
   async function onSaveProfile(event: FormEvent) {
     event.preventDefault();
@@ -218,6 +311,116 @@ export function SettingsPage() {
   return (
     <PageShell>
       <div className="settings-grid">
+        {isSuperAdmin ? (
+          <section className="panel settings-panel settings-span">
+            <div className="panel-header">
+              <div>
+                <h2>Platform charges</h2>
+                <p className="muted">Super Admin only. Password and OTP required to save. Foundation for Finance and Reconciliation.</p>
+              </div>
+            </div>
+            {platformMsg ? <Alert tone={platformMsg.tone}>{platformMsg.text}</Alert> : null}
+            <form className="settings-form settings-form-wide" onSubmit={onSavePlatform}>
+              <label>
+                Sedania % Charge
+                <div className="settings-pct">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.0001"
+                    inputMode="decimal"
+                    value={sedaniaCharge}
+                    onChange={(e) => setSedaniaCharge(e.target.value)}
+                    required
+                  />
+                  <span>%</span>
+                </div>
+              </label>
+              <p className="meta" style={{ margin: 0 }}>
+                Platform-wide. Default 0.0035%. Range 0 to 100.
+              </p>
+              <div>
+                <strong>BTI % Charge</strong>
+                <p className="meta" style={{ margin: "0.15rem 0 0.45rem" }}>
+                  Unique per FI. Default 0.004% for books already onboarded. New FIs set this on Onboard → Commercial.
+                </p>
+                {fiCharges.length === 0 ? (
+                  <p className="meta">No institutions yet.</p>
+                ) : (
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Institution</th>
+                          <th>BTI % Charge</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fiCharges.map((item) => (
+                          <tr key={item.id}>
+                            <td>
+                              <div className="font-medium">{item.name}</div>
+                              <div className="meta">{item.code}</div>
+                            </td>
+                            <td>
+                              <div className="settings-pct">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step="0.0001"
+                                  inputMode="decimal"
+                                  value={String(item.bti_charge_pct)}
+                                  onChange={(e) =>
+                                    setFiCharges((rows) =>
+                                      rows.map((row) => (row.id === item.id ? { ...row, bti_charge_pct: e.target.value } : row)),
+                                    )
+                                  }
+                                />
+                                <span>%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <label>
+                Password
+                <input
+                  type="password"
+                  value={chargePassword}
+                  onChange={(e) => setChargePassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+              <div className="settings-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => void onSendChargeOtp()} disabled={platformBusy}>
+                  {platformBusy ? "Sending…" : "Send OTP"}
+                </button>
+              </div>
+              <label>
+                OTP
+                <input
+                  value={chargeOtp}
+                  onChange={(e) => setChargeOtp(e.target.value)}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                />
+              </label>
+              {chargeDevCode ? <p className="meta">Tester code: {chargeDevCode}</p> : null}
+              <button type="submit" className="btn btn-primary" disabled={platformBusy}>
+                {platformBusy ? "Saving…" : "Save charges"}
+              </button>
+            </form>
+          </section>
+        ) : null}
+
         <section className="panel settings-panel">
           <div className="panel-header">
             <div>
@@ -289,7 +492,7 @@ export function SettingsPage() {
           </form>
         </section>
 
-        <section className="panel settings-panel">
+        <section className="panel settings-panel settings-span">
           <div className="panel-header">
             <div>
               <h2>Appearance</h2>
@@ -307,7 +510,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <section className="panel settings-panel">
+        <section className="panel settings-panel settings-span">
           <div className="panel-header">
             <div>
               <h2>Password</h2>
@@ -354,7 +557,7 @@ export function SettingsPage() {
           </form>
         </section>
 
-        <section className="panel settings-panel">
+        <section className="panel settings-panel settings-span">
           <div className="panel-header">
             <div>
               <h2>Two-factor authentication</h2>
@@ -436,7 +639,7 @@ export function SettingsPage() {
         </section>
 
         {roleLinks.length > 0 ? (
-          <section className="panel settings-panel">
+          <section className="panel settings-panel settings-span">
             <div className="panel-header">
               <div>
                 <h2>Role workspace</h2>

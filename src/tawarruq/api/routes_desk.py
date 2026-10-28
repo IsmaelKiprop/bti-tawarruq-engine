@@ -48,6 +48,7 @@ def _load_case(db: Session, case_id: str, request: Request) -> FiDeskCase:
     if role == ApiKeyRole.FI_APPROVER and case.assigned_approver_id != user_id:
         raise HTTPException(status_code=403, detail="This case is assigned to another approver")
     fi_desk_service.refresh_resale_status(case)
+    fi_desk_service.seal_completed_case(case)
     return case
 
 
@@ -81,6 +82,8 @@ def list_desk_cases(
         return []
     for row in rows:
         fi_desk_service.refresh_resale_status(row)
+        fi_desk_service.seal_completed_case(row)
+    db.commit()
     loaded = (
         db.query(FiDeskCase)
         .options(

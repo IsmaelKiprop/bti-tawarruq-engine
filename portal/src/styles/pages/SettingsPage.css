@@ -70,6 +70,10 @@
   max-width: 26rem;
 }
 
+.settings-form-wide {
+  max-width: 40rem;
+}
+
 .settings-form label {
   display: grid;
   gap: 0.2rem;
@@ -169,15 +173,32 @@
   background: #fff;
 }
 
+.settings-pct {
+  position: relative;
+  max-width: 10rem;
+}
+
+.settings-pct input {
+  padding-right: 1.7rem;
+}
+
+.settings-pct span {
+  position: absolute;
+  right: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  pointer-events: none;
+}
+
 @media (min-width: 900px) {
   .settings-grid {
     grid-template-columns: 1fr 1fr;
     gap: 0.75rem;
   }
 
-  .settings-panel:nth-child(3),
-  .settings-panel:nth-child(4),
-  .settings-panel:nth-child(5) {
+  .settings-span {
     grid-column: 1 / -1;
   }
 }

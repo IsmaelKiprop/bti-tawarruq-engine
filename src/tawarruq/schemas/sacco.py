@@ -26,7 +26,7 @@ class SaccoExecuteRequest(BaseModel):
         None,
         ge=0,
         le=1,
-        description="Optional Murabahah profit rate. Defaults to SEDANIA_DEFAULT_PROFIT_RATE.",
+        description="Optional Murabahah profit rate as a fraction 0–1. Defaults to Super Admin Sedania % Charge.",
     )
     callback_url: str | None = Field(
         None,

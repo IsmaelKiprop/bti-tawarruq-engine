@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, type DeskApprover, type DeskCase } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { DESK_STEPS, DOCUMENT_TYPES, PRODUCT_TYPES, deskPayload, deskTimestamps, maxDeskStep } from "../config/fiDesk";
+import { DESK_STEPS, DOCUMENT_TYPES, PRODUCT_TYPES, deskPayload, deskStatusLabel, deskTimestamps, maxDeskStep } from "../config/fiDesk";
 
 const fieldClass = "rounded-sm border border-border bg-surface-elevated px-2.5 py-1.5 text-sm text-foreground";
 const labelClass = "flex min-w-0 flex-col gap-1 text-xs uppercase tracking-wide text-muted";
@@ -617,7 +617,7 @@ export function OriginationDeskPage() {
 
         {step === 7 && record ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <ReadRow label="Final status" value={record.status} />
+            <ReadRow label="Final status" value={deskStatusLabel(record.status)} />
             {Object.entries(stamps).map(([key, value]) => (
               <ReadRow key={key} label={key.replace(/_/g, " ")} value={value} />
             ))}

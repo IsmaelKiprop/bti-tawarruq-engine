@@ -354,7 +354,20 @@ def start_onboarding(
     inst_code = (code or suggest_code(name)).strip().upper()
     if db.query(Institution).filter(Institution.code == inst_code).first():
         raise ValueError(f"Institution code {inst_code} already exists")
-    institution = Institution(name=name, code=inst_code, lifecycle_status="draft", active=False)
+    from tawarruq.services.platform_settings_service import DEFAULT_BTI_CHARGE_PCT, parse_charge_pct
+
+    charge = DEFAULT_BTI_CHARGE_PCT
+    extra = dict(profile_fields or {})
+    if extra.get("bti_charge_pct") is not None:
+        charge = parse_charge_pct(extra.pop("bti_charge_pct"), field="BTI % Charge")
+        profile_fields = extra
+    institution = Institution(
+        name=name,
+        code=inst_code,
+        lifecycle_status="draft",
+        active=False,
+        bti_charge_pct=charge,
+    )
     db.add(institution)
     db.flush()
     profile = get_or_create_profile(db, institution, actor_id)
@@ -399,6 +412,15 @@ def save_onboarding(
                 raise ValueError(f"Institution code {next_code} already exists")
             institution.code = next_code
     profile = get_or_create_profile(db, institution, actor_id)
+    extra = dict(profile_fields or {})
+    if "bti_charge_pct" in extra:
+        from tawarruq.services.platform_settings_service import parse_charge_pct
+
+        if extra["bti_charge_pct"] is not None and extra["bti_charge_pct"] != "":
+            institution.bti_charge_pct = parse_charge_pct(extra.pop("bti_charge_pct"), field="BTI % Charge")
+        else:
+            extra.pop("bti_charge_pct", None)
+        profile_fields = extra
     if profile_fields:
         apply_profile_fields(profile, profile_fields)
     profile.updated_by = actor_id

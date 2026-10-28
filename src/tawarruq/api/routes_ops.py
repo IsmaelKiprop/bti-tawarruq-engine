@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from tawarruq.api.deps import get_tenant_institution_id
+from tawarruq.api.deps import get_tenant_institution_id, require_platform_admin
 from tawarruq.config import get_settings
 from tawarruq.database import get_db
 from tawarruq.enums import ApiKeyRole, AuditActor
@@ -54,6 +54,7 @@ from tawarruq.services.ops_user_service import (
     update_ops_user,
     user_mfa_method,
     verify_email_otp,
+    verify_password,
 )
 from tawarruq.services.totp_service import verify_totp
 from tawarruq.services.rbac import (
@@ -801,6 +802,154 @@ def log_ui_audit(payload: UiAuditRequest, request: Request, db: Session = Depend
     )
     db.commit()
     return Response(status_code=204)
+
+
+class InstitutionChargeRead(BaseModel):
+    id: str
+    name: str
+    code: str
+    bti_charge_pct: float
+
+
+class InstitutionChargeWrite(BaseModel):
+    id: str
+    bti_charge_pct: float = Field(..., ge=0, le=100)
+
+
+class PlatformSettingsRead(BaseModel):
+    sedania_charge_pct: float = Field(..., ge=0, le=100, description="Sedania % Charge, 0 to 100")
+    institutions: list[InstitutionChargeRead] = Field(default_factory=list)
+
+
+class PlatformSettingsUpdate(BaseModel):
+    password: str | None = None
+    otp_code: str | None = None
+    sedania_charge_pct: float | None = Field(None, ge=0, le=100, description="Sedania % Charge, 0 to 100")
+    institutions: list[InstitutionChargeWrite] | None = None
+
+
+class PlatformSettingsChallenge(BaseModel):
+    password: str = Field(..., min_length=1)
+
+
+class PlatformSettingsChallengeRead(BaseModel):
+    smtp_sent: bool = False
+    dev_code: str | None = None
+    email: str | None = None
+
+
+def _settings_actor(request: Request, db: Session) -> OpsUser:
+    user_id = getattr(request.state, "ops_user_id", None)
+    user = db.get(OpsUser, user_id) if user_id else None
+    if not user:
+        raise HTTPException(status_code=401, detail="Login required")
+    return user
+
+
+def _require_charge_password(user: OpsUser, password: str) -> None:
+    if not verify_password(password, user.password_hash):
+        raise HTTPException(status_code=403, detail="Password is required to change charges")
+
+
+def _serialize_platform_settings(db: Session) -> PlatformSettingsRead:
+    from tawarruq.services.platform_settings_service import get_or_create_platform_settings, list_institution_charges
+
+    row = get_or_create_platform_settings(db)
+    books = list_institution_charges(db)
+    return PlatformSettingsRead(
+        sedania_charge_pct=float(row.sedania_charge_pct),
+        institutions=[
+            InstitutionChargeRead(
+                id=item.id,
+                name=item.name,
+                code=item.code,
+                bti_charge_pct=float(item.bti_charge_pct if item.bti_charge_pct is not None else 0.004),
+            )
+            for item in books
+        ],
+    )
+
+
+@router.get(
+    "/ops/settings",
+    response_model=PlatformSettingsRead,
+    summary="Super Admin platform settings",
+    description="Sedania % Charge (platform) and BTI % Charge per FI. Super Admin only.",
+)
+def get_platform_settings(request: Request, db: Session = Depends(get_db)) -> PlatformSettingsRead:
+    require_platform_admin(request)
+    payload = _serialize_platform_settings(db)
+    db.commit()
+    return payload
+
+
+@router.post(
+    "/ops/settings/challenge",
+    response_model=PlatformSettingsChallengeRead,
+    summary="Send OTP to confirm a charge change",
+)
+def challenge_platform_settings(
+    payload: PlatformSettingsChallenge, request: Request, db: Session = Depends(get_db)
+) -> PlatformSettingsChallengeRead:
+    require_platform_admin(request)
+    user = _settings_actor(request, db)
+    _require_charge_password(user, payload.password)
+    delivery = issue_email_otp(user, purpose="platform charge change")
+    return PlatformSettingsChallengeRead(
+        smtp_sent=bool(delivery.get("smtp_sent")),
+        dev_code=delivery.get("dev_code"),
+        email=delivery.get("email") or user.email,
+    )
+
+
+@router.patch(
+    "/ops/settings",
+    response_model=PlatformSettingsRead,
+    summary="Update Super Admin platform settings",
+    description="Sedania % Charge and per-FI BTI % Charge. Requires password and OTP.",
+)
+def update_platform_settings(
+    payload: PlatformSettingsUpdate, request: Request, db: Session = Depends(get_db)
+) -> PlatformSettingsRead:
+    require_platform_admin(request)
+    from tawarruq.services.platform_settings_service import update_institution_bti_charge, update_sedania_charge_pct
+    from tawarruq.services.rbac import auth_is_enabled
+
+    actor_id = getattr(request.state, "ops_user_id", None)
+    if auth_is_enabled(request):
+        user = _settings_actor(request, db)
+        if not payload.password or not payload.otp_code:
+            raise HTTPException(status_code=400, detail="Password and OTP are required to change charges")
+        _require_charge_password(user, payload.password)
+        if not verify_email_otp(user, payload.otp_code):
+            raise HTTPException(status_code=403, detail="Valid OTP is required to change charges")
+    try:
+        row = None
+        if payload.sedania_charge_pct is not None:
+            row = update_sedania_charge_pct(db, payload.sedania_charge_pct, actor_id=actor_id)
+        for item in payload.institutions or []:
+            institution = db.get(Institution, item.id)
+            if not institution:
+                raise HTTPException(status_code=404, detail=f"Institution not found: {item.id}")
+            update_institution_bti_charge(db, institution, item.bti_charge_pct)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    log_audit(
+        db,
+        entity_type="platform_settings",
+        entity_id=row.id if row else "default",
+        actor=AuditActor.HUMAN,
+        action="update_charges",
+        details=f"sedania_charge_pct={payload.sedania_charge_pct}, fi_count={len(payload.institutions or [])}",
+        actor_user_id=actor_id,
+        group_id=getattr(request.state, "audit_group_id", None),
+        action_group="settings",
+        http_method="PATCH",
+        http_path="/api/v1/ops/settings",
+        http_status=200,
+    )
+    db.commit()
+    return _serialize_platform_settings(db)
 
 
 @router.get("/ops/metrics", response_model=OpsMetricsRead, summary="Operational metrics dashboard")

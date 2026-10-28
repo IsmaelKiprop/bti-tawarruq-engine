@@ -2,7 +2,14 @@
 
 from fastapi import HTTPException, Request
 
-from tawarruq.services.rbac import can_cross_tenant, get_request_role, has_permission, require_permission
+from tawarruq.services.rbac import (
+    auth_is_enabled,
+    can_cross_tenant,
+    get_request_role,
+    has_permission,
+    is_platform_admin,
+    require_permission,
+)
 
 
 def get_tenant_institution_id(request: Request) -> str | None:
@@ -65,6 +72,14 @@ def require_manage_integrations(request: Request) -> None:
 
 def require_manage_institutions(request: Request) -> None:
     require_permission(request, "manage_institutions")
+
+
+def require_platform_admin(request: Request) -> None:
+    if not auth_is_enabled(request):
+        return
+    if is_platform_admin(request):
+        return
+    raise HTTPException(status_code=403, detail="Super Admin only")
 
 
 def require_product(name: str) -> None:

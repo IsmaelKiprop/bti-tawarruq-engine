@@ -92,6 +92,7 @@ const ID_NO = /^[A-Za-z0-9/-]{3,40}$/;
 const COUNT = /^(0|[1-9]\d{0,8})$/;
 const MONEY = /^\d{1,15}(\.\d{1,2})?$/;
 const PCT = /^(100(\.0+)?|[0-9]{1,2}(\.[0-9]{1,4})?)$/;
+const CHARGE_PCT = /^(100(\.0+)?|0(\.[0-9]{1,6})?|[1-9][0-9]?(\.[0-9]{1,6})?)$/;
 
 function text(value: unknown): string {
   return String(value ?? "").trim();
@@ -167,6 +168,7 @@ export type FiKycForm = {
   commercial_agreement_status: string;
   pricing_schedule_reference: string;
   dispute_contact_email: string;
+  bti_charge_pct: string;
 };
 
 export function emptyFiKyc(): FiKycForm {
@@ -234,6 +236,7 @@ export function emptyFiKyc(): FiKycForm {
     commercial_agreement_status: "NOT_STARTED",
     pricing_schedule_reference: "",
     dispute_contact_email: "",
+    bti_charge_pct: "0.004",
   };
 }
 
@@ -290,6 +293,7 @@ export function payloadFromForm(form: FiKycForm) {
     expected_monthly_transaction_count: form.expected_monthly_transaction_count
       ? Number(form.expected_monthly_transaction_count)
       : null,
+    bti_charge_pct: form.bti_charge_pct ? Number(form.bti_charge_pct) : 0.004,
     incorporation_country: form.incorporation_country.trim().toUpperCase() || null,
     settlement_currency: form.settlement_currency.trim().toUpperCase() || null,
   };
@@ -377,6 +381,7 @@ export function stepErrors(stepId: WizardStepId, form: FiKycForm): Record<string
     requireField("maximum_transaction_amount", "Maximum transaction amount", MONEY);
     requireField("target_go_live_date", "Target go-live");
     requireField("commercial_agreement_status", "Commercial agreement");
+    requireField("bti_charge_pct", "BTI % Charge", CHARGE_PCT);
     optionalFormat("dispute_contact_email", "Dispute contact email", EMAIL);
   }
 

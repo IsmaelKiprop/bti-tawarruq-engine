@@ -30,6 +30,7 @@ class InstitutionRead(BaseModel):
     approval_steps: str = 'murabaha,liquidation,disbursement'
     approval_limit_amount: Decimal | None = None
     billing_fee_bps: int = 25
+    bti_charge_pct: Decimal = Field(Decimal("0.004"), description="BTI % Charge for this FI, 0 to 100")
     created_at: datetime
 
 
@@ -97,6 +98,7 @@ class InstitutionOnboardingWrite(BaseModel):
     commercial_agreement_status: str | None = None
     pricing_schedule_reference: str | None = None
     dispute_contact_email: str | None = None
+    bti_charge_pct: Decimal | None = Field(None, ge=0, le=100, description="BTI % Charge for this FI, 0 to 100")
 
 
 class InstitutionOnboardingRead(InstitutionRead):
@@ -524,6 +526,7 @@ class InstitutionUpdate(BaseModel):
     approval_steps: str | None = Field(None, description='Comma-separated: murabaha,liquidation,disbursement')
     approval_limit_amount: Decimal | None = None
     billing_fee_bps: int | None = Field(None, description='Platform fee in basis points of disbursed volume')
+    bti_charge_pct: Decimal | None = Field(None, ge=0, le=100, description='BTI % Charge. Super Admin Settings changes need password and OTP.')
 
 class WebhookCreate(BaseModel):
     institution_id: str

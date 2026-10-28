@@ -265,6 +265,7 @@ export function InstitutionOnboardPage() {
       ["Primary contact", form.primary_contact_full_name],
       ["Settlement bank", form.settlement_bank_name],
       ["Go-live", form.target_go_live_date],
+      ["BTI % Charge", form.bti_charge_pct],
     ],
     [form],
   );
@@ -588,6 +589,20 @@ export function InstitutionOnboardPage() {
               </Field>
               <Field label="Target go-live" required error={errors.target_go_live_date}>
                 <input className={fieldClass} type="date" value={form.target_go_live_date} onChange={(e) => set({ target_go_live_date: e.target.value })} />
+              </Field>
+              <Field label="BTI % Charge" required error={errors.bti_charge_pct}>
+                <input
+                  className={fieldClass}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.0001"
+                  value={form.bti_charge_pct}
+                  onChange={(e) => set({ bti_charge_pct: e.target.value })}
+                />
+                <p className="meta" style={{ margin: "0.35rem 0 0" }}>
+                  Unique for this FI. Default 0.004%. Super Admin can change later on Settings with password and OTP.
+                </p>
               </Field>
               <Field label="Commercial agreement" required error={errors.commercial_agreement_status}>
                 <select className={fieldClass} value={form.commercial_agreement_status} onChange={(e) => set({ commercial_agreement_status: e.target.value })}>

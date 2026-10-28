@@ -64,7 +64,26 @@ def _user_name(user: OpsUser | None) -> str | None:
     return user.full_name or user.email
 
 
+def seal_completed_case(case: FiDeskCase) -> FiDeskCase:
+    payload = _parse_payload(case.payload_json)
+    clearing = payload.get("clearing") if isinstance(payload.get("clearing"), dict) else {}
+    complete = payload.get("complete") if isinstance(payload.get("complete"), dict) else {}
+    stamps = payload.get("timestamps") if isinstance(payload.get("timestamps"), dict) else {}
+    finished = (
+        case.current_step >= 8
+        or clearing.get("final_status") == "Complete"
+        or complete.get("final_status") == "Complete"
+        or bool(stamps.get("complete"))
+        or bool(stamps.get("clearing"))
+    )
+    if finished and case.status in {"in_progress", "approved"}:
+        case.status = "complete"
+        case.current_step = 8
+    return case
+
+
 def serialize_case(case: FiDeskCase) -> DeskCaseRead:
+    seal_completed_case(case)
     return DeskCaseRead(
         id=case.id,
         institution_id=case.institution_id,
@@ -326,10 +345,15 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
         current.setdefault("settlement_ref", f"clr-{case.id[:8]}")
         _stamp(payload, "clearing")
         current.setdefault("settlement_timestamp", payload["timestamps"].get("clearing"))
+        current["final_status"] = "Complete"
+        _stamp(payload, "complete")
+        case.status = "complete"
+        case.current_step = 8
     if step == 8:
         current["final_status"] = "Complete"
         _stamp(payload, "complete")
         case.status = "complete"
+        case.current_step = 8
     payload[bucket] = current
     case.payload_json = _dump_payload(payload)
     if case.status != "complete":

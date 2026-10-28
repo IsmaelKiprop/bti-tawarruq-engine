@@ -42,7 +42,7 @@ One KYC category per page. **Next** is blocked until that page’s required fiel
 3. **Ownership** — parent, shareholders, UBOs, board, senior management, PEP / sanctions / adverse-media status.
 4. **Representatives** — primary contact, compliance officer, signatories, ID type / number / status, authority document reference.
 5. **Settlement** — bank, account name / number / currency, verification status, evidence document reference. Full account numbers are not written into audit `details`.
-6. **Commercial** — expected monthly count / value, typical / max amount, go-live, commercial agreement, pricing reference, dispute email.
+6. **Commercial** — expected monthly count / value, typical / max amount, go-live, **BTI % Charge** (unique per FI, default 0.004%), commercial agreement, pricing reference, dispute email.
 7. **Review** — summary. Super Admin activates. BTI Ops submits for Super Admin.
 
 `other_institution_type` is required when type is OTHER. `regulator_other_name` is required when regulator is OTHER.

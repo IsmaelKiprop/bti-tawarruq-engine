@@ -242,6 +242,13 @@ export function InstitutionManagementPage() {
                 Billing fee (bps)
                 <input value={editFeeBps} onChange={(e) => setEditFeeBps(e.target.value)} disabled={!canManage} />
               </label>
+              <label>
+                BTI % Charge
+                <input value={String(item.bti_charge_pct ?? "0.004")} readOnly />
+              </label>
+              <p className="meta sm:col-span-2" style={{ margin: 0 }}>
+                Change BTI % Charge on Settings with password and OTP. New FIs set it on Onboard → Commercial.
+              </p>
             </div>
             {canManage ? (
               <div className="flex flex-wrap gap-2">

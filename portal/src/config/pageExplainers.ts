@@ -200,7 +200,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   },
   "/settings": {
     title: "What settings cover",
-    lead: "Your own portal account: profile/HR record, password, MFA, theme, and shortcuts for desks you can open.",
+    lead: "Your own portal account: profile/HR record, password, MFA, theme, and shortcuts for desks you can open. Super Admin also sets platform knobs here.",
     dealTitle: "How you use it",
     dealSteps: [
       "Keep display name and HR fields current so admins see the same staff record on Users → Manage.",
@@ -208,7 +208,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Enable authenticator or email MFA; privileged Buruuj roles should keep MFA on.",
       "Use role workspace links for institutions, users, billing, and ops when your permissions allow.",
     ],
-    note: "Process explainers for desks live under Documentation, not on Settings.",
+    note: "Super Admin sets Sedania % Charge and per-FI BTI % Charge here. Saving needs password and OTP. Process explainers for desks live under Documentation.",
   },
   "/integrations": {
     title: "What integrations are",
@@ -409,6 +409,7 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
       { n: 1, title: "Profile & HR", body: "Update name, job title, department, employee number, phone, and office." },
       { n: 2, title: "Security", body: "Change password and enable MFA (authenticator or email)." },
       { n: 3, title: "Shortcuts", body: "Open desks your role can reach without hunting the sidebar." },
+      { n: 4, title: "Platform (Super Admin)", body: "Set Sedania % Charge (default 0.0035%) and per-FI BTI % Charge (default 0.004%). Saving needs password and OTP." },
     ],
   },
   "/integrations": {

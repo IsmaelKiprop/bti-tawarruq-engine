@@ -25,6 +25,7 @@ export function DeskCaseListPage({ mode }: { mode: DeskListMode }) {
   const [error, setError] = useState("");
   const [officer, setOfficer] = useState("all");
   const [customer, setCustomer] = useState("all");
+  const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [date, setDate] = useState("");
 
@@ -56,14 +57,22 @@ export function DeskCaseListPage({ mode }: { mode: DeskListMode }) {
   }, [items]);
 
   const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
     return items.filter((item) => {
       if (isQueue && officer !== "all" && item.requested_by_name !== officer) return false;
       if (!isQueue && customer !== "all" && deskCustomerName(item) !== customer) return false;
       if (status !== "all" && item.status !== status) return false;
       if (date && deskDateKey(item.created_at) !== date) return false;
+      if (needle) {
+        const hay = [deskCustomerName(item), item.requested_by_name, item.assigned_approver_name]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
       return true;
     });
-  }, [items, isQueue, officer, customer, status, date]);
+  }, [items, isQueue, officer, customer, query, status, date]);
 
   return (
     <PageShell wide>
@@ -77,6 +86,17 @@ export function DeskCaseListPage({ mode }: { mode: DeskListMode }) {
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
+          {isQueue ? (
+            <label className={filterClass}>
+              Search
+              <input
+                className={inputClass}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Customer or requester"
+              />
+            </label>
+          ) : null}
           {isQueue ? (
             <label className={filterClass}>
               Requesting officer
@@ -135,7 +155,14 @@ export function DeskCaseListPage({ mode }: { mode: DeskListMode }) {
             <table className="table">
               <thead>
                 <tr>
-                  {isQueue ? <th>Requesting officer</th> : <th>Customer</th>}
+                  {isQueue ? (
+                    <>
+                      <th>Customer</th>
+                      <th>Requesting officer</th>
+                    </>
+                  ) : (
+                    <th>Customer</th>
+                  )}
                   <th>Amount</th>
                   <th>Status</th>
                   <th>{isQueue ? "Date requested" : "Date"}</th>
@@ -148,10 +175,20 @@ export function DeskCaseListPage({ mode }: { mode: DeskListMode }) {
                   const orig = deskPayload(item, "origination");
                   return (
                     <tr key={item.id}>
-                      <td>
-                        <div className="font-medium">{isQueue ? item.requested_by_name || "—" : deskCustomerName(item) || "—"}</div>
-                        <div className="meta">{item.id.slice(0, 8)}</div>
-                      </td>
+                      {isQueue ? (
+                        <>
+                          <td>
+                            <div className="font-medium">{deskCustomerName(item) || "—"}</div>
+                            <div className="meta">{item.id.slice(0, 8)}</div>
+                          </td>
+                          <td>{item.requested_by_name || "—"}</td>
+                        </>
+                      ) : (
+                        <td>
+                          <div className="font-medium">{deskCustomerName(item) || "—"}</div>
+                          <div className="meta">{item.id.slice(0, 8)}</div>
+                        </td>
+                      )}
                       <td>{orig.approved_facility_amount || "—"}</td>
                       <td>{deskStatusLabel(item.status)}</td>
                       <td>{formatWhen(item.created_at)}</td>

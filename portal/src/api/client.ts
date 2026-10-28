@@ -366,6 +366,7 @@ export interface Institution {
   approval_steps?: string;
   approval_limit_amount?: string | null;
   billing_fee_bps?: number;
+  bti_charge_pct?: number | string;
   created_at: string;
 }
 
@@ -646,6 +647,18 @@ export interface DeskAuditEntry {
   actor_to: string;
   details?: string | null;
   institution_id?: string | null;
+}
+
+export interface InstitutionCharge {
+  id: string;
+  name: string;
+  code: string;
+  bti_charge_pct: number | string;
+}
+
+export interface PlatformSettings {
+  sedania_charge_pct: number;
+  institutions?: InstitutionCharge[];
 }
 
 export interface OpsUserRecord {
@@ -1302,6 +1315,19 @@ export const api = {
     const query = params.toString();
     return request<DeskAuditEntry[]>(`/desk/audit${query ? `?${query}` : ""}`);
   },
+
+  getPlatformSettings: () => request<PlatformSettings>("/ops/settings"),
+  challengePlatformSettings: (password: string) =>
+    request<{ smtp_sent: boolean; dev_code?: string | null; email?: string | null }>("/ops/settings/challenge", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+  updatePlatformSettings: (body: {
+    password: string;
+    otp_code: string;
+    sedania_charge_pct?: number;
+    institutions?: { id: string; bti_charge_pct: number }[];
+  }) => request<PlatformSettings>("/ops/settings", { method: "PATCH", body: JSON.stringify(body) }),
 
   getAuthContext: () => request<AuthContext>("/ops/auth/me"),
   updateOwnProfile: (body: OpsUserProfilePatch) =>

@@ -207,6 +207,7 @@ def test_desk_steps_otp_and_shariah_scope():
 
     step7 = client.post(f"/api/v1/desk/cases/{case_id}/steps/7", headers=ops, json={"fields": {"settlement_ref": "CLR-1"}})
     assert step7.status_code == 200, step7.text
+    assert step7.json()["status"] == "complete"
     step8 = client.post(f"/api/v1/desk/cases/{case_id}/steps/8", headers=ops, json={"fields": {}})
     assert step8.status_code == 200, step8.text
     assert step8.json()["status"] == "complete"

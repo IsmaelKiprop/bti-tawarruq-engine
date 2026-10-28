@@ -46,6 +46,7 @@ def init_db() -> None:
     _ensure_sedania_financing_columns()
     _ensure_institution_kyc_columns()
     _ensure_api_key_reveal_column()
+    _ensure_platform_settings_table()
     register_append_only_guards()
 
 
@@ -395,6 +396,7 @@ def _ensure_control_schema() -> None:
             ),
             "approval_limit_amount": "ALTER TABLE institutions ADD COLUMN approval_limit_amount NUMERIC(18, 2)",
             "billing_fee_bps": "ALTER TABLE institutions ADD COLUMN billing_fee_bps INTEGER DEFAULT 25 NOT NULL",
+            "bti_charge_pct": "ALTER TABLE institutions ADD COLUMN bti_charge_pct NUMERIC(10, 6) DEFAULT 0.004 NOT NULL",
         },
     )
     add_missing(
@@ -486,3 +488,35 @@ def _ensure_institution_kyc_columns() -> None:
             conn.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_institutions_lifecycle_status ON institutions (lifecycle_status)")
             )
+
+
+def _ensure_platform_settings_table() -> None:
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "platform_settings" in inspector.get_table_names():
+        existing = {col["name"] for col in inspector.get_columns("platform_settings")}
+        if "sedania_charge_pct" not in existing:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE platform_settings ADD COLUMN sedania_charge_pct "
+                        "NUMERIC(10, 6) DEFAULT 0.0035 NOT NULL"
+                    )
+                )
+        return
+    dt = "DATETIME" if settings.is_sqlite else "TIMESTAMP"
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                f"""
+                CREATE TABLE platform_settings (
+                    id VARCHAR(32) NOT NULL PRIMARY KEY,
+                    sedania_charge_pct NUMERIC(10, 6) NOT NULL DEFAULT 0.0035,
+                    updated_at {dt},
+                    updated_by_id VARCHAR(36),
+                    FOREIGN KEY(updated_by_id) REFERENCES ops_users (id)
+                )
+                """
+            )
+        )

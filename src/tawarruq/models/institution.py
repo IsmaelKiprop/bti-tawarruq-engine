@@ -23,6 +23,7 @@ class Institution(Base):
     )
     approval_limit_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
     billing_fee_bps: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    bti_charge_pct: Mapped[Decimal] = mapped_column(Numeric(10, 6), default=Decimal("0.004"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     applications = relationship("FinancingApplication", back_populates="institution")

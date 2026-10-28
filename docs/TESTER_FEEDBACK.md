@@ -4,7 +4,7 @@ Record of the FI tester / BTI Ops suggestions that are now in the engine and por
 
 Kenya Ops was **not** rewritten. FI desk work is a new **Origination** page (`/origination`). SMTP invite mail is still later.
 
-Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **Shariah officers** land on Shariah Audit: BTI-wide sees all FIs, FI-bound sees their tenant. **FI Ops** sees Origination, All Workflows, Settings. **FI Approver** sees Origination, Approval Queue, Settings. No Dashboard, Shariah, or Ops Monitor.
+Schema: Alembic **`016`** (API key reveal), **`017`** (`fi_desk_cases`), **`018`** (platform settings), **`019`** (charge percents). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **Shariah officers** land on Shariah Audit: BTI-wide sees all FIs, FI-bound sees their tenant. **FI Ops** sees Origination, All Workflows, Settings. **FI Approver** sees Origination, Approval Queue, Settings. No Dashboard, Shariah, or Ops Monitor.
 
 ---
 
@@ -20,8 +20,9 @@ Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TES
 | GET must not dump plaintext keys | `GET /institutions/{id}/api-keys/request` | Status, prefix, timestamps. `api_key` and `hmac_secret` are null until reveal. |
 | FI Ops needs an eight-step desk | `/origination` | Gated wizard. First sidebar tab. FI Ops and FI Approver land here after login. |
 | No Dashboard / Shariah / Ops for FI Ops | Sidebar | Those three are hidden for FI Ops and FI Approver. Login ignores a leftover `/users` URL and sends them to Origination. |
-| Approval Queue for FI Approver | `/origination/queue` | Lists assigned requests. Filter by requesting officer, status, date requested. Open jumps to the desk. |
-| All Workflows for FI Ops | `/origination/workflows` | Lists origination cases. Filter by customer, status, date. Open jumps to the desk. |
+| Approval Queue for FI Approver | `/origination/queue` | Lists assigned requests. Customer name column. Search by customer or requester. Filter by officer, status, date. Open jumps to the desk. |
+| All Workflows for FI Ops | `/origination/workflows` | Lists origination cases. Filter by customer, status, date. Clearing marks the case **Complete** (not In Progress). Open jumps to the desk. |
+| Sedania % Charge and BTI % Charge | Settings, Onboard | Super Admin: Sedania default **0.0035%**, per-FI BTI default **0.004%**. Save needs password and OTP. New FIs set BTI % Charge on Onboard → Commercial. |
 | Commodity type is Airtime only | Origination step 1 | Document type then ID. Amount cannot be negative. **Commodity type** is Airtime only. |
 | Step 3 locks after Yes | Origination step 3 | After confirm, purchase complete cannot be changed. |
 | Buyer / Seller and facility on Murabaha | Origination step 4 | Buyer (name, email, phone) and Seller (FI) first, then facility account, repayment installments, first and last installment due dates. |
@@ -134,10 +135,10 @@ Helpers: `isBtiManagedUser`, `inviteRoleOptionsForBook` in `portal/src/config/ro
 
 ```powershell
 $env:PYTHONPATH="src"
-python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py tests/test_invite_matrix.py tests/test_ops_login.py::test_shariah_officer_audit_at_bti_and_fi_level -q
+python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py tests/test_invite_matrix.py tests/test_ops_login.py::test_shariah_officer_audit_at_bti_and_fi_level tests/test_ops_login.py::test_super_admin_sets_sedania_charge_pct -q
 ```
 
-`test_fi_desk.py`: eight steps, Airtime-only product, OTP, proceeds account/branch, Shariah audit rows, reveal requires a session password.
+`test_fi_desk.py`: eight steps, Airtime-only product, OTP, proceeds account/branch, clearing seals **Complete**, Shariah audit rows, reveal requires a session password. Charge test: default 0.0035 / 0.004, password + OTP to save, FI Admin 403.
 
 ---
 
@@ -161,7 +162,8 @@ python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py test
 | Copy / reveal UI | `portal/src/components/SecretCopyPanel.tsx` |
 | Reveal + request | `src/tawarruq/api/routes_extended.py`, Alembic `016_api_key_reveal.py` |
 | Desk | `src/tawarruq/services/fi_desk_service.py`, `api/routes_desk.py`, `models/fi_desk.py`, Alembic `017_fi_desk_cases.py` |
-| Origination UI | `portal/src/pages/OriginationDeskPage.tsx`, `config/fiDesk.ts` |
+| Platform charges | `src/tawarruq/services/platform_settings_service.py`, Alembic `018_platform_settings.py`, `019_charge_pcts.py`, `portal/src/pages/SettingsPage.tsx` |
+| Origination UI | `portal/src/pages/OriginationDeskPage.tsx`, `config/fiDesk.ts`, `DeskCaseListPage.tsx` |
 | Shariah UI | `portal/src/pages/ShariahCompliancePage.tsx` |
 | Users books | `portal/src/pages/UsersPage.tsx`, `config/roles.ts` |
 | Tester nav | `TESTER_VISIBLE_PATHS` in `portal/src/config/roles.ts` |

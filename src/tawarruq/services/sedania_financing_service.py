@@ -16,7 +16,6 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from tawarruq.config import get_settings
 from tawarruq.enums import (
     ApplicationStatus,
     AuditActor,
@@ -400,8 +399,9 @@ def execute_bank_financing(
     from tawarruq.services.sacco_execute_service import resolve_sacco_customer
 
     customer = resolve_sacco_customer(db, institution.id, payload.customer_id)
-    settings = get_settings()
-    rate = payload.profit_rate if payload.profit_rate is not None else Decimal(str(settings.sedania_default_profit_rate))
+    from tawarruq.services.platform_settings_service import sedania_profit_rate
+
+    rate = payload.profit_rate if payload.profit_rate is not None else sedania_profit_rate(db)
     amount = _money(payload.amount)
     profit = _money(amount * rate)
     deferred = _money(amount + profit)

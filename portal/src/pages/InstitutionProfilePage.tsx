@@ -144,6 +144,7 @@ export function InstitutionProfilePage() {
         rows: [
           ["Go-live", form.target_go_live_date],
           ["Monthly count", form.expected_monthly_transaction_count],
+          ["BTI % Charge", form.bti_charge_pct],
           ["Agreement", form.commercial_agreement_status],
         ],
       },

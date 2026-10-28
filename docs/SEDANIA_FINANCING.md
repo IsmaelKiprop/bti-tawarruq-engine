@@ -39,7 +39,7 @@ POST /api/v1/sedania/financing/{id}/settle
 POST /api/v1/sedania/financing/{id}/physical-delivery
 ```
 
-Portal desk: `/sedania`.
+Portal desk: `/sedania`. Super Admin sets **Sedania % Charge** (default **0.0035%**, range 0–100) on **Settings**. Changing it needs password and OTP. That percent is the default Murabahah charge when a facility does not send `profit_rate`. **BTI % Charge** is unique per FI (default **0.004%** for books already onboarded; set on Onboard → Commercial).
 
 ## SACCO path
 

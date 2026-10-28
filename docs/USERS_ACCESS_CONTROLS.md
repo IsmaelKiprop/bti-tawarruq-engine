@@ -437,6 +437,7 @@ Nav is permission-based. Super Admin does **not** see every write desk.
 | `/mobile-lend` | listed roles | BTI Ops, FI Admin, FI Ops, FI Approver (no Super Admin) |
 | `/billing` | `manage_billing` | Super Admin, Finance |
 | `/reconciliation` | `reconcile` | Super Admin, Reconciler |
+| `/settings` | session | All portal logins. Super Admin also sets **Sedania % Charge** (default 0.0035%) and per-FI **BTI % Charge** (default 0.004%). Charge changes need password and OTP |
 | `/shariah` | `view_shariah` | Super Admin, BTI Ops, FI Admin, Shariah (BTI-wide sees all FIs; FI-bound sees own tenant) |
 | `/mfa-enroll` | session | Privileged roles |
 | `/agent-dealers` | dealer desk | Agent dealer (ops can view; only dealer tops up) |
@@ -445,7 +446,7 @@ Nav is permission-based. Super Admin does **not** see every write desk.
 
 ## 13. Data model
 
-Alembic revision **`017_fi_desk_cases`** (KYC `015`, reveal `016`; controls remain on `011`). SQLite `init_db` also ALTERs missing columns.
+Alembic revision **`019_charge_pcts`** (settings `018`, desk `017`, KYC `015`, reveal `016`; controls remain on `011`). SQLite `init_db` also ALTERs missing columns. Super Admin **Sedania % Charge** lives in `platform_settings`. Per-FI **BTI % Charge** is `institutions.bti_charge_pct`.
 
 **`institutions`:** `active`, `lifecycle_status` (`draft` / `pending_approval` / `active` / `dormant` / `deactivated`), `approval_steps`, `approval_limit_amount`, `billing_fee_bps`
 
@@ -567,7 +568,7 @@ Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it 
 | HTTP | `src/tawarruq/api/routes_controls.py`, `routes_ops.py`, `routes_extended.py` (API keys Super Admin only; request / reveal), `routes_desk.py` |
 | OpenAPI / Swagger | `src/tawarruq/api/openapi_metadata.py` — invite rules and Super Admin key create |
 | Models | `src/tawarruq/models/controls.py`, `institution.py`, `institution_profile.py`, `ops_user.py` |
-| Migration | `alembic/versions/011_controls_billing_mfa.py`, `015_institution_kyc_profile.py`, `016_api_key_reveal.py`, `017_fi_desk_cases.py` |
+| Migration | `alembic/versions/011_controls_billing_mfa.py`, `015_institution_kyc_profile.py`, `016_api_key_reveal.py`, `017_fi_desk_cases.py`, `018_platform_settings.py`, `019_charge_pcts.py` |
 | FI onboarding | `src/tawarruq/services/institution_onboarding_service.py`, `portal/src/pages/InstitutionOnboardPage.tsx` |
 | Origination desk | `src/tawarruq/services/fi_desk_service.py`, `portal/src/pages/OriginationDeskPage.tsx` |
 | Portal | `portal/src/config/roles.ts`, `UsersPage`, `WebhooksPage`, `SecretCopyPanel`, `navigation.ts`, pages `DashboardPage`, `InstitutionsPage`, `InstitutionProfilePage`, `ShariahCompliancePage`, `ApprovalsPage`, `BillingPage`, `ReconciliationPage`, `MfaEnrollPage`, `LoginPage` |

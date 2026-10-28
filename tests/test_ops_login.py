@@ -297,6 +297,58 @@ def test_shariah_officer_audit_at_bti_and_fi_level():
     assert client.get("/api/v1/desk/cases", headers=fi_headers).status_code == 200
 
 
+def test_super_admin_sets_sedania_charge_pct():
+    client = _client()
+    admin_headers, institution_id = _super_admin_headers(client)
+    password = "NewSecurePass!99"
+
+    loaded = client.get("/api/v1/ops/settings", headers=admin_headers)
+    assert loaded.status_code == 200, loaded.text
+    assert loaded.json()["sedania_charge_pct"] == 0.0035
+    assert any(item["id"] == institution_id and item["bti_charge_pct"] == 0.004 for item in loaded.json()["institutions"])
+
+    denied = client.patch(
+        "/api/v1/ops/settings",
+        headers=admin_headers,
+        json={"sedania_charge_pct": 0.01},
+    )
+    assert denied.status_code == 400
+
+    challenge = client.post("/api/v1/ops/settings/challenge", headers=admin_headers, json={"password": password})
+    assert challenge.status_code == 200, challenge.text
+    otp = challenge.json()["dev_code"]
+    assert otp
+
+    saved = client.patch(
+        "/api/v1/ops/settings",
+        headers=admin_headers,
+        json={
+            "password": password,
+            "otp_code": otp,
+            "sedania_charge_pct": 0.0035,
+            "institutions": [{"id": institution_id, "bti_charge_pct": 0.004}],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["sedania_charge_pct"] == 0.0035
+
+    too_high = client.patch(
+        "/api/v1/ops/settings",
+        headers=admin_headers,
+        json={"password": password, "otp_code": "000000", "sedania_charge_pct": 101},
+    )
+    assert too_high.status_code in {400, 403, 422}
+
+    _, temp = _invite_fi_admin(client, admin_headers, institution_id, email="fi.admin.settings@bank.local")
+    fi_login = _login(client, "fi.admin.settings@bank.local", temp)
+    fi_changed = _change_password(client, fi_login["access_token"], temp, "FiAdminPass!22")
+    fi_headers = {"Authorization": f"Bearer {fi_changed['access_token']}"}
+    blocked = client.get("/api/v1/ops/settings", headers=fi_headers)
+    assert blocked.status_code == 403
+    blocked_patch = client.patch("/api/v1/ops/settings", headers=fi_headers, json={"sedania_charge_pct": 8})
+    assert blocked_patch.status_code == 403
+
+
 def test_invite_user_emails_temp_password_via_smtp(monkeypatch, tmp_path):
     """When SMTP is configured, invite emails the password and withholds it from the API."""
     os.environ["SMTP_HOST"] = "smtp.test.local"

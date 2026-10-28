@@ -380,7 +380,7 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
   },
   "/origination/queue": {
     title: "Approval Queue",
-    description: "All assigned origination requests, filterable by officer, status, and date",
+    description: "Assigned origination requests, with customer name and search by customer or requester",
   },
   "/origination/workflows": {
     title: "All Workflows",

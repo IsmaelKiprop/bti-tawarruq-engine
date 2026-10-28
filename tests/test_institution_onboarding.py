@@ -89,6 +89,7 @@ def test_super_admin_submit_activates_and_allows_invite(client, monkeypatch):
     assert created.status_code == 201, created.text
     fi_id = created.json()["id"]
     assert created.json()["lifecycle_status"] == "draft"
+    assert float(created.json()["bti_charge_pct"]) == 0.004
 
     submitted = client.post(f"/api/v1/institutions/{fi_id}/onboarding/submit", headers=headers)
     assert submitted.status_code == 200, submitted.text
