@@ -4,7 +4,7 @@ Record of the FI tester / BTI Ops suggestions that are now in the engine and por
 
 Kenya Ops was **not** rewritten. FI desk work is a new **Origination** page (`/origination`). SMTP invite mail is still later.
 
-Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **FI Ops and FI Approver** see Origination first, then Settings only (no Dashboard, Shariah, or Ops Monitor).
+Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **FI Ops** sees Origination, All Workflows, Settings. **FI Approver** sees Origination, Approval Queue, Settings. No Dashboard, Shariah, or Ops Monitor.
 
 ---
 
@@ -20,6 +20,8 @@ Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TES
 | GET must not dump plaintext keys | `GET /institutions/{id}/api-keys/request` | Status, prefix, timestamps. `api_key` and `hmac_secret` are null until reveal. |
 | FI Ops needs an eight-step desk | `/origination` | Gated wizard. First sidebar tab. FI Ops and FI Approver land here after login. |
 | No Dashboard / Shariah / Ops for FI Ops | Sidebar | Those three are hidden for FI Ops and FI Approver. Login ignores a leftover `/users` URL and sends them to Origination. |
+| Approval Queue for FI Approver | `/origination/queue` | Lists assigned requests. Filter by requesting officer, status, date requested. Open jumps to the desk. |
+| All Workflows for FI Ops | `/origination/workflows` | Lists origination cases. Filter by customer, status, date. Open jumps to the desk. |
 | Commodity type is Airtime only | Origination step 1 | Document type then ID. Amount cannot be negative. **Commodity type** is Airtime only. |
 | Step 3 locks after Yes | Origination step 3 | After confirm, purchase complete cannot be changed. |
 | Buyer / Seller and facility on Murabaha | Origination step 4 | Buyer (name, email, phone) and Seller (FI) first, then facility account, repayment installments, first and last installment due dates. |

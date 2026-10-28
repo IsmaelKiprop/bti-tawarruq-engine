@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
-import { OptionalAppLayout, RequireAnyPermission, RequireAuth, RequirePermission } from "./auth/RequireAuth";
+import { OptionalAppLayout, RequireAnyPermission, RequireAuth, RequirePermission, RequireRole } from "./auth/RequireAuth";
 import { AppLayout } from "./components/AppLayout";
 import { ApplicationDetailPage } from "./pages/ApplicationDetailPage";
 import { ApplicationsListPage } from "./pages/ApplicationsListPage";
@@ -17,6 +17,7 @@ import { KenyaFlowPage } from "./pages/KenyaFlowPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MalaysiaManualBridgePage } from "./pages/MalaysiaManualBridgePage";
 import { NewApplicationPage } from "./pages/NewApplicationPage";
+import { DeskCaseListPage } from "./pages/DeskCaseListPage";
 import { OriginationDeskPage } from "./pages/OriginationDeskPage";
 import { RepaymentsPage } from "./pages/RepaymentsPage";
 import { SedaniaFinancingPage } from "./pages/SedaniaFinancingPage";
@@ -89,6 +90,12 @@ createRoot(document.getElementById("root")!).render(
               </Route>
               <Route element={<RequireAnyPermission permissions={["write_ops", "approve_txn"]} />}>
                 <Route path="origination" element={<OriginationDeskPage />} />
+              </Route>
+              <Route element={<RequireRole roles={["fi_approver"]} />}>
+                <Route path="origination/queue" element={<DeskCaseListPage mode="queue" />} />
+              </Route>
+              <Route element={<RequireRole roles={["institution_ops"]} />}>
+                <Route path="origination/workflows" element={<DeskCaseListPage mode="workflows" />} />
               </Route>
               <Route element={<RequirePermission permission="write_ops" />}>
                 <Route path="customers" element={<CustomersPage />} />

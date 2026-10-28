@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, type DeskApprover, type DeskCase } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
@@ -32,6 +33,8 @@ function asRecord(value: unknown): Record<string, string> {
 
 export function OriginationDeskPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const caseFromUrl = searchParams.get("case") || "";
   const isApprover = user?.role === "fi_approver";
   const canWrite = Boolean(user?.permissions.includes("write_ops"));
   const [cases, setCases] = useState<DeskCase[]>([]);
@@ -109,9 +112,10 @@ export function OriginationDeskPage() {
   useEffect(() => {
     setLoading(true);
     loadList()
+      .then(() => (caseFromUrl ? openCase(caseFromUrl) : undefined))
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load origination desk"))
       .finally(() => setLoading(false));
-  }, [user?.institution_id]);
+  }, [user?.institution_id, caseFromUrl]);
 
   async function run(label: string, work: () => Promise<DeskCase | void>) {
     setBusy(true);

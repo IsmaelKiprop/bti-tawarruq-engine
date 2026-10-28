@@ -140,7 +140,7 @@ python -m pytest tests/test_institution_onboarding.py tests/test_fi_desk.py test
 
 ## 4d. Origination desk and Shariah (portal)
 
-Tester shell: Super Admin sees Dashboard, Onboard FI, Institutions, Users, Origination, Shariah, Ops Monitor, Audit. FI Ops and FI Approver see Origination first, then Settings. Kenya Ops stays hidden. Full list: [TESTER_FEEDBACK.md](TESTER_FEEDBACK.md).
+Tester shell: Super Admin sees Dashboard, Onboard FI, Institutions, Users, Origination, Shariah, Ops Monitor, Audit. FI Ops sees Origination, All Workflows, Settings. FI Approver sees Origination, Approval Queue, Settings. Kenya Ops stays hidden. Full list: [TESTER_FEEDBACK.md](TESTER_FEEDBACK.md).
 
 1. FI Admin invites FI Ops and FI Approver on Users.
 2. Sign in as FI Ops. Home is **Origination**. Complete step 1, pick the FI Approver, send.

@@ -57,6 +57,21 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: IconNewApplication,
         hint: "FI Ops eight-step facility desk",
         anyPermissions: ["write_ops", "approve_txn"],
+        end: true,
+      },
+      {
+        to: "/origination/queue",
+        label: "Approval Queue",
+        Icon: IconUsers,
+        hint: "Filter requests by officer, status, and date",
+        roles: ["fi_approver"],
+      },
+      {
+        to: "/origination/workflows",
+        label: "All Workflows",
+        Icon: IconApplications,
+        hint: "Filter cases by customer, status, and date",
+        roles: ["institution_ops"],
       },
       {
         to: "/",
@@ -362,6 +377,14 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
   "/origination": {
     title: "Origination",
     description: "FI Ops eight-step facility desk",
+  },
+  "/origination/queue": {
+    title: "Approval Queue",
+    description: "All assigned origination requests, filterable by officer, status, and date",
+  },
+  "/origination/workflows": {
+    title: "All Workflows",
+    description: "All origination cases, filterable by customer, status, and date",
   },
   "/kenya": {
     title: "Kenya Ops Workbench",
