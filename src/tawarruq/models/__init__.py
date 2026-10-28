@@ -7,6 +7,7 @@ from tawarruq.models.certificate import Certificate
 from tawarruq.models.customer import Customer, LiquidityPool
 from tawarruq.models.disbursement import Disbursement
 from tawarruq.models.execution import CertificateVault, TawarruqExecution
+from tawarruq.models.fi_desk import FiDeskCase
 from tawarruq.models.institution import Institution
 from tawarruq.models.institution_profile import InstitutionProfile
 from tawarruq.models.institution_integration import InstitutionIntegration
@@ -40,6 +41,7 @@ __all__ = [
     "Disbursement",
     "TawarruqExecution",
     "AuditEvent",
+    "FiDeskCase",
     "Institution",
     "InstitutionProfile",
     "InstitutionIntegration",

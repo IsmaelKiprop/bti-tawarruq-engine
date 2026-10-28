@@ -24,8 +24,10 @@ Public surfaces: ops portal (`ops.buruujfintech.com` / local `:5173`), API (`api
 | **Live integrations** | M-Pesa Daraja (B2C + STK), Safaricom / Airtel airtime, Airtel Money, broker OTC |
 | **Multi-tenant** | Institutions, per-tenant credentials, webhooks, Super Admin-issued API keys |
 | **FI onboarding** | KYC wizard: Super Admin activate is immediate; BTI Ops waits for Super Admin. Invite FI Admin only when Active |
-| **Users & controls** | RBAC, who-may-invite rules, maker-checker, amount limits, tenant suspend, TOTP, invoices, recon |
-| **Ops portal** | Role-aware nav: Dashboard FI charts, Onboard FI, Institutions, Users, then Ops Monitor and Audit |
+| **Users & controls** | RBAC, who-may-invite rules, BTI vs FI user books, maker-checker, amount limits, tenant suspend, TOTP, invoices, recon |
+| **API Client copy** | FI Admin requests; Super Admin issues. GET omits secrets. Reveal with session password. Masked copy panel |
+| **Origination desk** | FI Ops eight-step gated wizard (`/origination`). FI Approver decides on step 2. Mock/email OTP. Shariah log on every action |
+| **Ops portal** | Role-aware nav. Tester shell: Dashboard, Onboard, Institutions, Users, Origination, Shariah, Ops Monitor, Audit |
 | **Amanah worker** | Auto-advances Kenya / Malaysia legs after eligibility or offer acceptance |
 | **Expo mobile** | Buruuj Lend (`mobile/`) — email MFA, FI invite / approve, customer journey |
 | **Tests** | pytest: flows, Shariah, No-Inah, RBAC, invites, maker-checker, billing, auth |
@@ -72,14 +74,14 @@ Local lab can set `AUTH_ENABLED=false` so unauthenticated mock flows still run. 
 | BTI Operations | `bti_ops` | Kenya / Malaysia / Ops Monitor |
 | BTI Finance | `bti_finance` | Billing |
 | FI Administrator | `institution_admin` | Dashboard, Users |
-| FI Operations | `institution_ops` | Kenya / Malaysia desks |
-| FI Approver | `fi_approver` | Approvals |
+| FI Operations | `institution_ops` | Origination desk |
+| FI Approver | `fi_approver` | Origination (step 2) |
 | Shariah / Audit | `shariah_officer` | Shariah |
 | Reconciliation | `reconciler` | Reconciliation |
 | Agent dealer | `agent_dealer` | Float desk only |
 | Institution API Client | `api_client` | Machine key — not a portal login |
 
-**API keys:** Super Admin only, on **Webhooks** (`POST /api/v1/institutions/{id}/api-keys`). Prefer `api_client`. FI Admin cannot create keys — request BTI to onboard. Copy the key and HMAC secret once.
+**API keys:** Super Admin only, on **Webhooks** (`POST /api/v1/institutions/{id}/api-keys`). Prefer `api_client`. FI Admin cannot create keys — they **Request API Client** on Institution profile. GET request status never returns plaintext secrets. Copy after `POST /institutions/{id}/api-keys/reveal` with the signed-in user’s password. Panel: mask, Show / Hide, Copy, Copy both.
 
 **Invite flow:** `POST /api/v1/ops/auth/users` generates a temporary password, emails it when `SMTP_HOST` is set, and forces a change on first login. Super Admin must send `institution_id` when inviting a tenant role. Invite FI Admin only after the institution lifecycle is `active`.
 
@@ -108,7 +110,7 @@ When `AUTH_ENABLED=true`, Murabaha, liquidation, and disbursement can queue for 
 
 Immediate execution when auth is off, the caller is `api_client` or a mobile session, or the step is omitted from `institution.approval_steps`.
 
-Portal: FI Ops runs the desk; FI Approver works **Approvals**. Super Admin cannot initiate or approve trades.
+Portal: FI Ops runs **Origination**; FI Approver decides step 2 on the same desk. Kenya **Approvals** remains for commodity maker-checker (hidden while the tester shell is on). Super Admin cannot initiate or approve trades.
 
 ## Product flows
 
@@ -169,9 +171,10 @@ Vite proxies `/api` to `http://127.0.0.1:8000`. Nav is permission-based.
 | `/` | Super Admin — FI charts and onboard CTA. Other roles: uptime |
 | `/institutions/onboard` | Super Admin, BTI Ops — customer FI KYC wizard |
 | `/institutions` | Super Admin, BTI Ops — directory and lifecycle |
-| `/users` | Super Admin, BTI Ops, FI Admin — invites (filtered by caller) |
-| `/institution` | FI Admin — own KYC profile and Request API Client |
-| `/webhooks` | Super Admin issues keys; FI Admin registers callbacks and requests BTI for a key |
+| `/users` | Super Admin, BTI Ops — BTI staff vs FI logins. FI Admin — own tenant |
+| `/institution` | FI Admin — own KYC; Request API Client (Pending, then copy after issue) |
+| `/origination` | FI Ops, FI Approver — eight-step facility desk |
+| `/webhooks` | Super Admin issues keys; FI Admin registers callbacks |
 | `/integrations` | Super Admin, FI Admin — Daraja / MNO secrets |
 | `/kenya` `/malaysia` `/sedania` | BTI Ops, FI Admin, FI Ops |
 | `/approvals` | FI Approver, FI Admin |
@@ -226,7 +229,7 @@ docker compose up --build
 
 API `:8000`, Postgres `:5432`, Shariah audit `:8001`, portal image on `:15173`. For local portal against compose API, run `npm run dev` in `portal/` (proxies to `:8000`).
 
-Set `AUTH_ENABLED=true` in compose. Alembic through `015` (FI KYC profiles + lifecycle). SQLite `init_db` also adds missing columns; Postgres datetime columns use `TIMESTAMP`.
+Set `AUTH_ENABLED=true` in compose. Alembic through `017` (FI KYC, API key reveal, origination desk). SQLite `init_db` also adds missing columns; Postgres datetime columns use `TIMESTAMP`.
 
 ### Mobile
 
@@ -251,9 +254,12 @@ Prefix all paths with `/api/v1`.
 | POST | `/ops/auth/change-password` | Required when `must_change_password` |
 | POST | `/ops/auth/mfa` / `/mfa/enroll` / `/mfa/confirm` | Privileged TOTP |
 | GET | `/ops/auth/me` | Role and permissions |
-| GET/POST | `/ops/auth/users` | Invite — Super Admin / FI Admin only |
+| GET/POST | `/ops/auth/users` | Invite — Super Admin / BTI Ops / FI Admin (invite map) |
 | PATCH | `/ops/auth/users/{id}` | Role change uses the same invite rules |
 | POST | `/institutions/{id}/api-keys` | Super Admin only |
+| GET/POST | `/institutions/{id}/api-keys/request` | FI Admin status / request. GET omits secrets |
+| POST | `/institutions/{id}/api-keys/reveal` | Session password; returns key + HMAC once unlocked |
+| GET/POST | `/desk/cases` | Origination desk. Approver: `.../decide`. OTP: `.../otp/send` and `.../otp/verify` |
 | POST | `/institutions/onboarding` | Super Admin or BTI Ops — start KYC draft |
 | POST | `/institutions/{id}/onboarding/submit` | Super Admin activates; BTI Ops waits for approve |
 | POST | `/institutions/{id}/onboarding/decide` | Super Admin: approve / return / reject |
@@ -332,7 +338,7 @@ Partner keys (Daraja, MNO, Airtel, broker): [docs/INTEGRATIONS.md](docs/INTEGRAT
 
 ```powershell
 $env:PYTHONPATH="src"
-python -m pytest tests/test_institution_onboarding.py tests/test_invite_matrix.py tests/test_ops_login.py tests/test_rbac.py tests/test_controls.py -q
+python -m pytest tests/test_institution_onboarding.py tests/test_invite_matrix.py tests/test_fi_desk.py tests/test_ops_login.py tests/test_rbac.py tests/test_controls.py -q
 pytest -v
 ```
 
@@ -365,6 +371,7 @@ bti-tawarruq-engine/
 | Doc | Contents |
 |-----|----------|
 | [docs/FI_ONBOARDING.md](docs/FI_ONBOARDING.md) | Customer FI KYC wizard, lifecycle, dashboard, deploy |
+| [docs/TESTER_FEEDBACK.md](docs/TESTER_FEEDBACK.md) | Implemented tester / BTI Ops suggestions (keys, origination, users books) |
 | [docs/USERS_ACCESS_CONTROLS.md](docs/USERS_ACCESS_CONTROLS.md) | Roles, invites, keys, maker-checker, billing, recon, MFA |
 | [docs/BTI_Tawarruq_Users_ver_001.docx](docs/BTI_Tawarruq_Users_ver_001.docx) | Stakeholder catalogue (`python scripts/build_users_doc.py`) |
 | [docs/KENYA_FLOW.md](docs/KENYA_FLOW.md) | Kenya eight steps, No-Inah, mobile mapping |

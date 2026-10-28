@@ -128,12 +128,27 @@ Compose portal: http://127.0.0.1:15173. Full field list and APIs: [FI_ONBOARDING
 2. Complete the seven KYC pages in order (Identity through Review). Next stays blocked until the current page’s required fields are filled. Submit as Super Admin to **Activate institution**.
 3. Repeat for a second type (for example SACCO) and confirm the dashboard pies and monthly bar update.
 4. Institutions is a directory: search, lifecycle filter, Resume KYC, Manage for engine settings. There is no 4-field register form.
-5. Users: invite FI Admin only for an Active FI.
-6. Optional: BTI Ops starts a draft and **Submit for Super Admin approval**. Super Admin approves from the directory or Review.
+5. Users: Super Admin opens **Financial institutions** and invites FI Admin only for an Active FI. **BTI** is BTI staff only.
+6. FI Admin: Institution profile → Request API Client (Pending). Super Admin issues on Webhooks. FI Admin reveals with password and copies.
+7. Optional: BTI Ops starts a draft and **Submit for Super Admin approval**. Super Admin approves from the directory or Review.
 
 ```powershell
-python -m pytest tests/test_institution_onboarding.py tests/test_rbac.py tests/test_invite_matrix.py -q
+python -m pytest tests/test_institution_onboarding.py tests/test_fi_desk.py tests/test_rbac.py tests/test_invite_matrix.py -q
 ```
+
+---
+
+## 4d. Origination desk and Shariah (portal)
+
+Tester shell: Dashboard, Onboard FI, Institutions, Users, Origination, Shariah, Ops Monitor, Audit. Kenya Ops stays hidden. Full list: [TESTER_FEEDBACK.md](TESTER_FEEDBACK.md).
+
+1. FI Admin invites FI Ops and FI Approver on Users.
+2. Sign in as FI Ops. Home is **Origination**. Complete step 1, pick the FI Approver, send.
+3. Sign in as that FI Approver. Same page, step 2: approve (or return).
+4. Back as FI Ops: steps 3–8. OTP on 4–6: Send OTP. If SMTP is off the code is on screen. Enter it, then complete the step.
+5. Shariah Audit: pick the desk case (Super Admin may pick All or one FI). Every action has a timestamp.
+
+Swagger: `POST /desk/cases`, `POST /desk/cases/{id}/decide`, `POST /desk/cases/{id}/steps/{n}`, `POST /desk/cases/{id}/otp/send` and `.../otp/verify`, `GET /desk/audit`.
 
 ---
 
@@ -150,9 +165,11 @@ Open http://localhost:5173
 - **Dashboard** — Super Admin FI charts and onboard CTA
 - **Onboard FI** — customer institution KYC wizard
 - **Institutions** — directory and lifecycle (Manage = engine settings)
+- **Users** — BTI book vs FI book (Super Admin / BTI Ops); FI Admin sees own tenant
+- **Origination** — FI Ops eight-step desk; FI Approver decides step 2
+- **Shariah Audit** — Kenya ledger plus origination desk trail
 - **Kenya MNO Flow** — demo runner (mock mode; hidden while tester shell is on)
 - **Integrations** — per-institution Daraja/MNO config
-- **Application detail** — Shariah audit, business steps
 
 ---
 

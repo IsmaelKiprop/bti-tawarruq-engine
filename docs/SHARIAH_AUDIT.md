@@ -45,6 +45,21 @@ FINANCING_REQUEST → ELIGIBILITY_CHECK → MURABAHA_PURCHASE → CONSTRUCTIVE_P
 
 Malaysia applications: `GET /api/v1/applications/{id}/shariah-audit`
 
+### Origination desk trail
+
+Every Origination action (`create`, decide, step complete, OTP send / verify) calls `log_shariah_step` with `entity_type = fi_desk_case`. Portal **Shariah Audit** (`/shariah`) is on the tester nav.
+
+- Super Admin / BTI Ops: **All** institutions or one.
+- FI Admin / Shariah: own tenant.
+- Two lists: Kenya applications (possession seal + chain) and origination desk cases with timestamps.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/v1/desk/audit` | Desk-case Shariah rows (`view_shariah`) |
+| GET | `/api/v1/desk/cases` | Cases the viewer may see |
+
+See [TESTER_FEEDBACK.md](TESTER_FEEDBACK.md).
+
 ## Python microservice
 
 Location: `shariah-audit-service/app.py`
@@ -111,6 +126,8 @@ Violations raise `ShariahStateViolation` (HTTP 409 on API).
 | `services/shariah_audit_service.py` | Query, export, application integrity |
 | `services/shariah_audit_remote.py` | HTTP mirror to microservice |
 | `models/kenya_flow.py` | `ShariahAuditLog` ORM model |
+| `services/fi_desk_service.py` | Desk-case `log_shariah_step` on every action |
+| `portal/src/pages/ShariahCompliancePage.tsx` | Tenant vs all + desk trail |
 
 ## Database migrations
 

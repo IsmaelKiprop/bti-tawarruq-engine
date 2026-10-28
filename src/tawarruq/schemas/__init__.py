@@ -579,6 +579,10 @@ class ApiClientRequestRead(BaseModel):
     hmac_secret: str | None = None
 
 
+class ApiKeyRevealRequest(BaseModel):
+    password: str = Field(..., min_length=1)
+
+
 class ApiClientRequestListItem(ApiClientRequestRead):
     name: str
     code: str

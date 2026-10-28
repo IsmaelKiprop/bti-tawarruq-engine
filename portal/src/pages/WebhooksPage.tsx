@@ -107,10 +107,18 @@ export function WebhooksPage() {
         <SecretCopyPanel
           title="API client issued"
           note="Copy these for the FI. They also appear on FI profile."
+          institutionId={institutionId}
           secrets={[
             { id: "key", label: "API key", value: issuedKey },
             { id: "hmac", label: "HMAC secret", value: issuedHmac },
           ]}
+          onReveal={async (password) => {
+            const revealed = await api.revealApiClient(institutionId, password);
+            return [
+              { id: "key", label: "API key", value: revealed.api_key || "" },
+              { id: "hmac", label: "HMAC secret", value: revealed.hmac_secret || "" },
+            ];
+          }}
         />
       ) : null}
 

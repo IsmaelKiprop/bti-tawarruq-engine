@@ -189,7 +189,6 @@ export function AppLayout() {
             )}
             <div className="navbar-titles">
               <h1>{meta.title}</h1>
-              <p>{meta.description}</p>
             </div>
           </div>
 

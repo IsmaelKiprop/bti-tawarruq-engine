@@ -41,8 +41,8 @@ With `AUTH_ENABLED=true`, the ops portal uses a login page (not pasted API keys)
 2. Bootstrap / seed passwords come from `OPS_BOOTSTRAP_*` and `OPS_SEED_PASSWORD`. New secrets are appended to `data/ops_seed_credentials.txt` (gitignored).
 3. Sign in at `/login`. Temporary passwords force `/change-password` before any other page.
 4. Re-run anytime: `python -m tawarruq.cli seed-ops-users`
-5. Super Admin onboards the customer FI (or approves a BTI Ops submit). Super Admin or BTI Ops invites the FI Admin under **Users**. That FI Admin then invites FI Operations and FI Approver.
-6. Machine clients use `X-API-Key` (`api_client` role preferred). Super Admin issues the key on **Webhooks**; FI Admin requests BTI to onboard.
+5. Super Admin onboards the customer FI (or approves a BTI Ops submit). Super Admin or BTI Ops invites the FI Admin under Users → **Financial institutions**. That FI Admin then invites FI Operations and FI Approver. BTI staff are invited from the **BTI** book.
+6. Machine clients use `X-API-Key` (`api_client` role preferred). Super Admin issues the key on **Webhooks**; FI Admin requests on Institution profile, then reveals with password to copy.
 7. Privileged portal roles (Super Admin, BTI Ops, BTI Finance) should enroll TOTP at `/mfa-enroll`. After enrollment, login requires the authenticator code.
 8. Murabaha, liquidation, and disbursement are maker-checker gated when `AUTH_ENABLED=true`. FI Ops queues the step; FI Approvers act on **Approvals**. Amount limits on the institution or the approver are enforced. The initiator cannot be the sole approver.
 
@@ -69,7 +69,7 @@ OPS_BOOTSTRAP_ADMIN_PASSWORD=ChangeMeNow!123
 CALLBACK_AUTH_TOKEN=your-callback-secret   # optional, for inbound Daraja/MNO webhooks
 ```
 
-Run Alembic through `015` (FI KYC profiles + lifecycle). If the database has schema from `init_db` and no `alembic_version` row, `alembic stamp 014` then `upgrade head`. SQLite `init_db` adds missing columns automatically:
+Run Alembic through `017` (FI KYC, API key reveal, origination desk). If the database has schema from `init_db` and no `alembic_version` row, `alembic stamp 014` then `upgrade head`. SQLite `init_db` adds missing columns automatically:
 
 ```bash
 alembic upgrade head
@@ -141,7 +141,7 @@ Services:
 - [ ] Postgres `DATABASE_URL` (not SQLite)
 - [ ] On-prem: Shariah **mirror** on Postgres `tawarruq_audit`, or disable the mirror — do not rely on Compose SQLite as the only extra copy ([DEPLOYMENT.md](DEPLOYMENT.md#shariah-audit-stores-packaging-gap))
 - [ ] `AUTH_ENABLED=true`
-- [ ] Alembic `015` applied (FI KYC + lifecycle; includes `011` controls)
+- [ ] Alembic `017` applied (FI KYC, reveal_key, fi_desk_cases; includes `011` controls)
 - [ ] Super Admin password rotated and TOTP enrolled
 - [ ] Create `platform_admin` + per-institution keys / FI Approver
 - [ ] Configure real Daraja / MNO / BSAS credentials

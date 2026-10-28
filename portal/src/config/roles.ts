@@ -99,6 +99,20 @@ export function canAssignInviteInstitution(creatorRole?: string | null): boolean
   return creatorRole === "platform_admin" || creatorRole === "bti_ops";
 }
 
+/** BTI book: operator staff and any login with no institution. FI book: tenant-bound desks. */
+export function isBtiManagedUser(role?: string | null, institutionId?: string | null): boolean {
+  if (PLATFORM_SCOPED_INVITE_ROLES.includes(role as OpsRole)) return true;
+  return !institutionId;
+}
+
+export function inviteRoleOptionsForBook(creatorRole: string | null | undefined, book: "bti" | "fi") {
+  return inviteRoleOptions(creatorRole).filter((opt) =>
+    book === "bti"
+      ? PLATFORM_SCOPED_INVITE_ROLES.includes(opt.value)
+      : !PLATFORM_SCOPED_INVITE_ROLES.includes(opt.value),
+  );
+}
+
 type NavVisibility = {
   to: string;
   permission?: string;
@@ -169,7 +183,7 @@ const ROLE_PROFILES: Record<string, RoleProfile> = {
     showApiDocs: false,
     showWriteActions: true,
     showShariah: false,
-    homePath: "/kenya",
+    homePath: "/origination",
   },
   fi_approver: {
     label: "FI Approver",
@@ -179,7 +193,7 @@ const ROLE_PROFILES: Record<string, RoleProfile> = {
     showApiDocs: false,
     showWriteActions: false,
     showShariah: false,
-    homePath: "/approvals",
+    homePath: "/origination",
   },
   shariah_officer: {
     label: "Shariah / Audit",
@@ -260,7 +274,18 @@ export const AUDIT_ROLES: OpsRole[] = [
 /** Temporary tester shell: hide product desks until BTI Admin signs off. */
 export const TESTER_SHELL = true;
 
-const TESTER_VISIBLE_PATHS = ["/", "/ops", "/institutions", "/institutions/onboard", "/institution", "/users", "/audit", "/settings"] as const;
+const TESTER_VISIBLE_PATHS = [
+  "/",
+  "/ops",
+  "/institutions",
+  "/institutions/onboard",
+  "/institution",
+  "/users",
+  "/audit",
+  "/settings",
+  "/origination",
+  "/shariah",
+] as const;
 
 export function isTesterVisiblePath(to: string): boolean {
   const path = to.split("?")[0] || "/";

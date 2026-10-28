@@ -27,6 +27,7 @@ from tawarruq.api.routes_ops import router as ops_router
 from tawarruq.api.routes_ops_mobile import router as ops_mobile_router
 from tawarruq.api.routes_mobile_auth import router as mobile_auth_router
 from tawarruq.api.routes_controls import router as controls_router
+from tawarruq.api.routes_desk import router as desk_router
 from tawarruq.api.routes_sacco import router as sacco_router
 from tawarruq.api.routes_sedania import router as sedania_router
 from tawarruq.config import get_settings
@@ -266,6 +267,7 @@ def create_app() -> FastAPI:
     app.include_router(integrations_router, prefix=settings.api_prefix)
     app.include_router(ops_router, prefix=settings.api_prefix)
     app.include_router(controls_router, prefix=settings.api_prefix)
+    app.include_router(desk_router, prefix=settings.api_prefix)
     app.include_router(customer_router, prefix=settings.api_prefix)
     if settings.product_enabled("sacco"):
         app.include_router(sacco_router, prefix=settings.api_prefix)

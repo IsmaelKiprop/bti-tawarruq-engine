@@ -250,6 +250,13 @@ def test_fi_admin_can_request_api_client_on_active_fi(client, monkeypatch):
     assert shown.status_code == 200
     body = shown.json()
     assert body["status"] == "issued"
-    assert body["api_key"] == issued.json()["api_key"]
-    assert body["hmac_secret"] == issued.json()["hmac_secret"]
+    assert body["api_key"] is None
+    assert body["hmac_secret"] is None
+    assert body["key_prefix"]
+    blocked = client.post(
+        f"/api/v1/institutions/{mine}/api-keys/reveal",
+        headers=fi_headers,
+        json={"password": "anything"},
+    )
+    assert blocked.status_code == 401
     get_settings.cache_clear()

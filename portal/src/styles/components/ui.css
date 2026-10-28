@@ -129,6 +129,40 @@
   margin-bottom: 0.85rem;
 }
 
+.secret-copy-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.secret-copy-unlock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: end;
+  margin-bottom: 0.75rem;
+}
+
+.secret-copy-unlock label {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.secret-copy-unlock span,
+.secret-copy-error {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.secret-copy-error {
+  color: var(--color-destructive);
+  margin: 0 0 0.6rem;
+}
+
 .secret-copy-head h3 {
   margin: 0 0 0.2rem;
   font-size: 0.95rem;

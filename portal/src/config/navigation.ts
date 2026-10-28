@@ -128,6 +128,13 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "kenya",
     label: "Kenya track: float / airtime",
     items: [
+      {
+        to: "/origination",
+        label: "Origination",
+        Icon: IconNewApplication,
+        hint: "FI Ops eight-step facility desk",
+        anyPermissions: ["write_ops", "approve_txn"],
+      },
       { to: "/kenya", label: "Kenya Ops", Icon: IconKenya, hint: "Run the eight steps in order", permission: "write_ops", product: "kenya" },
       {
         to: "/agent-dealers",
@@ -202,9 +209,8 @@ export const NAV_SECTIONS: NavSection[] = [
         to: "/shariah",
         label: "Shariah Audit",
         Icon: IconShariah,
-        hint: "Verify the chain",
+        hint: "Tenant or all-institution chain",
         permission: "view_shariah",
-        hidden: true,
       },
       {
         to: "/documentation",
@@ -328,6 +334,10 @@ export const ROUTE_META: Record<string, { title: string; description: string }> 
   "/webhooks": {
     title: "Webhooks & Keys",
     description: "Manage callback URLs and API credentials",
+  },
+  "/origination": {
+    title: "Origination",
+    description: "FI Ops eight-step facility desk",
   },
   "/kenya": {
     title: "Kenya Ops Workbench",

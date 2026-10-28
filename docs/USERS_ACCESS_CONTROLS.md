@@ -4,7 +4,7 @@ Complete operator and engineer guide for the live identity, permission, maker-ch
 
 Companion stakeholder catalogue: [BTI_Tawarruq_Users_ver_001.docx](BTI_Tawarruq_Users_ver_001.docx) (regenerate with `python scripts/build_users_doc.py`). Production deploy and monitoring remain in [PRODUCTION_OPS.md](PRODUCTION_OPS.md).
 
-**Status:** implemented in `bti-tawarruq-engine` (Alembic `015` for FI KYC; `011` for controls). Production VPS must pull, rebuild, and run `alembic upgrade head` (or restart SQLite so `init_db` adds the columns). Existing emails, including `admin@buruujfintech.com`, are never overwritten by seed. Customer FI KYC: [FI_ONBOARDING.md](FI_ONBOARDING.md).
+**Status:** implemented in `bti-tawarruq-engine` (Alembic `017` head: FI KYC `015`, API key reveal `016`, origination desk `017`; controls remain on `011`). Production VPS must pull, rebuild, and run `alembic upgrade head` (or restart SQLite so `init_db` adds the columns). Existing emails, including `admin@buruujfintech.com`, are never overwritten by seed. Customer FI KYC: [FI_ONBOARDING.md](FI_ONBOARDING.md). Tester / BTI Ops suggestions: [TESTER_FEEDBACK.md](TESTER_FEEDBACK.md).
 
 ---
 
@@ -65,8 +65,8 @@ Engine codes are the stable API values. Product names are what the Users page sh
 | BTI Tawarruq Operations | `bti_ops` | Platform | `/ops` |
 | BTI Finance / Billing | `bti_finance` | Platform | `/billing` |
 | FI Administrator | `institution_admin` | Own tenant | `/` |
-| FI Operations Officer | `institution_ops` | Own tenant | `/kenya` |
-| FI Approver | `fi_approver` | Own tenant | `/approvals` |
+| FI Operations Officer | `institution_ops` | Own tenant | `/origination` |
+| FI Approver | `fi_approver` | Own tenant | `/origination` |
 | Shariah / Audit | `shariah_officer` | Tenant | `/shariah` |
 | Reconciliation Officer | `reconciler` | Tenant, or BTI-wide if unbound | `/reconciliation` |
 | Read only | `read_only` | Own tenant | `/` |
@@ -87,7 +87,9 @@ Super Admin, BTI Ops, and FI Admin may invite. Extra engine roles (`read_only`, 
 | FI Admin must **not** | Super Admin, BTI Ops, BTI Finance |
 | Everyone else | Nobody |
 
-FI API Client and Sedania stay technical identities, not portal invites. Super Admin provisions API keys on **Webhooks**. FI Admin cannot create keys — they request BTI to onboard.
+FI API Client and Sedania stay technical identities, not portal invites. Super Admin provisions API keys on **Webhooks**. FI Admin cannot create keys — they **Request API Client** on Institution profile. GET status never returns plaintext. Reveal with the signed-in user’s password, then copy from the masked panel.
+
+Super Admin and BTI Ops manage BTI staff and FI logins on separate Users books. FI Admin sees one tenant directory.
 
 ### Permission catalogue
 
@@ -130,7 +132,7 @@ These roles cannot make arbitrary POST/PATCH/DELETE calls: `read_only`, `shariah
 
 - BTI Finance → `/api/v1/ops/billing/*`
 - Reconciler → `/api/v1/ops/reconciliation/*`
-- FI Approver → `/api/v1/ops/approvals/*` and paths ending `/approve` or `/reject`
+- FI Approver → `/api/v1/ops/approvals/*`, `/api/v1/desk/cases`, and paths ending `/approve`, `/reject`, or `/decide`
 - All roles → password change and MFA enroll/confirm
 
 Agent dealers may only hit `/api/v1/ops/auth/*` (me, login, change-password) and `/api/v1/kenya/agent-dealers*`.
@@ -163,12 +165,17 @@ Algorithm: RFC 6238, HMAC-SHA1, 30-second step, 6 digits, ±1 window. Issuer lab
 
 ### API keys
 
-Header `X-API-Key` (override with `API_KEY_HEADER`). Super Admin creates keys under **Webhooks**. FI Admin is blocked and should request BTI to onboard:
+Header `X-API-Key` (override with `API_KEY_HEADER`). Super Admin creates keys under **Webhooks**. FI Admin is blocked from create and uses Request instead:
 
 ```http
+POST /api/v1/institutions/{id}/api-keys/request
 POST /api/v1/institutions/{id}/api-keys
 { "name": "fi-core-banking", "role": "api_client" }
+POST /api/v1/institutions/{id}/api-keys/reveal
+{ "password": "session-password" }
 ```
+
+GET request status returns `none` / `requested` / `issued` and `key_prefix` only. `api_key` and `hmac_secret` appear after a successful reveal. Keys issued before Alembic `016` have no `reveal_key`; Super Admin re-issues.
 
 `api_client` skips maker-checker so core-banking integrations execute immediately under the FI’s own dual-control.
 
@@ -419,8 +426,9 @@ Nav is permission-based. Super Admin does **not** see every write desk.
 | `/` | session | Super Admin: FI charts + onboard. Other roles: uptime |
 | `/institutions/onboard` | `manage_institutions` or `write_bti_ops` | Super Admin, BTI Ops |
 | `/institutions` | `manage_institutions` or `write_bti_ops` | Super Admin, BTI Ops — directory. Manage stays Super Admin |
-| `/institution` | FI Admin session | Own KYC profile. Request API Client shows Pending, then Copy after Super Admin issues |
-| `/users` | `manage_credentials` | Super Admin, FI Admin |
+| `/institution` | FI Admin session | Own KYC. Request API Client: Pending Super Admin, then masked copy after issue (password to reveal) |
+| `/users` | `manage_credentials` | Super Admin, BTI Ops (BTI / FI books), FI Admin (own tenant) |
+| `/origination` | `write_ops` or `approve_txn` | FI Ops eight-step desk; FI Approver decides step 2 |
 | `/integrations` | `manage_integrations` | Super Admin, FI Admin |
 | `/webhooks` | `manage_credentials` | Super Admin, FI Admin |
 | `/kenya` | `write_ops` | BTI Ops, FI Admin, FI Ops |
@@ -437,11 +445,15 @@ Nav is permission-based. Super Admin does **not** see every write desk.
 
 ## 13. Data model
 
-Alembic revision **`015_institution_kyc_profile`** (controls remain on `011`). SQLite `init_db` also ALTERs missing columns.
+Alembic revision **`017_fi_desk_cases`** (KYC `015`, reveal `016`; controls remain on `011`). SQLite `init_db` also ALTERs missing columns.
 
 **`institutions`:** `active`, `lifecycle_status` (`draft` / `pending_approval` / `active` / `dormant` / `deactivated`), `approval_steps`, `approval_limit_amount`, `billing_fee_bps`
 
 **`institution_profiles`:** 1:1 KYC (identity, regulator, ownership JSON, representatives, settlement, commercial, workflow)
+
+**`api_keys`:** `reveal_key` (optional; set when Super Admin issues so FI Admin can copy later)
+
+**`fi_desk_cases`:** origination wizard (`current_step`, `status`, assigned approver, OTP hash, `payload_json`)
 
 **`ops_users`:** `approval_limit_amount`, `mfa_secret`, `mfa_enabled`
 
@@ -491,14 +503,14 @@ Re-seed anytime: `python -m tawarruq.cli seed-ops-users`. Existing emails are le
 
 ### First production day
 
-1. `alembic upgrade head` (must include `015`). If `alembic_version` is missing, `alembic stamp 014` then upgrade.
+1. `alembic upgrade head` (must include `017`). If `alembic_version` is missing, `alembic stamp 014` then upgrade.
 2. Confirm `AUTH_ENABLED=true` and a strong `OPS_SESSION_SECRET`.
 3. Sign in as Super Admin → change password → enroll TOTP at `/mfa-enroll`.
 4. Rotate seed passwords for BTI Ops, Finance, and the default FI users (or disable unused seeds).
 5. **Onboard FI** for each customer institution (Super Admin activate, or BTI Ops submit then Super Admin approve). See [FI_ONBOARDING.md](FI_ONBOARDING.md).
 6. On each **Active** FI: set `approval_steps`, `approval_limit_amount`, `billing_fee_bps` on Manage.
-7. Super Admin or BTI Ops invites the FI Admin under **Users** only after the FI is Active. That FI Admin then invites FI Ops and FI Approver (and optional amount cap). Super Admin and BTI Ops do not create FI desk staff.
-8. Super Admin issues an `api_client` key on **Webhooks** if the FI submits trades over API.
+7. Super Admin or BTI Ops opens Users → **Financial institutions** and invites the FI Admin only after the FI is Active. That FI Admin then invites FI Ops and FI Approver (and optional amount cap). Super Admin and BTI Ops do not create FI desk staff. Super Admin invites BTI staff from the **BTI** book.
+8. Super Admin issues an `api_client` key on **Webhooks** if the FI submits trades over API. FI Admin copies it from Institution profile after password reveal.
 
 ### FI Ops runs a Kenya deal
 
@@ -526,7 +538,7 @@ Reconciler → **Scan trades vs settlement** → filter mismatch/outstanding →
 ```powershell
 cd bti-tawarruq-engine
 $env:PYTHONPATH="src"
-python -m pytest tests/test_institution_onboarding.py tests/test_controls.py tests/test_rbac.py tests/test_ops_login.py tests/test_invite_matrix.py tests/test_auth_scope.py tests/test_kenya_flow.py tests/test_api.py -q
+python -m pytest tests/test_institution_onboarding.py tests/test_fi_desk.py tests/test_controls.py tests/test_rbac.py tests/test_ops_login.py tests/test_invite_matrix.py tests/test_auth_scope.py tests/test_kenya_flow.py tests/test_api.py -q
 ```
 
 `tests/test_controls.py` covers: Super Admin cannot create applications; queue + self-approve blocked; amount cap; tenant suspend; billing + recon; BTI ops retry; TOTP round-trip.
@@ -534,6 +546,8 @@ python -m pytest tests/test_institution_onboarding.py tests/test_controls.py tes
 `tests/test_invite_matrix.py` and `tests/test_ops_login.py` cover who may invite whom: Super Admin and BTI Ops may invite FI Admin but not FI Operations or FI Approver; BTI Ops cannot invite until the FI is Active; FI Admin cannot invite BTI roles or create API keys; FI Ops cannot invite anyone.
 
 `tests/test_institution_onboarding.py` covers Super Admin activate + invite, BTI Ops pending then Super Admin approve, FI Admin cannot onboard other tenants, and incomplete KYC rejected on submit.
+
+`tests/test_fi_desk.py` covers the eight origination steps, OTP, Shariah desk audit, and API-key reveal requiring a session password.
 
 Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it false so they execute immediately.
 
@@ -549,12 +563,13 @@ Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it 
 | Billing | `src/tawarruq/services/billing_service.py` |
 | Reconciliation | `src/tawarruq/services/reconciliation_service.py` |
 | TOTP | `src/tawarruq/services/totp_service.py` |
-| HTTP | `src/tawarruq/api/routes_controls.py`, `routes_ops.py`, `routes_extended.py` (API keys Super Admin only) |
+| HTTP | `src/tawarruq/api/routes_controls.py`, `routes_ops.py`, `routes_extended.py` (API keys Super Admin only; request / reveal), `routes_desk.py` |
 | OpenAPI / Swagger | `src/tawarruq/api/openapi_metadata.py` — invite rules and Super Admin key create |
 | Models | `src/tawarruq/models/controls.py`, `institution.py`, `institution_profile.py`, `ops_user.py` |
-| Migration | `alembic/versions/011_controls_billing_mfa.py`, `015_institution_kyc_profile.py` |
+| Migration | `alembic/versions/011_controls_billing_mfa.py`, `015_institution_kyc_profile.py`, `016_api_key_reveal.py`, `017_fi_desk_cases.py` |
 | FI onboarding | `src/tawarruq/services/institution_onboarding_service.py`, `portal/src/pages/InstitutionOnboardPage.tsx` |
-| Portal | `portal/src/config/roles.ts`, `UsersPage`, `WebhooksPage`, `navigation.ts`, pages `DashboardPage`, `InstitutionsPage`, `ApprovalsPage`, `BillingPage`, `ReconciliationPage`, `MfaEnrollPage`, `LoginPage` |
+| Origination desk | `src/tawarruq/services/fi_desk_service.py`, `portal/src/pages/OriginationDeskPage.tsx` |
+| Portal | `portal/src/config/roles.ts`, `UsersPage`, `WebhooksPage`, `SecretCopyPanel`, `navigation.ts`, pages `DashboardPage`, `InstitutionsPage`, `InstitutionProfilePage`, `ShariahCompliancePage`, `ApprovalsPage`, `BillingPage`, `ReconciliationPage`, `MfaEnrollPage`, `LoginPage` |
 | Catalogue generator | `scripts/build_users_doc.py` |
 
 ---
@@ -579,4 +594,5 @@ Maker-checker tests turn `AUTH_ENABLED=true`. Kenya/Malaysia mock flows keep it 
 - [ONPREM.md](ONPREM.md) — customer-server edition
 - [PRODUCTION_OPS.md](PRODUCTION_OPS.md) — monitoring, Prometheus, CI/CD
 - [LOCAL_TEST.md](LOCAL_TEST.md) — local Swagger walkthrough
+- [TESTER_FEEDBACK.md](TESTER_FEEDBACK.md) — implemented tester / BTI Ops suggestions
 - [INTEGRATIONS.md](INTEGRATIONS.md) — Daraja / MNO / broker credentials

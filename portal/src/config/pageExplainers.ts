@@ -187,7 +187,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   },
   "/users": {
     title: "What a user is",
-    lead: "A portal login. Platform admin is Buruuj and sees all institutions. Other roles stay on one bank or SACCO. The directory is lean; open Manage for profile, HR, and audit.",
+    lead: "A portal login. Super Admin and BTI Ops keep BTI staff and FI logins on separate books. Other roles stay on one bank or SACCO. The directory is lean; open Manage for profile, HR, and audit.",
     dealTitle: "How a deal uses it",
     dealSteps: [
       "Invite with the narrowest role that still lets them work.",
@@ -196,7 +196,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Approval limit is the maximum deal amount that person may approve. Set it on FI Approver. The engine uses the lower of this and the institution limit.",
       "Staff set their own name and HR fields on Settings. Admins can override the same fields on User management.",
     ],
-    note: "Super Admin and BTI Ops invite FI Admin only after the FI is Active. Super Admin may also invite Super Admin, BTI Ops, BTI Finance, Shariah / Audit, and Reconciliation. FI Admin invites FI Ops, FI Approver, and the other FI desk roles for their institution. Super Admin and BTI Ops do not invite FI Ops or FI Approver. API keys are Super Admin only.",
+    note: "Super Admin and BTI Ops keep BTI staff and FI logins on separate books. Invite FI Admin only after the FI is Active, from the FI book. Super Admin may also invite Super Admin, BTI Ops, BTI Finance, Shariah / Audit, and Reconciliation. FI Admin invites FI Ops, FI Approver, and the other FI desk roles for their institution. Super Admin and BTI Ops do not invite FI Ops or FI Approver. API keys are Super Admin only.",
   },
   "/settings": {
     title: "What settings cover",

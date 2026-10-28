@@ -615,6 +615,39 @@ export interface ReconciliationRow {
   created_at: string | null;
 }
 
+export interface DeskApprover {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
+export interface DeskCase {
+  id: string;
+  institution_id: string;
+  institution_name?: string | null;
+  current_step: number;
+  status: string;
+  assigned_approver_id?: string | null;
+  assigned_approver_name?: string | null;
+  requested_by_id?: string | null;
+  requested_by_name?: string | null;
+  approval_comments?: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface DeskAuditEntry {
+  id: string;
+  timestamp: string;
+  step_id: string;
+  entity_id: string;
+  actor_from: string;
+  actor_to: string;
+  details?: string | null;
+  institution_id?: string | null;
+}
+
 export interface OpsUserRecord {
   id: string;
   email: string;
@@ -1230,6 +1263,45 @@ export const api = {
     request<ApiClientRequest>(`/institutions/${institutionId}/api-keys/request`),
   requestApiClient: (institutionId: string) =>
     request<ApiClientRequest>(`/institutions/${institutionId}/api-keys/request`, { method: "POST" }),
+  revealApiClient: (institutionId: string, password: string) =>
+    request<ApiClientRequest>(`/institutions/${institutionId}/api-keys/reveal`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+  listDeskApprovers: (institutionId?: string) =>
+    request<DeskApprover[]>(`/desk/approvers${institutionId ? `?institution_id=${institutionId}` : ""}`),
+  listDeskCases: (institutionId?: string) =>
+    request<DeskCase[]>(`/desk/cases${institutionId ? `?institution_id=${institutionId}` : ""}`),
+  getDeskCase: (caseId: string) => request<DeskCase>(`/desk/cases/${caseId}`),
+  createDeskCase: (body: Record<string, string>) =>
+    request<DeskCase>("/desk/cases", { method: "POST", body: JSON.stringify(body) }),
+  decideDeskCase: (caseId: string, decision: "approve" | "return", comments = "") =>
+    request<DeskCase>(`/desk/cases/${caseId}/decide`, {
+      method: "POST",
+      body: JSON.stringify({ decision, comments }),
+    }),
+  completeDeskStep: (caseId: string, step: number, fields: Record<string, unknown>) =>
+    request<DeskCase>(`/desk/cases/${caseId}/steps/${step}`, {
+      method: "POST",
+      body: JSON.stringify({ fields }),
+    }),
+  sendDeskOtp: (caseId: string, purpose: string) =>
+    request<{ purpose: string; smtp_sent: boolean; dev_code?: string | null; expires_at?: string | null }>(
+      `/desk/cases/${caseId}/otp/send`,
+      { method: "POST", body: JSON.stringify({ purpose }) },
+    ),
+  verifyDeskOtp: (caseId: string, purpose: string, code: string) =>
+    request<DeskCase>(`/desk/cases/${caseId}/otp/verify`, {
+      method: "POST",
+      body: JSON.stringify({ purpose, code }),
+    }),
+  listDeskAudit: (institutionId?: string, caseId?: string) => {
+    const params = new URLSearchParams();
+    if (institutionId) params.set("institution_id", institutionId);
+    if (caseId) params.set("case_id", caseId);
+    const query = params.toString();
+    return request<DeskAuditEntry[]>(`/desk/audit${query ? `?${query}` : ""}`);
+  },
 
   getAuthContext: () => request<AuthContext>("/ops/auth/me"),
   updateOwnProfile: (body: OpsUserProfilePatch) =>

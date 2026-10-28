@@ -200,10 +200,18 @@ export function InstitutionProfilePage() {
         <SecretCopyPanel
           title="API client issued"
           note={requestState.message}
+          institutionId={institutionId}
           secrets={[
-            { id: "key", label: "API key", value: requestState.api_key || "" },
+            { id: "key", label: "API key", value: requestState.api_key || "", prefix: requestState.key_prefix || undefined },
             { id: "hmac", label: "HMAC secret", value: requestState.hmac_secret || "" },
           ]}
+          onReveal={async (password) => {
+            const revealed = await api.revealApiClient(institutionId, password);
+            return [
+              { id: "key", label: "API key", value: revealed.api_key || "", prefix: revealed.key_prefix || undefined },
+              { id: "hmac", label: "HMAC secret", value: revealed.hmac_secret || "" },
+            ];
+          }}
         />
       ) : null}
 

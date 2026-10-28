@@ -1,15 +1,21 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, Institution, KenyaOpsCase, ShariahAuditEntry } from "../api/client";
+import { api, type DeskAuditEntry, type DeskCase, type Institution, type KenyaOpsCase, type ShariahAuditEntry } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { DealTape } from "../components/DealTape";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
 
 export function ShariahCompliancePage() {
+  const { user } = useAuth();
+  const canSeeAll = user?.role === "platform_admin" || user?.role === "bti_ops" || Boolean(user?.permissions.includes("manage_institutions"));
   const [institutions, setInstitutions] = useState<Institution[]>([]);
-  const [institutionId, setInstitutionId] = useState("");
+  const [institutionId, setInstitutionId] = useState(canSeeAll ? "all" : "");
   const [cases, setCases] = useState<KenyaOpsCase[]>([]);
+  const [deskCases, setDeskCases] = useState<DeskCase[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [deskCaseId, setDeskCaseId] = useState("");
   const [audit, setAudit] = useState<ShariahAuditEntry[]>([]);
+  const [deskAudit, setDeskAudit] = useState<DeskAuditEntry[]>([]);
   const [chain, setChain] = useState<Record<string, unknown> | null>(null);
   const [integrity, setIntegrity] = useState<{
     valid: boolean;
@@ -25,24 +31,26 @@ export function ShariahCompliancePage() {
       .listInstitutions()
       .then((items) => {
         setInstitutions(items);
-        if (items[0]) setInstitutionId(items[0].id);
+        if (!canSeeAll && items[0]) setInstitutionId(items[0].id);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    api
-      .listKenyaOpsCases("all")
-      .then(setCases)
-      .catch(() => setCases([]));
-  }, []);
+    const scoped = institutionId && institutionId !== "all" ? institutionId : undefined;
+    api.listKenyaOpsCases("all").then(setCases).catch(() => setCases([]));
+    api.listDeskCases(scoped).then(setDeskCases).catch(() => setDeskCases([]));
+    if (canSeeAll || scoped) {
+      api.listDeskAudit(scoped).then(setDeskAudit).catch(() => setDeskAudit([]));
+    }
+  }, [institutionId, canSeeAll]);
 
   async function verifyChain() {
     setError("");
     setMessage("");
     try {
-      const result = await api.verifyShariahChain(institutionId || undefined);
+      const result = await api.verifyShariahChain(institutionId && institutionId !== "all" ? institutionId : undefined);
       setChain(result);
       setMessage("Institution ledger chain verified.");
     } catch (err) {
@@ -74,7 +82,7 @@ export function ShariahCompliancePage() {
     try {
       await api.downloadShariahExport({
         format,
-        institution_id: institutionId || undefined,
+        institution_id: institutionId && institutionId !== "all" ? institutionId : undefined,
         application_id: selectedId || undefined,
       });
       setMessage(`Shariah export (${format}) downloaded.`);
@@ -99,6 +107,7 @@ export function ShariahCompliancePage() {
                   value={institutionId}
                   onChange={(e) => setInstitutionId(e.target.value)}
                 >
+                  {canSeeAll ? <option value="all">All institutions</option> : null}
                   {institutions.map((inst) => (
                     <option key={inst.id} value={inst.id}>
                       {inst.name}
@@ -190,15 +199,45 @@ export function ShariahCompliancePage() {
           </div>
         )}
 
+        <section className="panel">
+          <h2>Origination desk cases</h2>
+          <p className="muted">FI Ops wizard trail. Every action has a timestamp.</p>
+          <select
+            className="select-input"
+            value={deskCaseId}
+            onChange={(e) => {
+              setDeskCaseId(e.target.value);
+              if (e.target.value) {
+                api.listDeskAudit(institutionId && institutionId !== "all" ? institutionId : undefined, e.target.value).then(setDeskAudit).catch(() => setDeskAudit([]));
+              }
+            }}
+          >
+            <option value="">All desk cases…</option>
+            {deskCases.map((item) => (
+              <option key={item.id} value={item.id}>
+                {(item.payload.origination as { customer_name?: string } | undefined)?.customer_name || item.id.slice(0, 8)} · {item.status}
+              </option>
+            ))}
+          </select>
+        </section>
+
         <section className="panel span-2">
           <h2>Audit entries</h2>
-          {audit.length === 0 ? (
+          {audit.length === 0 && deskAudit.length === 0 ? (
             <EmptyState
               title="No entries loaded"
-              description="Select an application to inspect Step_ID, Asset_Ref, actors, and payload hashes."
+              description="Select a Kenya case or an origination desk case. Every action is timestamped."
             />
           ) : (
             <ul className="audit-list">
+              {deskAudit.map((entry) => (
+                <li key={entry.id}>
+                  <span className="audit-action">{entry.step_id}</span>
+                  <span className="meta">{entry.actor_from} → {entry.actor_to}</span>
+                  <span className="meta">{entry.details || "desk"}</span>
+                  <span className="meta">{new Date(entry.timestamp).toLocaleString()}</span>
+                </li>
+              ))}
               {audit.map((entry) => (
                 <li key={entry.id}>
                   <span className="audit-action">{entry.step_id}</span>

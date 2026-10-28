@@ -112,6 +112,7 @@ export function DashboardPage() {
   const [issuedKey, setIssuedKey] = useState("");
   const [issuedHmac, setIssuedHmac] = useState("");
   const [issuedName, setIssuedName] = useState("");
+  const [issuedInstitutionId, setIssuedInstitutionId] = useState("");
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -163,6 +164,7 @@ export function DashboardPage() {
     try {
       const created = await api.createApiKey(item.institution_id, `${item.code}-api-client`, "api_client");
       setIssuedName(item.name);
+      setIssuedInstitutionId(item.institution_id);
       setIssuedKey(created.api_key);
       setIssuedHmac(created.hmac_secret || "");
       setApiRequests((prev) => prev.filter((row) => row.institution_id !== item.institution_id));
@@ -260,10 +262,18 @@ export function DashboardPage() {
         <SecretCopyPanel
           title={`API client issued${issuedName ? ` · ${issuedName}` : ""}`}
           note="Copy these for the FI. They also appear on FI profile."
+          institutionId={issuedInstitutionId}
           secrets={[
             { id: "key", label: "API key", value: issuedKey },
             { id: "hmac", label: "HMAC secret", value: issuedHmac },
           ]}
+          onReveal={async (password) => {
+            const revealed = await api.revealApiClient(issuedInstitutionId, password);
+            return [
+              { id: "key", label: "API key", value: revealed.api_key || "" },
+              { id: "hmac", label: "HMAC secret", value: revealed.hmac_secret || "" },
+            ];
+          }}
         />
       ) : null}
 

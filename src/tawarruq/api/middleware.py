@@ -65,10 +65,10 @@ def _write_forbidden(role: str, path: str, method: str) -> bool:
     if role == ApiKeyRole.RECONCILER.value and "/ops/reconciliation" in path:
         return False
     if role == ApiKeyRole.FI_APPROVER.value:
-        if "/ops/approvals" in path:
+        if "/ops/approvals" in path or "/desk/cases" in path:
             return False
         stripped = path.rstrip("/")
-        if stripped.endswith("/approve") or stripped.endswith("/reject"):
+        if stripped.endswith("/approve") or stripped.endswith("/reject") or stripped.endswith("/decide"):
             return False
         return True
     return role in {item.value for item in WRITE_BLOCKED_ROLES}

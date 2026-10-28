@@ -18,6 +18,7 @@ from tawarruq.models.transaction import CommodityTransaction
 from tawarruq.models.audit import AuditEvent
 from tawarruq.schemas import (
     ApiClientRequestRead,
+    ApiKeyRevealRequest,
     ApiKeyCreate,
     ApiKeyCreatedRead,
     ApiKeyRead,
@@ -318,7 +319,9 @@ def get_institution_api_keys(
 API_CLIENT_REQUEST_ACTION = "institution.api_client.requested"
 
 
-def _api_client_request_state(db: Session, institution_id: str) -> ApiClientRequestRead:
+def _api_client_request_state(
+    db: Session, institution_id: str, *, include_secrets: bool = False
+) -> ApiClientRequestRead:
     keys = [key for key in list_api_keys(db, institution_id) if key.role == ApiKeyRole.API_CLIENT.value]
     latest = max(keys, key=lambda key: key.created_at) if keys else None
     last = (
@@ -347,8 +350,8 @@ def _api_client_request_state(db: Session, institution_id: str) -> ApiClientRequ
         issued_at=latest.created_at if latest else None,
         key_count=len(keys),
         key_prefix=latest.key_prefix if latest else None,
-        api_key=latest.reveal_key if latest else None,
-        hmac_secret=latest.hmac_secret if latest else None,
+        api_key=latest.reveal_key if latest and include_secrets else None,
+        hmac_secret=latest.hmac_secret if latest and include_secrets else None,
     )
 
 
@@ -389,7 +392,7 @@ def request_api_client(
     if institution.lifecycle_status != "active" or not institution.active:
         raise HTTPException(status_code=400, detail="Request an API client only after this financial institution is active")
     current = _api_client_request_state(db, institution_id)
-    if current.status == "issued" and current.api_key:
+    if current.status == "issued":
         raise HTTPException(status_code=400, detail=current.message)
     if current.status == "requested":
         return current
@@ -406,6 +409,38 @@ def request_api_client(
     )
     db.commit()
     return _api_client_request_state(db, institution_id)
+
+
+@router.post(
+    "/institutions/{institution_id}/api-keys/reveal",
+    response_model=ApiClientRequestRead,
+    tags=["Institutions"],
+    summary="Reveal issued API client secrets after password re-entry",
+)
+def reveal_api_client(
+    institution_id: str, payload: ApiKeyRevealRequest, request: Request, db: Session = Depends(get_db)
+) -> ApiClientRequestRead:
+    require_tenant_access(request, institution_id)
+    user_id = getattr(request.state, "ops_user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Login required to reveal the API client key")
+    from tawarruq.models.ops_user import OpsUser
+    from tawarruq.services.ops_user_service import verify_password
+
+    user = db.get(OpsUser, user_id)
+    if not user or not user.active:
+        raise HTTPException(status_code=401, detail="User not found")
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect password")
+    institution = db.get(Institution, institution_id)
+    if not institution:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    current = _api_client_request_state(db, institution_id, include_secrets=True)
+    if current.status != "issued":
+        raise HTTPException(status_code=400, detail=current.message)
+    if not current.api_key:
+        raise HTTPException(status_code=400, detail=current.message)
+    return current
 
 
 @router.post("/handoffs", response_model=HandoffRead, status_code=201, tags=["Audit"])

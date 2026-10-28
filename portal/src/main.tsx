@@ -17,6 +17,7 @@ import { KenyaFlowPage } from "./pages/KenyaFlowPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MalaysiaManualBridgePage } from "./pages/MalaysiaManualBridgePage";
 import { NewApplicationPage } from "./pages/NewApplicationPage";
+import { OriginationDeskPage } from "./pages/OriginationDeskPage";
 import { RepaymentsPage } from "./pages/RepaymentsPage";
 import { SedaniaFinancingPage } from "./pages/SedaniaFinancingPage";
 import { ShariahCompliancePage } from "./pages/ShariahCompliancePage";
@@ -85,6 +86,9 @@ createRoot(document.getElementById("root")!).render(
               </Route>
               <Route element={<RequirePermission permission="approve_txn" />}>
                 <Route path="approvals" element={<ApprovalsPage />} />
+              </Route>
+              <Route element={<RequireAnyPermission permissions={["write_ops", "approve_txn"]} />}>
+                <Route path="origination" element={<OriginationDeskPage />} />
               </Route>
               <Route element={<RequirePermission permission="write_ops" />}>
                 <Route path="customers" element={<CustomersPage />} />

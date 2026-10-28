@@ -19,7 +19,7 @@ FI roles only see their own tenant. Do not invite FI Admin or FI desk users onto
 
 ## Portal
 
-Tester-shell nav: Dashboard, Onboard FI, Institutions, Users, Settings, then Ops Monitor, then Audit. Kenya / Malaysia / Approvals stay hidden until the tester shell is lifted.
+Tester-shell nav: Dashboard, Onboard FI, Institutions, Users, Settings, Origination, Shariah, then Ops Monitor, then Audit. Kenya / Malaysia / Approvals stay hidden until the tester shell is lifted. What testers asked for after first review: [TESTER_FEEDBACK.md](TESTER_FEEDBACK.md).
 
 | Page | Path | Purpose |
 |------|------|---------|
@@ -28,8 +28,8 @@ Tester-shell nav: Dashboard, Onboard FI, Institutions, Users, Settings, then Ops
 | Resume KYC | `/institutions/:id/onboard` | Continue a draft or review a pending / active profile |
 | Directory | `/institutions` | Search, lifecycle filter, resume / approve, link to Manage |
 | Manage | `/institutions/:id` | Engine settings only |
-| Users | `/users` | Super Admin and BTI Ops invite FI Admin. Dropdown lists **Active** FIs only. FI Admin invites own-tenant desk roles. |
-| FI profile | `/institution` | FI Admin: read-only KYC and **Request API Client** |
+| Users | `/users` | Super Admin and BTI Ops: **BTI** vs **Financial institutions** books. Invite FI Admin from the FI book; dropdown lists **Active** FIs only. FI Admin invites own-tenant desk roles. |
+| FI profile | `/institution` | FI Admin: read-only KYC. **Request API Client** shows Pending Super Admin, then a masked copy panel after issue (password to reveal). |
 
 Super Admin home is Dashboard. Super Admin CTA on Review: **Activate institution**. BTI Ops CTA: **Submit for Super Admin approval**. Wizard CTAs: **Previous**, **Save draft**, **Next**.
 
@@ -85,7 +85,7 @@ Keep `POST /institutions` (name / code) for seeds and tests. Portal onboarding u
 | POST | `/institutions/{id}/onboarding/submit` | Super Admin or BTI Ops | Super Admin → `active` + `APPROVED`. BTI Ops → `pending_approval` + `UNDER_REVIEW` |
 | POST | `/institutions/{id}/onboarding/decide` | Super Admin | `{ "decision": "approve" \| "return" \| "reject", "reason"? }` |
 | PATCH | `/institutions/{id}/lifecycle` | Super Admin | `{ "lifecycle_status": "active" \| "dormant" \| "deactivated" }` |
-| GET / POST | `/institutions/{id}/api-keys/request` | FI Admin (own tenant) | Request API Client. GET is `requested` (pending) or `issued` with `api_key` + `hmac_secret` to copy. Super Admin issues `POST /institutions/{id}/api-keys` |
+| GET / POST | `/institutions/{id}/api-keys/request` | FI Admin (own tenant) | Request API Client. GET is `none` / `requested` / `issued`. Secrets are never in GET. Super Admin issues `POST /institutions/{id}/api-keys`. Copy after `POST /institutions/{id}/api-keys/reveal` with the session password. |
 
 `fi_id` is the engine institution UUID. It is not typed on the form.
 
@@ -104,8 +104,9 @@ Local Compose portal: http://127.0.0.1:15173. Seed emails and passwords: `data/o
 1. Super Admin signs in. Dashboard is first: charts and **Onboard financial institution**.
 2. Onboard a Bank and a SACCO. Activate. Confirm they appear as Active and the charts update.
 3. Open Institutions. Filter by lifecycle. Open Manage for BSAS / deal maker-checker only.
-4. Users: invite FI Admin only for an Active FI. Draft / pending FIs are not in the dropdown.
-5. Optional: BTI Ops starts a third FI and submits. Super Admin approves from the directory or the Review page.
+4. Users: open **Financial institutions**, invite FI Admin only for an Active FI. Draft / pending FIs are not in the dropdown. **BTI** is Super Admin / BTI Ops / BTI Finance only.
+5. FI Admin: Institution profile → Request API Client → Pending. Super Admin issues on Webhooks. FI Admin reveals with password and copies.
+6. Optional: BTI Ops starts a third FI and submits. Super Admin approves from the directory or the Review page.
 
 Swagger: after Super Admin login, `POST /institutions/onboarding` then `POST /institutions/{id}/onboarding/submit`. Invite FI Admin only after `lifecycle_status` is `active`.
 
@@ -113,7 +114,7 @@ Swagger: after Super Admin login, `POST /institutions/onboarding` then `POST /in
 
 ```powershell
 $env:PYTHONPATH="src"
-python -m pytest tests/test_institution_onboarding.py tests/test_rbac.py tests/test_invite_matrix.py tests/test_ops_login.py tests/test_auth_scope.py -q
+python -m pytest tests/test_institution_onboarding.py tests/test_fi_desk.py tests/test_rbac.py tests/test_invite_matrix.py tests/test_ops_login.py tests/test_auth_scope.py -q
 ```
 
 Covered: Super Admin submit activates and allows invite; BTI Ops submit is pending and invite is blocked until Super Admin approve; FI Admin cannot onboard or see other tenants; incomplete KYC is rejected on submit.
@@ -131,8 +132,9 @@ cp /tmp/docker-compose.yml.vps docker-compose.yml
 docker compose exec api alembic stamp 014
 docker compose exec api alembic upgrade head
 
-# Already at 014:
+# Already at 014 or later:
 docker compose exec api alembic upgrade head
+# head includes 016 (reveal_key) and 017 (fi_desk_cases)
 
 docker compose build --no-cache api portal
 docker compose up -d api portal
@@ -147,9 +149,9 @@ Do not `git add` Word lock files.
 | Model | `src/tawarruq/models/institution.py`, `institution_profile.py` |
 | Service | `src/tawarruq/services/institution_onboarding_service.py` |
 | HTTP | `src/tawarruq/api/routes.py` |
-| Migration | `alembic/versions/015_institution_kyc_profile.py`, `src/tawarruq/database.py` |
-| Portal | `portal/src/pages/InstitutionOnboardPage.tsx`, `InstitutionsPage.tsx`, `DashboardPage.tsx`, `config/fiKyc.ts` |
-| Tests | `tests/test_institution_onboarding.py` |
+| Migration | `alembic/versions/015_institution_kyc_profile.py`, `016_api_key_reveal.py`, `src/tawarruq/database.py` |
+| Portal | `portal/src/pages/InstitutionOnboardPage.tsx`, `InstitutionsPage.tsx`, `DashboardPage.tsx`, `InstitutionProfilePage.tsx`, `config/fiKyc.ts` |
+| Tests | `tests/test_institution_onboarding.py`, `tests/test_fi_desk.py` (reveal) |
 
 ## Not in this slice
 
@@ -158,4 +160,4 @@ Do not `git add` Word lock files.
 | KYC file store / virus scan | Document fields take a text reference |
 | Live PEP / sanctions | Status enums only |
 | Super Admin inviting FI Ops / FI Approver | Unchanged invite map |
-| Opening Kenya / Malaysia / Approvals for testers | `TESTER_SHELL` stays on |
+| Opening Kenya / Malaysia / Approvals for testers | `TESTER_SHELL` stays on. Origination and Shariah are already visible |
