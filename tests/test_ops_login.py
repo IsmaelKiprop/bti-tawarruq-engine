@@ -243,6 +243,60 @@ def test_shariah_officer_can_change_own_password():
     assert relogin.status_code == 200
 
 
+def test_shariah_officer_audit_at_bti_and_fi_level():
+    client = _client()
+    admin_headers, institution_id = _super_admin_headers(client)
+
+    bti_created = client.post(
+        "/api/v1/ops/auth/users",
+        headers=admin_headers,
+        json={
+            "email": "bti.shariah@bank.local",
+            "full_name": "BTI Shariah Officer",
+            "role": "shariah_officer",
+            "temporary_password": "TempBtiShariah!1",
+        },
+    )
+    assert bti_created.status_code == 201, bti_created.text
+    assert bti_created.json()["institution_id"] is None
+
+    fi_created = client.post(
+        "/api/v1/ops/auth/users",
+        headers=admin_headers,
+        json={
+            "email": "fi.shariah@bank.local",
+            "full_name": "FI Shariah Officer",
+            "role": "shariah_officer",
+            "institution_id": institution_id,
+            "temporary_password": "TempFiShariah!1",
+        },
+    )
+    assert fi_created.status_code == 201, fi_created.text
+    assert fi_created.json()["institution_id"] == institution_id
+
+    bti_login = _login(client, "bti.shariah@bank.local", "TempBtiShariah!1")
+    assert bti_login["institution_id"] is None
+    bti_changed = _change_password(client, bti_login["access_token"], "TempBtiShariah!1", "BtiShariahPass!22")
+    bti_headers = {"Authorization": f"Bearer {bti_changed['access_token']}"}
+
+    fi_login = _login(client, "fi.shariah@bank.local", "TempFiShariah!1")
+    assert fi_login["institution_id"] == institution_id
+    fi_changed = _change_password(client, fi_login["access_token"], "TempFiShariah!1", "FiShariahPass!22")
+    fi_headers = {"Authorization": f"Bearer {fi_changed['access_token']}"}
+
+    bti_books = client.get("/api/v1/institutions", headers=bti_headers)
+    assert bti_books.status_code == 200
+    assert len(bti_books.json()) >= 1
+    assert client.get("/api/v1/desk/audit", headers=bti_headers).status_code == 200
+    assert client.get("/api/v1/desk/cases", headers=bti_headers).status_code == 200
+
+    fi_books = client.get("/api/v1/institutions", headers=fi_headers)
+    assert fi_books.status_code == 200
+    assert [item["id"] for item in fi_books.json()] == [institution_id]
+    assert client.get("/api/v1/desk/audit", headers=fi_headers).status_code == 200
+    assert client.get("/api/v1/desk/cases", headers=fi_headers).status_code == 200
+
+
 def test_invite_user_emails_temp_password_via_smtp(monkeypatch, tmp_path):
     """When SMTP is configured, invite emails the password and withholds it from the API."""
     os.environ["SMTP_HOST"] = "smtp.test.local"

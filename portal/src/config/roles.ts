@@ -50,6 +50,13 @@ export const INVITE_TARGETS_BY_CREATOR: Record<string, OpsRole[]> = {
 
 const PLATFORM_SCOPED_INVITE_ROLES: OpsRole[] = ["platform_admin", "bti_ops", "bti_finance"];
 
+/** Invited on the BTI book (no institution) or the FI book (one tenant). */
+const DUAL_SCOPE_INVITE_ROLES: OpsRole[] = ["shariah_officer", "reconciler"];
+
+export function isDualScopeInviteRole(role: string): boolean {
+  return DUAL_SCOPE_INVITE_ROLES.includes(role as OpsRole);
+}
+
 const ONPREM_ROLE_LABELS: Partial<Record<OpsRole, string>> = {
   platform_admin: "Site Admin",
   bti_ops: "Site Ops",
@@ -90,7 +97,8 @@ export function defaultInviteRole(creatorRole?: string | null): OpsRole {
   return "institution_ops";
 }
 
-export function inviteNeedsInstitution(role: string): boolean {
+export function inviteNeedsInstitution(role: string, book?: "bti" | "fi"): boolean {
+  if (isDualScopeInviteRole(role)) return book !== "bti";
   return !PLATFORM_SCOPED_INVITE_ROLES.includes(role as OpsRole);
 }
 
@@ -106,11 +114,12 @@ export function isBtiManagedUser(role?: string | null, institutionId?: string | 
 }
 
 export function inviteRoleOptionsForBook(creatorRole: string | null | undefined, book: "bti" | "fi") {
-  return inviteRoleOptions(creatorRole).filter((opt) =>
-    book === "bti"
+  return inviteRoleOptions(creatorRole).filter((opt) => {
+    if (isDualScopeInviteRole(opt.value)) return true;
+    return book === "bti"
       ? PLATFORM_SCOPED_INVITE_ROLES.includes(opt.value)
-      : !PLATFORM_SCOPED_INVITE_ROLES.includes(opt.value),
-  );
+      : !PLATFORM_SCOPED_INVITE_ROLES.includes(opt.value);
+  });
 }
 
 type NavVisibility = {

@@ -49,8 +49,8 @@ Malaysia applications: `GET /api/v1/applications/{id}/shariah-audit`
 
 Every Origination action (`create`, decide, step complete, OTP send / verify) calls `log_shariah_step` with `entity_type = fi_desk_case`. Portal **Shariah Audit** (`/shariah`) is on the tester nav.
 
-- Super Admin / BTI Ops: **All** institutions or one.
-- FI Admin / Shariah: own tenant.
+- Super Admin / BTI Ops / BTI-wide Shariah (`bti.shariah@…`, no institution): **All** institutions or one.
+- FI Admin / FI Shariah (`shariah@…`): own tenant.
 - Two lists: Kenya applications (possession seal + chain) and origination desk cases with timestamps.
 
 | Method | Path | Purpose |

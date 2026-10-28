@@ -275,7 +275,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Open a case to see the step ledger and possession seal.",
       "Export CSV or JSON for a Shariah board or auditor.",
     ],
-    note: "Rows cannot be edited or deleted. Application delete does not remove the chain.",
+    note: "BTI-wide Shariah officers see every FI. FI Shariah officers see their tenant only. Rows cannot be edited or deleted.",
   },
 };
 

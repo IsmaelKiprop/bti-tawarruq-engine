@@ -129,6 +129,7 @@ def seed_ops_role_catalogue(db: Session) -> list[SeededCredential]:
             ("fi.admin", "FI Administrator", ApiKeyRole.INSTITUTION_ADMIN, institution.id, None),
             ("fi.ops", "FI Operations Officer", ApiKeyRole.INSTITUTION_OPS, institution.id, None),
             ("fi.approver", "FI Approver", ApiKeyRole.FI_APPROVER, institution.id, None),
+            ("bti.shariah", "BTI Shariah Audit Officer", ApiKeyRole.SHARIAH_OFFICER, None, None),
             ("shariah", "Shariah Audit Officer", ApiKeyRole.SHARIAH_OFFICER, institution.id, None),
             ("reconciler", "BTI Reconciliation Officer", ApiKeyRole.RECONCILER, None, None),
             ("fi.reconciler", "FI Reconciliation Officer", ApiKeyRole.RECONCILER, institution.id, None),

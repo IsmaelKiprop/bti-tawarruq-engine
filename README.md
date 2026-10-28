@@ -100,7 +100,8 @@ When `OPS_SEED_USERS=true` (default), missing catalogue users are created. Exist
 | `bti.finance@…` | BTI Finance |
 | `fi.admin@…` | FI Admin (default tenant) |
 | `fi.ops@…` / `fi.approver@…` | FI Ops / FI Approver |
-| `shariah@…` / `reconciler@…` | Shariah / Recon |
+| `bti.shariah@…` / `shariah@…` | Shariah (BTI-wide / FI) |
+| `reconciler@…` / `fi.reconciler@…` | Recon (BTI-wide / FI) |
 
 First login must change the temporary password. Super Admin, BTI Ops, and BTI Finance should enroll TOTP at `/mfa-enroll`.
 
@@ -180,7 +181,7 @@ Vite proxies `/api` to `http://127.0.0.1:8000`. Nav is permission-based.
 | `/approvals` | FI Approver, FI Admin |
 | `/billing` | Super Admin, BTI Finance |
 | `/reconciliation` | Super Admin, Reconciler |
-| `/shariah` | Super Admin, BTI Ops, FI Admin, Shariah |
+| `/shariah` | Super Admin, BTI Ops, FI Admin, Shariah (BTI-wide or one FI) |
 | `/agent-dealers` | Agent dealer (ops can view; only the dealer tops up) |
 
 ## Quick start

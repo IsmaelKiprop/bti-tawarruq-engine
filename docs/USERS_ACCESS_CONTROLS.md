@@ -67,7 +67,7 @@ Engine codes are the stable API values. Product names are what the Users page sh
 | FI Administrator | `institution_admin` | Own tenant | `/` |
 | FI Operations Officer | `institution_ops` | Own tenant | `/origination` |
 | FI Approver | `fi_approver` | Own tenant | `/origination` |
-| Shariah / Audit | `shariah_officer` | Tenant | `/shariah` |
+| Shariah / Audit | `shariah_officer` | Tenant, or BTI-wide if unbound | `/shariah` |
 | Reconciliation Officer | `reconciler` | Tenant, or BTI-wide if unbound | `/reconciliation` |
 | Read only | `read_only` | Own tenant | `/` |
 | Agent dealer | `agent_dealer` | Bound dealer pool | `/agent-dealers` |
@@ -79,7 +79,7 @@ Super Admin, BTI Ops, and FI Admin may invite. Extra engine roles (`read_only`, 
 
 | Creator | May invite |
 |---------|------------|
-| Super Admin | Super Admin, FI Admin, BTI Ops, Shariah, BTI Finance, Recon |
+| Super Admin | Super Admin, FI Admin, BTI Ops, Shariah (BTI-wide or one FI), BTI Finance, Recon (BTI-wide or one FI) |
 | Super Admin must **not** | FI Ops, FI Approver (FI desk staff are created by the FI Admin) |
 | BTI Ops | FI Admin, and only for an **Active** FI |
 | BTI Ops must **not** | Super Admin, BTI Ops, BTI Finance, FI Ops, FI Approver |
@@ -437,7 +437,7 @@ Nav is permission-based. Super Admin does **not** see every write desk.
 | `/mobile-lend` | listed roles | BTI Ops, FI Admin, FI Ops, FI Approver (no Super Admin) |
 | `/billing` | `manage_billing` | Super Admin, Finance |
 | `/reconciliation` | `reconcile` | Super Admin, Reconciler |
-| `/shariah` | `view_shariah` | Super Admin, BTI Ops, FI Admin, Shariah |
+| `/shariah` | `view_shariah` | Super Admin, BTI Ops, FI Admin, Shariah (BTI-wide sees all FIs; FI-bound sees own tenant) |
 | `/mfa-enroll` | session | Privileged roles |
 | `/agent-dealers` | dealer desk | Agent dealer (ops can view; only dealer tops up) |
 
@@ -490,7 +490,8 @@ Seed emails (domain = `OPS_SEED_EMAIL_DOMAIN`):
 | `fi.admin@…` | `institution_admin` (default tenant) |
 | `fi.ops@…` | `institution_ops` |
 | `fi.approver@…` | `fi_approver` |
-| `shariah@…` | `shariah_officer` |
+| `bti.shariah@…` | `shariah_officer` (BTI-wide) |
+| `shariah@…` | `shariah_officer` (tenant) |
 | `reconciler@…` | `reconciler` (BTI-wide) |
 | `fi.reconciler@…` | `reconciler` (tenant) |
 | `seed-api-client` key | `api_client` |

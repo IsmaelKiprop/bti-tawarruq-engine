@@ -7,7 +7,11 @@ import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageSh
 
 export function ShariahCompliancePage() {
   const { user } = useAuth();
-  const canSeeAll = user?.role === "platform_admin" || user?.role === "bti_ops" || Boolean(user?.permissions.includes("manage_institutions"));
+  const canSeeAll =
+    user?.role === "platform_admin" ||
+    user?.role === "bti_ops" ||
+    (user?.role === "shariah_officer" && !user.institution_id) ||
+    Boolean(user?.permissions.includes("manage_institutions"));
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [institutionId, setInstitutionId] = useState(canSeeAll ? "all" : "");
   const [cases, setCases] = useState<KenyaOpsCase[]>([]);
@@ -39,7 +43,7 @@ export function ShariahCompliancePage() {
 
   useEffect(() => {
     const scoped = institutionId && institutionId !== "all" ? institutionId : undefined;
-    api.listKenyaOpsCases("all").then(setCases).catch(() => setCases([]));
+    api.listKenyaOpsCases("all", scoped).then(setCases).catch(() => setCases([]));
     api.listDeskCases(scoped).then(setDeskCases).catch(() => setDeskCases([]));
     if (canSeeAll || scoped) {
       api.listDeskAudit(scoped).then(setDeskAudit).catch(() => setDeskAudit([]));
@@ -96,6 +100,11 @@ export function ShariahCompliancePage() {
       <div className="page-grid">
         <section className="panel">
           <h2>Regulatory export</h2>
+          <p className="muted">
+            {canSeeAll
+              ? "BTI-wide audit. All institutions, or pick one FI."
+              : "FI-level audit. This login only sees its own institution."}
+          </p>
           {loading ? (
             <LoadingPanel rows={3} />
           ) : (

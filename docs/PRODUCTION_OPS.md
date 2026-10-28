@@ -16,7 +16,7 @@ When `AUTH_ENABLED=true`, protected routes require an ops session Bearer token o
 | `institution_admin` | FI Administrator | Own tenant | Ops + users/integrations + `approve_txn`. Cannot create API keys |
 | `institution_ops` | FI Operations Officer | Own tenant | Initiate/monitor (`write_ops`) |
 | `fi_approver` | FI Approver | Own tenant | `approve_txn` only (maker-checker) |
-| `shariah_officer` | Shariah / Audit | Tenant | Read-only + `view_shariah` |
+| `shariah_officer` | Shariah / Audit | Tenant or BTI-wide | Read-only + `view_shariah` |
 | `reconciler` | Reconciliation Officer | Tenant or BTI-wide | `reconcile` |
 | `read_only` | Viewer | Own tenant | GET + metrics |
 | `agent_dealer` | Kenya float desk | Dealer | `dealer_desk` only |
@@ -54,7 +54,8 @@ With `AUTH_ENABLED=true`, the ops portal uses a login page (not pasted API keys)
 | `fi.admin@…` | `institution_admin` (default / MWALIMU tenant) |
 | `fi.ops@…` | `institution_ops` |
 | `fi.approver@…` | `fi_approver` |
-| `shariah@…` | `shariah_officer` |
+| `bti.shariah@…` | `shariah_officer` (BTI-wide) |
+| `shariah@…` | `shariah_officer` (tenant) |
 | `reconciler@…` | `reconciler` (BTI-wide) |
 | `fi.reconciler@…` | `reconciler` (tenant) |
 

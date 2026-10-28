@@ -502,8 +502,9 @@ def get_ops_user(user_id: str, request: Request, db: Session = Depends(get_db)) 
         "bti_ops, shariah_officer, bti_finance, reconciler (not institution_ops or fi_approver). "
         "BTI Ops may invite institution_admin only, and only when the FI is Active. "
         "FI Admin may invite institution_admin, institution_ops, fi_approver, shariah_officer, "
-        "reconciler for their own tenant. Tenant-scoped roles need institution_id when the caller "
-        "is Super Admin or BTI Ops."
+        "reconciler for their own tenant. Super Admin may invite shariah_officer and reconciler "
+        "with no institution_id (BTI-wide) or with institution_id (one FI). Other tenant roles "
+        "need institution_id when the caller is Super Admin or BTI Ops."
     ),
 )
 def create_ops_user_endpoint(

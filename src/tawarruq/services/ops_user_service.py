@@ -20,7 +20,7 @@ from tawarruq.models.kenya_flow import AgentDealer
 from tawarruq.enums import AuditActor
 from tawarruq.models.ops_user import OpsUser
 from tawarruq.services.audit_service import log_audit
-from tawarruq.services.rbac import PLATFORM_SCOPED_ROLES, PORTAL_ASSIGNABLE_ROLES
+from tawarruq.services.rbac import DUAL_SCOPE_ROLES, PLATFORM_SCOPED_ROLES, PORTAL_ASSIGNABLE_ROLES
 
 logger = logging.getLogger(__name__)
 
@@ -361,12 +361,9 @@ def create_ops_user(
         from tawarruq.services.institution_onboarding_service import assert_institution_invitable
 
         assert_institution_invitable(db.get(Institution, institution_id))
-    # Reconciler may be BTI-wide (null institution) or tenant-scoped.
-    if role not in PLATFORM_SCOPED_ROLES and role != ApiKeyRole.RECONCILER and not institution_id:
+    # Shariah and Recon may be BTI-wide (null institution) or tenant-scoped.
+    if role not in PLATFORM_SCOPED_ROLES and role not in DUAL_SCOPE_ROLES and not institution_id:
         raise ValueError("institution_id is required for bank and SACCO roles")
-    if role == ApiKeyRole.RECONCILER and not institution_id:
-        # BTI-wide reconciler — allowed
-        pass
     bound_dealer_id = _bound_dealer_id(
         db, role=role, institution_id=None, agent_dealer_id=agent_dealer_id
     )
@@ -486,7 +483,7 @@ def update_ops_user(
             raise ValueError("Cannot demote the last active platform admin")
         if (
             role not in PLATFORM_SCOPED_ROLES
-            and role != ApiKeyRole.RECONCILER
+            and role not in DUAL_SCOPE_ROLES
             and not institution_id
             and not user.institution_id
         ):

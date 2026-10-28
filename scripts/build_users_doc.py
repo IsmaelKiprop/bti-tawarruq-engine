@@ -293,9 +293,9 @@ def build() -> Path:
     )
     add_para(
         doc,
-        "Access and control: FI auditors are tenant-scoped. Access is read-only (view_shariah). "
-        "HTTP writes are blocked. BTI-wide Shariah access, if required, is assigned by Super Admin "
-        "and must remain read-only.",
+        "Access and control: FI auditors are tenant-scoped. BTI-wide Shariah officers (no "
+        "institution bind) see all institutions. Access is read-only (view_shariah). HTTP writes "
+        "are blocked. Super Admin invites BTI-wide from the BTI book or FI-level from FI users.",
     )
 
     add_heading(doc, "3.8 Reconciliation and Settlement Officer", 2)

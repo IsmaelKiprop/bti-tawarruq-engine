@@ -133,6 +133,14 @@ CROSS_TENANT_ROLES = frozenset(
     }
 )
 
+# Invited with or without institution_id: unbound = BTI-wide, bound = one FI.
+DUAL_SCOPE_ROLES = frozenset(
+    {
+        ApiKeyRole.SHARIAH_OFFICER,
+        ApiKeyRole.RECONCILER,
+    }
+)
+
 # Super Admin staffs BTI roles and FI Admin. BTI Ops may invite FI Admin on Active FIs.
 # FI Admin staffs own-tenant desk roles after the FI is Active.
 INVITE_TARGETS_BY_CREATOR: dict[ApiKeyRole, frozenset[ApiKeyRole]] = {
@@ -256,7 +264,7 @@ def can_cross_tenant(request: Request) -> bool:
     role = get_request_role(request)
     if role in CROSS_TENANT_ROLES:
         return True
-    # BTI-wide reconciler (no institution bind) may scan across tenants.
-    if role == ApiKeyRole.RECONCILER and not getattr(request.state, "institution_id", None):
+    # BTI-wide Shariah / Recon (no institution bind) may scan across tenants.
+    if role in DUAL_SCOPE_ROLES and not getattr(request.state, "institution_id", None):
         return True
     return False

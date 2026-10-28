@@ -4,7 +4,7 @@ Record of the FI tester / BTI Ops suggestions that are now in the engine and por
 
 Kenya Ops was **not** rewritten. FI desk work is a new **Origination** page (`/origination`). SMTP invite mail is still later.
 
-Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **FI Ops** sees Origination, All Workflows, Settings. **FI Approver** sees Origination, Approval Queue, Settings. No Dashboard, Shariah, or Ops Monitor.
+Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **Shariah officers** land on Shariah Audit: BTI-wide sees all FIs, FI-bound sees their tenant. **FI Ops** sees Origination, All Workflows, Settings. **FI Approver** sees Origination, Approval Queue, Settings. No Dashboard, Shariah, or Ops Monitor.
 
 ---
 
@@ -30,7 +30,8 @@ Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TES
 | Later steps wait for Approval | Origination step 2 | FI Ops picks an FI Approver and sends the case. That approver decides on the same page (not Kenya `/approvals`). |
 | Customer OTP for tester-grade checks | Steps 4–6 | Send OTP (email when `SMTP_HOST` is set). If SMTP is off, the code is shown on screen. 10 minutes. Purposes: `murabaha`, `agent`, `casa`. |
 | Every desk action must leave a Shariah trail | Shariah Audit | Each create / decide / step / OTP writes `log_shariah_step` with a timestamp. |
-| Shariah Audit must be visible to testers | `/shariah` | Unhidden in the tester shell. Super Admin / BTI Ops: all institutions or one. FI roles: own tenant. |
+| Shariah Audit must be visible to testers | `/shariah` | Unhidden in the tester shell. Super Admin / BTI Ops / BTI-wide Shariah: all institutions or one. FI Shariah / FI Admin: own tenant. |
+| Audit for Shariah officers at BTI and FI level | `/shariah`, Users | Super Admin invites **Shariah / Audit (BTI-wide)** from the BTI book, or tenant Shariah from **FI users**. Seed: `bti.shariah@…` (all FIs) and `shariah@…` (one FI). |
 | Shariah must include the new desk | `/shariah` | Origination cases plus the desk audit list, not only Kenya applications. |
 | Separate BTI users from FI users | `/users` | Super Admin: **BTI** and **FI users** books. BTI Ops lands on FI (they only invite FI Admin). FI Admin stays on one tenant directory. |
 
@@ -105,9 +106,11 @@ Table: `fi_desk_cases` (Alembic `017`).
 
 `/shariah` stays on the tester nav for Super Admin, BTI Ops, FI Admin, and Shariah. It is hidden for FI Ops and FI Approver.
 
-- Super Admin and BTI Ops: filter **All** or one institution.
-- FI Admin / Shariah: own tenant only.
+- Super Admin, BTI Ops, and **BTI-wide Shariah** (`institution_id` null): filter **All** or one institution.
+- FI Admin and **FI Shariah** (tenant-bound): own institution only.
 - Two trails: Kenya application ledger (possession seal + chain) and origination desk cases (`entity_type = fi_desk_case`) with timestamps.
+
+Invite: Super Admin **BTI** book → Shariah / Audit (BTI-wide). Super Admin **FI users** or FI Admin → Shariah for that tenant. Same pattern as Recon.
 
 Every desk write calls `log_shariah_step`.
 
@@ -115,13 +118,13 @@ Every desk write calls `log_shariah_step`.
 
 ## 5. Users: BTI book vs FI book
 
-Invite rules did not change. Super Admin still cannot invite FI Ops or FI Approver. BTI Ops still invites FI Admin only on an **Active** FI.
+Invite rules did not change for FI Ops / FI Approver (Super Admin still cannot invite them). BTI Ops still invites FI Admin only on an **Active** FI. Super Admin can now invite **Shariah / Audit** and **Recon** on both books: BTI-wide (no institution) or one FI.
 
 | Viewer | Users page |
 |--------|------------|
-| Super Admin | **BTI** (Super Admin, BTI Ops, BTI Finance, and any login with no institution) and **FI users** (tenant-bound). Invite roles follow the open book. FI table shows Institution. `?institution=` opens the FI book. |
+| Super Admin | **BTI** (Super Admin, BTI Ops, BTI Finance, BTI-wide Shariah / Recon, and any login with no institution) and **FI users** (tenant-bound). Invite roles follow the open book. FI table shows Institution. `?institution=` opens the FI book. |
 | BTI Ops | Same two books. Default is FI. No invite on BTI (they cannot create BTI staff). |
-| FI Admin | One directory for their institution. Invite FI desk roles as before. |
+| FI Admin | One directory for their institution. Invite FI desk roles including tenant Shariah. |
 
 Helpers: `isBtiManagedUser`, `inviteRoleOptionsForBook` in `portal/src/config/roles.ts`.
 
@@ -131,7 +134,7 @@ Helpers: `isBtiManagedUser`, `inviteRoleOptionsForBook` in `portal/src/config/ro
 
 ```powershell
 $env:PYTHONPATH="src"
-python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py tests/test_invite_matrix.py -q
+python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py tests/test_invite_matrix.py tests/test_ops_login.py::test_shariah_officer_audit_at_bti_and_fi_level -q
 ```
 
 `test_fi_desk.py`: eight steps, Airtime-only product, OTP, proceeds account/branch, Shariah audit rows, reveal requires a session password.

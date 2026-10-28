@@ -1614,9 +1614,12 @@ export const api = {
   collectKenyaRepayment: (installmentId: string) =>
     request<RepaymentInstallment>(`/kenya/repayments/${installmentId}/collect`, { method: "POST" }),
 
-  listKenyaOpsCases: (queue?: string) => {
-    const q = queue && queue !== "all" ? `?queue=${queue}` : "";
-    return request<KenyaOpsCase[]>(`/kenya/ops/cases${q}`);
+  listKenyaOpsCases: (queue?: string, institutionId?: string) => {
+    const q = new URLSearchParams();
+    if (queue && queue !== "all") q.set("queue", queue);
+    if (institutionId) q.set("institution_id", institutionId);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return request<KenyaOpsCase[]>(`/kenya/ops/cases${suffix}`);
   },
 
   getKenyaOpsCase: (applicationId: string) =>

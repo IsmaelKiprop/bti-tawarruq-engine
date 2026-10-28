@@ -113,7 +113,7 @@ export function UsersPage() {
         email,
         full_name: fullName,
         role,
-        institution_id: canPickInstitution && inviteNeedsInstitution(role) ? institutionId || null : undefined,
+        institution_id: canPickInstitution && inviteNeedsInstitution(role, book) ? institutionId || null : undefined,
         approval_limit_amount: approvalLimit.trim() || null,
       });
       setMessage(created.invite_message || "User invited.");
@@ -141,8 +141,8 @@ export function UsersPage() {
           <p className="muted m-0 mt-1 text-sm">
             {splitBooks
               ? book === "bti"
-                ? `${filtered.length} BTI staff. Super Admin, BTI Ops, and BTI Finance live here.`
-                : `${filtered.length} FI logins. Invite FI Admin only for Active institutions.`
+                ? `${filtered.length} BTI staff. Super Admin, BTI Ops, BTI Finance, and BTI-wide Shariah / Recon live here.`
+                : `${filtered.length} FI logins. Invite FI Admin only for Active institutions. FI Shariah is tenant-scoped.`
               : `${filtered.length} of ${items.length} portal logins for your institution.`}
           </p>
         </div>
@@ -204,13 +204,15 @@ export function UsersPage() {
                 }}
               >
                 {roleOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
+                    <option key={opt.value} value={opt.value}>
+                      {splitBooks && book === "bti" && (opt.value === "shariah_officer" || opt.value === "reconciler")
+                        ? `${opt.label} (BTI-wide)`
+                        : opt.label}
+                    </option>
+                  ))}
               </select>
             </label>
-            {canPickInstitution && inviteNeedsInstitution(role) ? (
+            {canPickInstitution && inviteNeedsInstitution(role, book) ? (
               <label>
                 Institution
                 <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)} required>
