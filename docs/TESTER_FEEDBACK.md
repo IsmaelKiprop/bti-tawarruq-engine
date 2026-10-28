@@ -4,7 +4,7 @@ Record of the FI tester / BTI Ops suggestions that are now in the engine and por
 
 Kenya Ops was **not** rewritten. FI desk work is a new **Origination** page (`/origination`). SMTP invite mail is still later.
 
-Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TESTER_SHELL` stays on; testers see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, **Origination**, and **Shariah**.
+Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **FI Ops and FI Approver** see Origination first, then Settings only (no Dashboard, Shariah, or Ops Monitor).
 
 ---
 
@@ -18,13 +18,19 @@ Schema: Alembic **`016`** (API key reveal) and **`017`** (`fi_desk_cases`). `TES
 | Copy UI should be clean | Same copy panel on profile, Webhooks, Institutions, Dashboard | One panel: prefix visible, full secret hidden until password + Show. |
 | Super Admin issues keys; FI Admin only requests | Webhooks + profile | `POST /institutions/{id}/api-keys` is Super Admin only. FI Admin uses Request. A second request is blocked once issued. |
 | GET must not dump plaintext keys | `GET /institutions/{id}/api-keys/request` | Status, prefix, timestamps. `api_key` and `hmac_secret` are null until reveal. |
-| FI Ops needs an eight-step desk | `/origination` | Gated wizard. Later steps stay locked. FI Ops and FI Approver land here. |
+| FI Ops needs an eight-step desk | `/origination` | Gated wizard. First sidebar tab. FI Ops and FI Approver land here after login. |
+| No Dashboard / Shariah / Ops for FI Ops | Sidebar | Those three are hidden for FI Ops and FI Approver. Login ignores a leftover `/users` URL and sends them to Origination. |
+| Commodity type is Airtime only | Origination step 1 | Document type then ID. Amount cannot be negative. **Commodity type** is Airtime only. |
+| Step 3 locks after Yes | Origination step 3 | After confirm, purchase complete cannot be changed. |
+| Buyer / Seller and facility on Murabaha | Origination step 4 | Buyer (name, email, phone) and Seller (FI) first, then facility account, repayment installments, first and last installment due dates. |
+| Current commodity owner on resale | Origination step 5 | Separate rows: owner, email, phone (from the customer). |
+| CASA on Complete proceeds | Origination step 6 | Customer CASA account and branch are required. |
 | Later steps wait for Approval | Origination step 2 | FI Ops picks an FI Approver and sends the case. That approver decides on the same page (not Kenya `/approvals`). |
 | Customer OTP for tester-grade checks | Steps 4–6 | Send OTP (email when `SMTP_HOST` is set). If SMTP is off, the code is shown on screen. 10 minutes. Purposes: `murabaha`, `agent`, `casa`. |
 | Every desk action must leave a Shariah trail | Shariah Audit | Each create / decide / step / OTP writes `log_shariah_step` with a timestamp. |
 | Shariah Audit must be visible to testers | `/shariah` | Unhidden in the tester shell. Super Admin / BTI Ops: all institutions or one. FI roles: own tenant. |
 | Shariah must include the new desk | `/shariah` | Origination cases plus the desk audit list, not only Kenya applications. |
-| Separate BTI users from FI users | `/users` | Super Admin: **BTI** and **Financial institutions** books. BTI Ops lands on FI (they only invite FI Admin). FI Admin stays on one tenant directory. |
+| Separate BTI users from FI users | `/users` | Super Admin: **BTI** and **FI users** books. BTI Ops lands on FI (they only invite FI Admin). FI Admin stays on one tenant directory. |
 
 ---
 
@@ -61,12 +67,12 @@ New desk. Kenya `/kenya` is unchanged and stays hidden while the tester shell is
 
 | Step | Title | Who | Gate |
 |------|-------|-----|------|
-| 1 | Origination | FI Ops | Customer, facility, documents, pick FI Approver, submit |
+| 1 | Origination | FI Ops | Document type, ID, amount (≥ 0), **Commodity type** Airtime, pick FI Approver |
 | 2 | Approval | Assigned FI Approver | Approve or return. Other steps stay locked until approve |
-| 3 | Initiate Tawarruq | FI Ops | After approve |
-| 4 | Murabaha Sale | FI Ops | OTP purpose `murabaha` |
-| 5 | Commodity Resale | FI Ops | OTP purpose `agent` (Soqo appointment). Resale confirmation flips to Done after the mock window |
-| 6 | Resale Proceeds | FI Ops | OTP purpose `casa` |
+| 3 | Initiate Tawarruq | FI Ops | Confirm purchase Yes. Locked after moving to step 4 |
+| 4 | Murabaha Sale | FI Ops | Buyer (customer) and Seller (FI), facility account, installment count and due dates, OTP `murabaha` |
+| 5 | Commodity Resale | FI Ops | Current commodity owner, email, and phone. OTP purpose `agent` |
+| 6 | Resale Proceeds | FI Ops | OTP purpose `casa`. Customer CASA account and branch required |
 | 7 | Clearing | FI Ops | Settlement reference |
 | 8 | Complete | FI Ops | Closes the case |
 
@@ -95,7 +101,7 @@ Table: `fi_desk_cases` (Alembic `017`).
 
 ## 4. Shariah Audit
 
-`/shariah` is on the tester nav.
+`/shariah` stays on the tester nav for Super Admin, BTI Ops, FI Admin, and Shariah. It is hidden for FI Ops and FI Approver.
 
 - Super Admin and BTI Ops: filter **All** or one institution.
 - FI Admin / Shariah: own tenant only.
@@ -111,7 +117,7 @@ Invite rules did not change. Super Admin still cannot invite FI Ops or FI Approv
 
 | Viewer | Users page |
 |--------|------------|
-| Super Admin | **BTI** (Super Admin, BTI Ops, BTI Finance, and any login with no institution) and **Financial institutions** (tenant-bound). Invite roles follow the open book. FI table shows Institution. `?institution=` opens the FI book. |
+| Super Admin | **BTI** (Super Admin, BTI Ops, BTI Finance, and any login with no institution) and **FI users** (tenant-bound). Invite roles follow the open book. FI table shows Institution. `?institution=` opens the FI book. |
 | BTI Ops | Same two books. Default is FI. No invite on BTI (they cannot create BTI staff). |
 | FI Admin | One directory for their institution. Invite FI desk roles as before. |
 
@@ -126,7 +132,7 @@ $env:PYTHONPATH="src"
 python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py tests/test_invite_matrix.py -q
 ```
 
-`test_fi_desk.py`: eight steps, OTP, Shariah audit rows, reveal requires a session password.
+`test_fi_desk.py`: eight steps, Airtime-only product, OTP, proceeds account/branch, Shariah audit rows, reveal requires a session password.
 
 ---
 

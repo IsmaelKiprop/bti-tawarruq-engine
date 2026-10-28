@@ -10,7 +10,7 @@ export const DESK_STEPS = [
 ] as const;
 
 export const DOCUMENT_TYPES = ["National ID", "Passport", "Alien ID", "Other"];
-export const PRODUCT_TYPES = ["Airtime float", "Mobile money float", "Other"];
+export const PRODUCT_TYPES = ["Airtime"] as const;
 
 export function deskPayload(record: { payload?: Record<string, unknown> } | null, key: string): Record<string, string> {
   const raw = record?.payload?.[key];

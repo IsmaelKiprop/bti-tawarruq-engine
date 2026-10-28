@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import type { ProductModule } from "./deployment";
-import { AUDIT_ROLES, getRoleProfile, TESTER_SHELL, type OpsRole } from "./roles";
+import type { SessionUser } from "../api/client";
+import { AUDIT_ROLES, canSeeNavItem, getHomePath, getRoleProfile, TESTER_SHELL, type OpsRole } from "./roles";
 import {
   IconApplications,
   IconDashboard,
@@ -50,7 +51,21 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "overview",
     label: "Overview",
     items: [
-      { to: "/", label: "Dashboard", Icon: IconDashboard, end: true, hint: "Customer FI charts and onboarding" },
+      {
+        to: "/origination",
+        label: "Origination",
+        Icon: IconNewApplication,
+        hint: "FI Ops eight-step facility desk",
+        anyPermissions: ["write_ops", "approve_txn"],
+      },
+      {
+        to: "/",
+        label: "Dashboard",
+        Icon: IconDashboard,
+        end: true,
+        hint: "Customer FI charts and onboarding",
+        excludeRoles: ["institution_ops", "fi_approver"],
+      },
       {
         to: "/institutions/onboard",
         label: "Onboard FI",
@@ -128,13 +143,6 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "kenya",
     label: "Kenya track: float / airtime",
     items: [
-      {
-        to: "/origination",
-        label: "Origination",
-        Icon: IconNewApplication,
-        hint: "FI Ops eight-step facility desk",
-        anyPermissions: ["write_ops", "approve_txn"],
-      },
       { to: "/kenya", label: "Kenya Ops", Icon: IconKenya, hint: "Run the eight steps in order", permission: "write_ops", product: "kenya" },
       {
         to: "/agent-dealers",
@@ -211,6 +219,7 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: IconShariah,
         hint: "Tenant or all-institution chain",
         permission: "view_shariah",
+        excludeRoles: ["institution_ops", "fi_approver"],
       },
       {
         to: "/documentation",
@@ -232,6 +241,7 @@ export const NAV_SECTIONS: NavSection[] = [
         Icon: IconMonitor,
         hint: "Engine telemetry for your role",
         permission: "view_metrics",
+        excludeRoles: ["institution_ops", "fi_approver"],
       },
       {
         to: "/audit",
@@ -245,6 +255,20 @@ export const NAV_SECTIONS: NavSection[] = [
 ];
 
 export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((section) => section.items).filter((item) => !item.hidden);
+
+const AUTH_PATHS = new Set(["/login", "/change-password", "/mfa-enroll"]);
+
+/** After login, honor `from` only if this role can open that page. */
+export function safePostLoginPath(user: SessionUser | null | undefined, from?: string | null, authEnabled = true): string {
+  const home = getHomePath(user?.role);
+  const raw = (from || "").split("?")[0] || "";
+  if (!raw || AUTH_PATHS.has(raw)) return home;
+  const item = NAV_SECTIONS.flatMap((section) => section.items)
+    .filter((entry) => !entry.hidden)
+    .find((entry) => raw === entry.to || (entry.to !== "/" && raw.startsWith(`${entry.to}/`)));
+  if (!item || !canSeeNavItem(item, user, authEnabled)) return home;
+  return from || home;
+}
 
 export const ROUTE_META: Record<string, { title: string; description: string }> = {
   "/": {

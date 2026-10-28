@@ -153,7 +153,7 @@ export function UsersPage() {
                 BTI
               </button>
               <button type="button" className={`chip${book === "fi" ? " active" : ""}`} role="tab" aria-selected={book === "fi"} onClick={() => switchBook("fi")}>
-                Financial institutions
+                FI users
               </button>
             </div>
           ) : null}

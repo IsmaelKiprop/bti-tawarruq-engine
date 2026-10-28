@@ -53,13 +53,19 @@ export function OriginationDeskPage() {
     customer_phone: "",
     customer_email: "",
     approved_facility_amount: "",
-    facility_product_type: "Airtime float",
+    facility_product_type: "Airtime",
     assigned_approver_id: "",
     profit: "",
     purchase_complete: "Yes",
     offer_reference: "",
     contract_reference: "",
     settlement_ref: "",
+    customer_account_number: "",
+    customer_branch: "",
+    facility_account: "",
+    repayment_installments: "",
+    first_installment_due_date: "",
+    last_installment_due_date: "",
   });
 
   const reachable = record ? maxDeskStep(record.current_step, record.status) : 1;
@@ -90,6 +96,12 @@ export function OriginationDeskPage() {
       offer_reference: deskPayload(next, "murabaha").offer_reference || current.offer_reference,
       contract_reference: deskPayload(next, "murabaha").contract_reference || current.contract_reference,
       settlement_ref: deskPayload(next, "clearing").settlement_ref || current.settlement_ref,
+      customer_account_number: deskPayload(next, "proceeds").customer_account_number || current.customer_account_number,
+      customer_branch: deskPayload(next, "proceeds").customer_branch || current.customer_branch,
+      facility_account: deskPayload(next, "murabaha").facility_account || current.facility_account,
+      repayment_installments: deskPayload(next, "murabaha").repayment_installments || current.repayment_installments,
+      first_installment_due_date: deskPayload(next, "murabaha").first_installment_due_date || current.first_installment_due_date,
+      last_installment_due_date: deskPayload(next, "murabaha").last_installment_due_date || current.last_installment_due_date,
     }));
     setComments(next.approval_comments || "");
   }
@@ -130,6 +142,8 @@ export function OriginationDeskPage() {
   const stamps = deskTimestamps(record);
   const institutionName = record?.institution_name || user?.institution_name || "Financial institution";
   const originationLocked = record != null && record.status !== "returned";
+  const initiateLocked = Boolean(record && record.current_step > 3);
+  const murabahaLocked = Boolean(record && record.current_step > 4);
 
   const deferred = useMemo(() => {
     const cost = Number(initiate.commodity_quantity || orig.approved_facility_amount || 0);
@@ -228,15 +242,15 @@ export function OriginationDeskPage() {
       <section className="rounded-sm border border-border bg-surface p-3">
         {step === 0 ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Customer id">
-              <input className={fieldClass} value={form.customer_id} disabled={originationLocked} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} />
-            </Field>
             <Field label="Document type">
               <select className={fieldClass} value={form.document_type} disabled={originationLocked} onChange={(e) => setForm({ ...form, document_type: e.target.value })}>
                 {DOCUMENT_TYPES.map((item) => (
                   <option key={item}>{item}</option>
                 ))}
               </select>
+            </Field>
+            <Field label="ID">
+              <input className={fieldClass} value={form.customer_id} disabled={originationLocked} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} />
             </Field>
             <Field label="Customer name">
               <input className={fieldClass} value={form.customer_name} disabled={originationLocked} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
@@ -248,11 +262,19 @@ export function OriginationDeskPage() {
               <input className={fieldClass} type="email" value={form.customer_email} disabled={originationLocked} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} />
             </Field>
             <Field label="Approved facility amount">
-              <input className={fieldClass} value={form.approved_facility_amount} disabled={originationLocked} onChange={(e) => setForm({ ...form, approved_facility_amount: e.target.value })} />
+              <input
+                className={fieldClass}
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.approved_facility_amount}
+                disabled={originationLocked}
+                onChange={(e) => setForm({ ...form, approved_facility_amount: e.target.value })}
+              />
             </Field>
-            <Field label="Facility product type">
+            <Field label="Commodity type">
               <select className={fieldClass} value={form.facility_product_type} disabled={originationLocked} onChange={(e) => setForm({ ...form, facility_product_type: e.target.value })}>
-                {PRODUCT_TYPES.map((item) => (
+                {Array.from(new Set<string>([...PRODUCT_TYPES, form.facility_product_type])).filter(Boolean).map((item) => (
                   <option key={item}>{item}</option>
                 ))}
               </select>
@@ -272,7 +294,11 @@ export function OriginationDeskPage() {
                   type="button"
                   className="btn btn-primary"
                   disabled={busy}
-                  onClick={() =>
+                  onClick={() => {
+                    if (Number(form.approved_facility_amount) < 0) {
+                      setError("Approved facility amount cannot be negative");
+                      return;
+                    }
                     void run("Submitted to FI Approver", () =>
                       api.createDeskCase({
                         customer_id: form.customer_id,
@@ -284,8 +310,8 @@ export function OriginationDeskPage() {
                         facility_product_type: form.facility_product_type,
                         assigned_approver_id: form.assigned_approver_id,
                       }),
-                    )
-                  }
+                    );
+                  }}
                 >
                   {busy ? "Sending…" : "Send to FI Approver"}
                 </button>
@@ -329,12 +355,16 @@ export function OriginationDeskPage() {
             <ReadRow label="Commodity buyer" value={initiate.commodity_buyer || institutionName} />
             <ReadRow label="Commodity agent" value={initiate.commodity_agent || "Buruuj Fintech"} />
             <ReadRow label="Payment reference" value={initiate.payment_reference} />
-            <Field label="Purchase complete">
-              <select className={fieldClass} value={form.purchase_complete} onChange={(e) => setForm({ ...form, purchase_complete: e.target.value })}>
-                <option>Yes</option>
-                <option>No</option>
-              </select>
-            </Field>
+            {initiateLocked ? (
+              <ReadRow label="Purchase complete" value={initiate.purchase_complete || "Yes"} />
+            ) : (
+              <Field label="Purchase complete">
+                <select className={fieldClass} value={form.purchase_complete} onChange={(e) => setForm({ ...form, purchase_complete: e.target.value })}>
+                  <option>Yes</option>
+                  <option>No</option>
+                </select>
+              </Field>
+            )}
             {canWrite && record.current_step === 3 ? (
               <div className="sm:col-span-2">
                 <button
@@ -352,20 +382,61 @@ export function OriginationDeskPage() {
 
         {step === 3 && record ? (
           <div className="grid gap-3 sm:grid-cols-2">
+            <ReadRow label="Buyer" value={orig.customer_name} />
+            <ReadRow label="Buyer email" value={orig.customer_email} />
+            <ReadRow label="Buyer phone" value={orig.customer_phone} />
+            <ReadRow label="Seller" value={institutionName} />
+            {murabahaLocked ? (
+              <>
+                <ReadRow label="Facility account" value={murabaha.facility_account} />
+                <ReadRow label="Repayment installments" value={murabaha.repayment_installments} />
+                <ReadRow label="First installment due date" value={murabaha.first_installment_due_date} />
+                <ReadRow label="Last installment due date" value={murabaha.last_installment_due_date} />
+              </>
+            ) : (
+              <>
+                <Field label="Facility account">
+                  <input className={fieldClass} value={form.facility_account} onChange={(e) => setForm({ ...form, facility_account: e.target.value })} />
+                </Field>
+                <Field label="Repayment installments">
+                  <input
+                    className={fieldClass}
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.repayment_installments}
+                    onChange={(e) => setForm({ ...form, repayment_installments: e.target.value })}
+                  />
+                </Field>
+                <Field label="First installment due date">
+                  <input
+                    className={fieldClass}
+                    type="date"
+                    value={form.first_installment_due_date}
+                    onChange={(e) => setForm({ ...form, first_installment_due_date: e.target.value })}
+                  />
+                </Field>
+                <Field label="Last installment due date">
+                  <input
+                    className={fieldClass}
+                    type="date"
+                    value={form.last_installment_due_date}
+                    onChange={(e) => setForm({ ...form, last_installment_due_date: e.target.value })}
+                  />
+                </Field>
+              </>
+            )}
             <ReadRow label="Cost price" value={initiate.commodity_quantity || orig.approved_facility_amount} />
             <Field label="Profit">
-              <input className={fieldClass} value={form.profit} onChange={(e) => setForm({ ...form, profit: e.target.value })} />
+              <input className={fieldClass} value={form.profit} disabled={murabahaLocked} onChange={(e) => setForm({ ...form, profit: e.target.value })} />
             </Field>
             <ReadRow label="Deferred sale price" value={murabaha.deferred_sale_price || deferred} />
             <Field label="Customer offer reference">
-              <input className={fieldClass} value={form.offer_reference} onChange={(e) => setForm({ ...form, offer_reference: e.target.value })} />
+              <input className={fieldClass} value={form.offer_reference} disabled={murabahaLocked} onChange={(e) => setForm({ ...form, offer_reference: e.target.value })} />
             </Field>
             <Field label="Contract reference">
-              <input className={fieldClass} value={form.contract_reference} onChange={(e) => setForm({ ...form, contract_reference: e.target.value })} />
+              <input className={fieldClass} value={form.contract_reference} disabled={murabahaLocked} onChange={(e) => setForm({ ...form, contract_reference: e.target.value })} />
             </Field>
-            <ReadRow label="Current commodity owner" value={institutionName} />
-            <ReadRow label="Proposed owner" value={`${orig.customer_name} · ${orig.customer_id}`} />
-            <ReadRow label="Phone / email" value={`${orig.customer_phone} / ${orig.customer_email}`} />
             <ReadRow label="Sale status" value={murabaha.sale_status || "Pending"} />
             <ReadRow label="Sale timestamp" value={murabaha.sale_timestamp} />
             {canWrite && record.current_step === 4 ? (
@@ -399,6 +470,11 @@ export function OriginationDeskPage() {
                         profit: form.profit,
                         offer_reference: form.offer_reference,
                         contract_reference: form.contract_reference,
+                        facility_account: form.facility_account,
+                        repayment_installments: form.repayment_installments,
+                        first_installment_due_date: form.first_installment_due_date,
+                        last_installment_due_date: form.last_installment_due_date,
+                        seller_name: institutionName,
                       }),
                     )
                   }
@@ -412,10 +488,10 @@ export function OriginationDeskPage() {
 
         {step === 4 && record ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <ReadRow label="Current owner" value={resale.current_owner_name || orig.customer_name} />
+            <ReadRow label="Current commodity owner" value={resale.current_owner_name || orig.customer_name} />
+            <ReadRow label="Current commodity owner email" value={resale.current_owner_email || orig.customer_email} />
+            <ReadRow label="Current commodity owner phone" value={resale.current_owner_phone || orig.customer_phone} />
             <ReadRow label="Owner id" value={resale.current_owner_id || orig.customer_id} />
-            <ReadRow label="Email" value={resale.current_owner_email || orig.customer_email} />
-            <ReadRow label="Phone" value={resale.current_owner_phone || orig.customer_phone} />
             <ReadRow label="Agent" value={resale.agent_name || "Soqo Capital"} />
             <ReadRow label="Appointment status" value={resale.agent_appointment_status} />
             <ReadRow label="Appointment timestamp" value={resale.agent_appointment_timestamp} />
@@ -461,31 +537,61 @@ export function OriginationDeskPage() {
             <ReadRow label="Deposit ref" value={proceeds.deposit_txn_ref} />
             <ReadRow label="Final status" value={proceeds.final_status} />
             {canWrite && record.current_step === 6 ? (
-              <div className="sm:col-span-2 flex flex-wrap items-end gap-2">
-                <Field label="Customer OTP">
-                  <input className={fieldClass} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} />
+              <>
+                <Field label="Customer CASA account">
+                  <input
+                    className={fieldClass}
+                    value={form.customer_account_number}
+                    onChange={(e) => setForm({ ...form, customer_account_number: e.target.value })}
+                    required
+                  />
                 </Field>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    void run("OTP sent", async () => {
-                      const sent = await api.sendDeskOtp(record.id, "casa");
-                      setDevCode(sent.dev_code || "");
-                    })
-                  }
-                >
-                  Send OTP
-                </button>
-                <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void run("CASA approved", () => api.verifyDeskOtp(record.id, "casa", otpCode))}>
-                  Verify OTP
-                </button>
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void run("Proceeds recorded", () => api.completeDeskStep(record.id, 6, {}))}>
-                  Complete proceeds
-                </button>
-              </div>
-            ) : null}
+                <Field label="Branch">
+                  <input className={fieldClass} value={form.customer_branch} onChange={(e) => setForm({ ...form, customer_branch: e.target.value })} required />
+                </Field>
+                <div className="sm:col-span-2 flex flex-wrap items-end gap-2">
+                  <Field label="Customer OTP">
+                    <input className={fieldClass} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} />
+                  </Field>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      void run("OTP sent", async () => {
+                        const sent = await api.sendDeskOtp(record.id, "casa");
+                        setDevCode(sent.dev_code || "");
+                      })
+                    }
+                  >
+                    Send OTP
+                  </button>
+                  <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void run("CASA approved", () => api.verifyDeskOtp(record.id, "casa", otpCode))}>
+                    Verify OTP
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={() =>
+                      void run("Proceeds recorded", () =>
+                        api.completeDeskStep(record.id, 6, {
+                          customer_account_number: form.customer_account_number,
+                          customer_branch: form.customer_branch,
+                        }),
+                      )
+                    }
+                  >
+                    Complete proceeds
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <ReadRow label="Customer CASA account" value={proceeds.customer_account_number} />
+                <ReadRow label="Branch" value={proceeds.customer_branch} />
+              </>
+            )}
           </div>
         ) : null}
 

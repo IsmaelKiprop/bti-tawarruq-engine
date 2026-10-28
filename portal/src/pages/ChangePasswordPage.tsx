@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert } from "../components/PageShell";
-import { getHomePath } from "../config/roles";
+import { safePostLoginPath } from "../config/navigation";
 
 export function ChangePasswordPage() {
   const { authEnabled, loading, user, applyLoginResponse, logout } = useAuth();
@@ -28,7 +28,7 @@ export function ChangePasswordPage() {
     try {
       const result = await api.changePassword(currentPassword, newPassword);
       const session = applyLoginResponse(result);
-      navigate(getHomePath(session.role), { replace: true });
+      navigate(safePostLoginPath(session, undefined, authEnabled), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Password change failed");
     } finally {

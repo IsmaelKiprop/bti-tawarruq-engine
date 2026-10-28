@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { BrandLogo } from "../components/BrandLogo";
 import { getDeploymentProfile } from "../config/deployment";
-import { getHomePath } from "../config/roles";
+import { safePostLoginPath } from "../config/navigation";
 
 export function LoginPage() {
   const { authEnabled, loading, user, applyLoginResponse } = useAuth();
@@ -25,7 +25,7 @@ export function LoginPage() {
   }
 
   if (!loading && user && !user.must_change_password && !user.mfa_enroll_required) {
-    return <Navigate to={(location.state as { from?: string })?.from || getHomePath(user.role)} replace />;
+    return <Navigate to={safePostLoginPath(user, (location.state as { from?: string })?.from, authEnabled)} replace />;
   }
 
   if (!loading && user?.must_change_password) {
@@ -46,7 +46,7 @@ export function LoginPage() {
       navigate("/settings", { replace: true });
       return;
     }
-    navigate(getHomePath(session.role), { replace: true });
+    navigate(safePostLoginPath(session, (location.state as { from?: string })?.from, authEnabled), { replace: true });
   }
 
   async function onSubmit(event: FormEvent) {

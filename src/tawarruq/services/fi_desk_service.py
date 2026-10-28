@@ -167,6 +167,15 @@ def create_case(
     ]
     if missing:
         raise HTTPException(status_code=400, detail=f"Complete origination fields: {', '.join(missing)}")
+    product = str(payload.facility_product_type or "").strip()
+    if product.lower() != "airtime":
+        raise HTTPException(status_code=400, detail="Commodity type must be Airtime")
+    try:
+        amount = float(str(payload.approved_facility_amount).replace(",", "").strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Approved facility amount must be a number")
+    if amount < 0:
+        raise HTTPException(status_code=400, detail="Approved facility amount cannot be negative")
     fields = payload.model_dump()
     fields.pop("institution_id", None)
     fields.pop("assigned_approver_id", None)
@@ -239,6 +248,8 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
         raise HTTPException(status_code=400, detail="Complete this step from the desk form")
     if step > case.current_step:
         raise HTTPException(status_code=400, detail="Complete the earlier step first")
+    if step < case.current_step:
+        raise HTTPException(status_code=400, detail="This step is already complete and cannot be changed")
     payload = _parse_payload(case.payload_json)
     keys = {3: "initiate", 4: "murabaha", 5: "resale", 6: "proceeds", 7: "clearing", 8: "complete"}
     bucket = keys[step]
@@ -256,12 +267,38 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
         current.setdefault("purchase_timestamp", payload["timestamps"].get("purchase"))
     if step == 4:
         initiate = payload.get("initiate") or {}
+        orig = payload.get("origination") or {}
         cost = str(current.get("cost_price") or initiate.get("commodity_quantity") or "")
         profit = str(current.get("profit") or "")
         if not profit.strip():
             raise HTTPException(status_code=400, detail="Enter the Murabaha profit")
         if (payload.get("murabaha") or {}).get("sale_status") != "Complete":
             raise HTTPException(status_code=400, detail="Customer OTP must complete the Murabaha sale first")
+        facility_account = str(current.get("facility_account") or "").strip()
+        installments_raw = str(current.get("repayment_installments") or "").strip()
+        first_due = str(current.get("first_installment_due_date") or "").strip()
+        last_due = str(current.get("last_installment_due_date") or "").strip()
+        if not facility_account or not installments_raw or not first_due or not last_due:
+            raise HTTPException(
+                status_code=400,
+                detail="Enter facility account, repayment installments, and first and last installment due dates",
+            )
+        try:
+            installments = int(installments_raw)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Repayment installments must be a whole number")
+        if installments < 1:
+            raise HTTPException(status_code=400, detail="Repayment installments must be at least 1")
+        if last_due < first_due:
+            raise HTTPException(status_code=400, detail="Last installment due date cannot be before the first")
+        current["buyer_name"] = orig.get("customer_name")
+        current["buyer_email"] = orig.get("customer_email")
+        current["buyer_phone"] = orig.get("customer_phone")
+        current["seller_name"] = (payload.get("initiate") or {}).get("commodity_buyer") or current.get("seller_name")
+        current["facility_account"] = facility_account
+        current["repayment_installments"] = str(installments)
+        current["first_installment_due_date"] = first_due
+        current["last_installment_due_date"] = last_due
         current["cost_price"] = cost
         current["profit"] = profit
         try:
@@ -275,6 +312,12 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
     if step == 6:
         if current.get("final_status") != "Complete":
             raise HTTPException(status_code=400, detail="Customer OTP must approve the CASA deposit first")
+        account = str(current.get("customer_account_number") or "").strip()
+        branch = str(current.get("customer_branch") or "").strip()
+        if not account or not branch:
+            raise HTTPException(status_code=400, detail="Enter customer CASA account and branch")
+        current["customer_account_number"] = account
+        current["customer_branch"] = branch
         current.setdefault("commodity", "Airtime")
         orig = payload.get("origination") or {}
         current.setdefault("commodity_quantity", orig.get("approved_facility_amount"))
