@@ -61,7 +61,9 @@ def _login(client: TestClient, email: str, password: str) -> dict:
     return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 
-def test_desk_steps_otp_and_shariah_scope():
+def test_desk_steps_journey_and_shariah_scope(tmp_path, monkeypatch):
+    monkeypatch.setenv("CUSTOMER_MAIL_DIR", str(tmp_path / "mail"))
+    get_settings.cache_clear()
     client, ids = _client()
     ops = _login(client, "fi.ops@bank.local", ids["ops_pw"])
     approver = _login(client, "fi.approver@bank.local", ids["appr_pw"])
@@ -78,6 +80,7 @@ def test_desk_steps_otp_and_shariah_scope():
             "approved_facility_amount": "10000",
             "facility_product_type": "Mobile money float",
             "assigned_approver_id": ids["approver_id"],
+            "profit": "500",
         },
     )
     assert blocked.status_code == 400, blocked.text
@@ -94,9 +97,26 @@ def test_desk_steps_otp_and_shariah_scope():
             "approved_facility_amount": "-100",
             "facility_product_type": "Airtime",
             "assigned_approver_id": ids["approver_id"],
+            "profit": "500",
         },
     )
     assert negative.status_code == 400, negative.text
+
+    missing_profit = client.post(
+        "/api/v1/desk/cases",
+        headers=ops,
+        json={
+            "customer_id": "CUST-NP",
+            "document_type": "National ID",
+            "customer_name": "Amina Otieno",
+            "customer_phone": "+254700000001",
+            "customer_email": "amina@example.com",
+            "approved_facility_amount": "10000",
+            "facility_product_type": "Airtime",
+            "assigned_approver_id": ids["approver_id"],
+        },
+    )
+    assert missing_profit.status_code == 400, missing_profit.text
 
     created = client.post(
         "/api/v1/desk/cases",
@@ -110,6 +130,7 @@ def test_desk_steps_otp_and_shariah_scope():
             "approved_facility_amount": "10000",
             "facility_product_type": "Airtime",
             "assigned_approver_id": ids["approver_id"],
+            "profit": "500",
         },
     )
     assert created.status_code == 201, created.text
@@ -128,6 +149,14 @@ def test_desk_steps_otp_and_shariah_scope():
     assert decided.status_code == 200, decided.text
     assert decided.json()["status"] == "approved"
     assert decided.json()["current_step"] == 3
+    journey = decided.json()["payload"]["journey"]
+    assert journey["customer_ref"]
+    assert journey["application_id"]
+    offer_mail = tmp_path / "mail" / f"{journey['customer_ref']}.txt"
+    assert offer_mail.exists(), list((tmp_path / "mail").glob("*"))
+    mail_text = offer_mail.read_text(encoding="utf-8")
+    assert "Accept your Murabaha offer" in mail_text
+    assert f"/customer/{journey['customer_ref']}" in mail_text
 
     step3 = client.post(
         f"/api/v1/desk/cases/{case_id}/steps/3",
@@ -142,16 +171,30 @@ def test_desk_steps_otp_and_shariah_scope():
     )
     assert locked3.status_code == 400
 
-    sent = client.post(f"/api/v1/desk/cases/{case_id}/otp/send", headers=ops, json={"purpose": "murabaha"})
-    assert sent.status_code == 200, sent.text
-    code = sent.json()["dev_code"]
-    assert code
-    verified = client.post(
-        f"/api/v1/desk/cases/{case_id}/otp/verify",
+    missing_accept = client.post(
+        f"/api/v1/desk/cases/{case_id}/steps/4",
         headers=ops,
-        json={"purpose": "murabaha", "code": code},
+        json={
+            "fields": {
+                "profit": "500",
+                "offer_reference": "OFF-1",
+                "contract_reference": "CON-1",
+                "facility_account": "FAC-1001",
+                "repayment_installments": "12",
+                "first_installment_due_date": "2026-11-01",
+                "last_installment_due_date": "2027-10-01",
+            }
+        },
     )
-    assert verified.status_code == 200, verified.text
+    assert missing_accept.status_code == 400, missing_accept.text
+    assert "accept" in missing_accept.json()["detail"].lower()
+
+    accepted = client.post(f"/api/v1/customer/applications/{journey['customer_ref']}/accept")
+    assert accepted.status_code == 200, accepted.text
+    waiting = client.get(f"/api/v1/desk/cases/{case_id}", headers=ops)
+    assert waiting.status_code == 200, waiting.text
+    assert waiting.json()["payload"]["journey"]["offer_accepted"] is True
+
     missing_facility = client.post(
         f"/api/v1/desk/cases/{case_id}/steps/4",
         headers=ops,
@@ -175,25 +218,8 @@ def test_desk_steps_otp_and_shariah_scope():
     )
     assert step4.status_code == 200, step4.text
 
-    otp5 = client.post(f"/api/v1/desk/cases/{case_id}/otp/send", headers=ops, json={"purpose": "agent"})
-    assert otp5.status_code == 200, otp5.text
-    ok5 = client.post(
-        f"/api/v1/desk/cases/{case_id}/otp/verify",
-        headers=ops,
-        json={"purpose": "agent", "code": otp5.json()["dev_code"]},
-    )
-    assert ok5.status_code == 200, ok5.text
     step5 = client.post(f"/api/v1/desk/cases/{case_id}/steps/5", headers=ops, json={"fields": {}})
     assert step5.status_code == 200, step5.text
-
-    otp6 = client.post(f"/api/v1/desk/cases/{case_id}/otp/send", headers=ops, json={"purpose": "casa"})
-    assert otp6.status_code == 200, otp6.text
-    ok6 = client.post(
-        f"/api/v1/desk/cases/{case_id}/otp/verify",
-        headers=ops,
-        json={"purpose": "casa", "code": otp6.json()["dev_code"]},
-    )
-    assert ok6.status_code == 200, ok6.text
     missing_account = client.post(f"/api/v1/desk/cases/{case_id}/steps/6", headers=ops, json={"fields": {}})
     assert missing_account.status_code == 400
     step6 = client.post(

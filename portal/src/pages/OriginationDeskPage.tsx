@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, type DeskApprover, type DeskCase } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, EmptyState, LoadingPanel, PageShell } from "../components/PageShell";
-import { DESK_STEPS, DOCUMENT_TYPES, PRODUCT_TYPES, deskPayload, deskStatusLabel, deskTimestamps, maxDeskStep } from "../config/fiDesk";
+import { DOCUMENT_TYPES, PRODUCT_TYPES, VISIBLE_DESK_STEPS, deskPayload, deskStatusLabel, deskTimestamps, maxDeskStep } from "../config/fiDesk";
 
 const fieldClass = "rounded-sm border border-border bg-surface-elevated px-2.5 py-1.5 text-sm text-foreground";
 const labelClass = "flex min-w-0 flex-col gap-1 text-xs uppercase tracking-wide text-muted";
@@ -31,6 +31,18 @@ function asRecord(value: unknown): Record<string, string> {
   return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, item == null ? "" : String(item)]));
 }
 
+function journeyFrom(record: DeskCase | null): { ref: string; url: string; accepted: boolean } | null {
+  const raw = record?.payload?.journey;
+  if (!raw || typeof raw !== "object") return null;
+  const ref = String((raw as { customer_ref?: string }).customer_ref || "").trim();
+  if (!ref) return null;
+  return {
+    ref,
+    url: `${window.location.origin}/customer/${encodeURIComponent(ref)}`,
+    accepted: Boolean((raw as { offer_accepted?: boolean }).offer_accepted),
+  };
+}
+
 export function OriginationDeskPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -46,8 +58,6 @@ export function OriginationDeskPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [devCode, setDevCode] = useState("");
-  const [otpCode, setOtpCode] = useState("");
   const [comments, setComments] = useState("");
   const [form, setForm] = useState({
     customer_id: "",
@@ -89,13 +99,13 @@ export function OriginationDeskPage() {
     const next = await api.getDeskCase(id);
     setRecord(next);
     setSelectedId(id);
-    setStep(Math.max(0, Math.min(7, next.current_step - 1)));
+    setStep(next.status === "pending_approval" || next.status === "returned" || next.current_step <= 2 ? 0 : Math.max(0, Math.min(7, next.current_step - 1)));
     const orig = deskPayload(next, "origination");
     setForm((current) => ({
       ...current,
       ...orig,
       assigned_approver_id: next.assigned_approver_id || current.assigned_approver_id,
-      profit: deskPayload(next, "murabaha").profit || current.profit,
+      profit: orig.profit || deskPayload(next, "murabaha").profit || current.profit,
       offer_reference: deskPayload(next, "murabaha").offer_reference || current.offer_reference,
       contract_reference: deskPayload(next, "murabaha").contract_reference || current.contract_reference,
       settlement_ref: deskPayload(next, "clearing").settlement_ref || current.settlement_ref,
@@ -117,6 +127,16 @@ export function OriginationDeskPage() {
       .finally(() => setLoading(false));
   }, [user?.institution_id, caseFromUrl]);
 
+  const waitingForCustomer = Boolean(record?.payload?.journey) && !journeyFrom(record)?.accepted && (record?.current_step || 0) <= 4;
+
+  useEffect(() => {
+    if (!selectedId || !waitingForCustomer) return;
+    const timer = window.setInterval(() => {
+      void api.getDeskCase(selectedId).then(setRecord).catch(() => undefined);
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [selectedId, waitingForCustomer]);
+
   async function run(label: string, work: () => Promise<DeskCase | void>) {
     setBusy(true);
     setError("");
@@ -126,7 +146,7 @@ export function OriginationDeskPage() {
       if (next) {
         setRecord(next);
         setSelectedId(next.id);
-        setStep(Math.max(0, Math.min(7, next.current_step - 1)));
+        setStep(next.status === "pending_approval" || next.status === "returned" || next.current_step <= 2 ? 0 : Math.max(0, Math.min(7, next.current_step - 1)));
       }
       await loadList();
       setMessage(label);
@@ -148,6 +168,7 @@ export function OriginationDeskPage() {
   const originationLocked = record != null && record.status !== "returned";
   const initiateLocked = Boolean(record && record.current_step > 3);
   const murabahaLocked = Boolean(record && record.current_step > 4);
+  const journey = journeyFrom(record);
 
   const deferred = useMemo(() => {
     const cost = Number(initiate.commodity_quantity || orig.approved_facility_amount || 0);
@@ -167,7 +188,9 @@ export function OriginationDeskPage() {
         <div>
           <h2 className="m-0 text-lg font-semibold">Origination</h2>
           <p className="muted m-0 mt-1 text-sm">
-            {isApprover ? "Approve assigned facility requests." : "Eight-step FI Ops desk. Later steps stay locked until the current one is done."}
+            {isApprover
+              ? "Approve assigned facility requests on the first step."
+              : "Type the customer on this page. After FI Approver approves, they get the journey email. Their accept unlocks Murabaha."}
           </p>
         </div>
         {canWrite ? (
@@ -178,8 +201,6 @@ export function OriginationDeskPage() {
               setRecord(null);
               setSelectedId("");
               setStep(0);
-              setDevCode("");
-              setOtpCode("");
             }}
           >
             New case
@@ -189,8 +210,6 @@ export function OriginationDeskPage() {
 
       {error ? <Alert tone="error">{error}</Alert> : null}
       {message ? <Alert tone="success">{message}</Alert> : null}
-      {devCode ? <Alert tone="info">Tester OTP: {devCode}</Alert> : null}
-
       {loading ? <LoadingPanel rows={4} /> : null}
 
       {!loading && cases.length ? (
@@ -218,10 +237,11 @@ export function OriginationDeskPage() {
       ) : null}
 
       <ol className="m-0 flex list-none items-start p-0">
-        {DESK_STEPS.map((item, index) => {
-          const current = index === step;
-          const locked = index + 1 > reachable;
-          const done = index + 1 < reachable;
+        {VISIBLE_DESK_STEPS.map((item, index) => {
+          const uiIndex = item.n - 1;
+          const current = step === uiIndex || (item.n === 1 && step <= 1);
+          const locked = item.n > reachable;
+          const done = item.n < reachable;
           return (
             <li key={item.id} className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex items-center">
@@ -231,11 +251,11 @@ export function OriginationDeskPage() {
                     current || done ? "border-primary bg-primary text-primary-foreground" : locked ? "border-border text-muted" : "border-primary bg-surface text-primary"
                   }`}
                   disabled={locked}
-                  onClick={() => goToStep(index)}
+                  onClick={() => goToStep(uiIndex)}
                 >
-                  {done && !current ? "✓" : item.n}
+                  {done && !current ? "✓" : index + 1}
                 </button>
-                {index < DESK_STEPS.length - 1 ? <span className={`mx-1 h-px min-w-2 flex-1 ${index + 1 < reachable ? "bg-primary" : "bg-border"}`} /> : null}
+                {index < VISIBLE_DESK_STEPS.length - 1 ? <span className={`mx-1 h-px min-w-2 flex-1 ${item.n < reachable ? "bg-primary" : "bg-border"}`} /> : null}
               </div>
               <span className={`hidden pr-2 text-[0.65rem] uppercase tracking-wide sm:block ${current ? "text-foreground" : "text-muted"}`}>{item.title}</span>
             </li>
@@ -283,6 +303,9 @@ export function OriginationDeskPage() {
                 ))}
               </select>
             </Field>
+            <Field label="Profit">
+              <input className={fieldClass} value={form.profit} disabled={originationLocked} onChange={(e) => setForm({ ...form, profit: e.target.value })} />
+            </Field>
             <Field label="FI Approver">
               <select className={fieldClass} value={form.assigned_approver_id} disabled={originationLocked} onChange={(e) => setForm({ ...form, assigned_approver_id: e.target.value })}>
                 {approvers.map((item) => (
@@ -292,6 +315,47 @@ export function OriginationDeskPage() {
                 ))}
               </select>
             </Field>
+            {journey ? (
+              <div className="sm:col-span-2 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-sm border border-border bg-surface-elevated px-3 py-2">
+                  <dt className="text-[0.7rem] uppercase tracking-wide text-muted">Customer journey</dt>
+                  <dd className="m-0 text-sm">
+                    <a className="text-primary" href={journey.url} target="_blank" rel="noreferrer">
+                      {journey.url}
+                    </a>
+                  </dd>
+                </div>
+                <ReadRow
+                  label="Customer accept"
+                  value={journey.accepted ? "Accepted — Murabaha is unlocked" : "Waiting for the customer to accept"}
+                />
+              </div>
+            ) : null}
+            {record?.status === "pending_approval" ? (
+              <>
+                <ReadRow label="Request id" value={record.id} />
+                <ReadRow label="Requester" value={record.requested_by_name} />
+                <ReadRow label="Approver" value={record.assigned_approver_name} />
+                <ReadRow label="Status" value={deskStatusLabel(record.status)} />
+                {isApprover ? (
+                  <>
+                    <Field label="Approval comments">
+                      <textarea className={fieldClass} value={comments} onChange={(e) => setComments(e.target.value)} />
+                    </Field>
+                    <div className="flex flex-wrap gap-2 self-end">
+                      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void run("Approved", () => api.decideDeskCase(record.id, "approve", comments))}>
+                        Approve
+                      </button>
+                      <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void run("Returned", () => api.decideDeskCase(record.id, "return", comments))}>
+                        Return
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="muted sm:col-span-2 m-0 text-sm">Waiting for FI Approver. Approve emails this customer the journey. There is no separate customer page.</p>
+                )}
+              </>
+            ) : null}
             {canWrite && (!record || record.status === "returned") ? (
               <div className="sm:col-span-2">
                 <button
@@ -313,6 +377,7 @@ export function OriginationDeskPage() {
                         approved_facility_amount: form.approved_facility_amount,
                         facility_product_type: form.facility_product_type,
                         assigned_approver_id: form.assigned_approver_id,
+                        profit: form.profit,
                       }),
                     );
                   }}
@@ -320,32 +385,6 @@ export function OriginationDeskPage() {
                   {busy ? "Sending…" : "Send to FI Approver"}
                 </button>
               </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {step === 1 ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <ReadRow label="Request id" value={record?.id} />
-            <ReadRow label="Amount" value={orig.approved_facility_amount} />
-            <ReadRow label="Requester" value={record?.requested_by_name} />
-            <ReadRow label="Approver" value={record?.assigned_approver_name} />
-            <ReadRow label="Status" value={record?.status} />
-            <ReadRow label="Comments" value={record?.approval_comments} />
-            {isApprover && record?.status === "pending_approval" ? (
-              <>
-                <Field label="Approval comments">
-                  <textarea className={fieldClass} value={comments} onChange={(e) => setComments(e.target.value)} />
-                </Field>
-                <div className="flex flex-wrap gap-2 self-end">
-                  <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void run("Approved", () => api.decideDeskCase(record.id, "approve", comments))}>
-                    Approve
-                  </button>
-                  <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void run("Returned", () => api.decideDeskCase(record.id, "return", comments))}>
-                    Return
-                  </button>
-                </div>
-              </>
             ) : null}
           </div>
         ) : null}
@@ -441,33 +480,19 @@ export function OriginationDeskPage() {
             <Field label="Contract reference">
               <input className={fieldClass} value={form.contract_reference} disabled={murabahaLocked} onChange={(e) => setForm({ ...form, contract_reference: e.target.value })} />
             </Field>
-            <ReadRow label="Sale status" value={murabaha.sale_status || "Pending"} />
+            <ReadRow label="Sale status" value={murabaha.sale_status || (journey?.accepted ? "Customer accepted" : "Pending customer accept")} />
             <ReadRow label="Sale timestamp" value={murabaha.sale_timestamp} />
             {canWrite && record.current_step === 4 ? (
               <div className="sm:col-span-2 flex flex-wrap items-end gap-2">
-                <Field label="Customer OTP">
-                  <input className={fieldClass} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} />
-                </Field>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    void run("OTP sent", async () => {
-                      const sent = await api.sendDeskOtp(record.id, "murabaha");
-                      setDevCode(sent.dev_code || "");
-                    })
-                  }
-                >
-                  Send OTP
-                </button>
-                <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void run("OTP accepted", () => api.verifyDeskOtp(record.id, "murabaha", otpCode))}>
-                  Verify OTP
-                </button>
+                <p className="muted m-0 w-full text-sm">
+                  {journey?.accepted
+                    ? "Customer accepted on their journey. Complete Murabaha to open the next origination step."
+                    : "Waiting for the customer to accept the emailed journey. This step unlocks when they accept."}
+                </p>
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={busy}
+                  disabled={busy || !journey?.accepted}
                   onClick={() =>
                     void run("Murabaha recorded", () =>
                       api.completeDeskStep(record.id, 4, {
@@ -503,26 +528,7 @@ export function OriginationDeskPage() {
             <ReadRow label="Resale end" value={resale.resale_end_timestamp} />
             <ReadRow label="Confirmation" value={resale.resale_confirmation_status || "—"} />
             {canWrite && record.current_step === 5 ? (
-              <div className="sm:col-span-2 flex flex-wrap items-end gap-2">
-                <Field label="Customer OTP">
-                  <input className={fieldClass} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} />
-                </Field>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    void run("OTP sent", async () => {
-                      const sent = await api.sendDeskOtp(record.id, "agent");
-                      setDevCode(sent.dev_code || "");
-                    })
-                  }
-                >
-                  Send OTP
-                </button>
-                <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void run("Agent appointed", () => api.verifyDeskOtp(record.id, "agent", otpCode))}>
-                  Verify OTP
-                </button>
+              <div className="sm:col-span-2">
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void run("Resale recorded", () => api.completeDeskStep(record.id, 5, {}))}>
                   Complete resale
                 </button>
@@ -553,26 +559,7 @@ export function OriginationDeskPage() {
                 <Field label="Branch">
                   <input className={fieldClass} value={form.customer_branch} onChange={(e) => setForm({ ...form, customer_branch: e.target.value })} required />
                 </Field>
-                <div className="sm:col-span-2 flex flex-wrap items-end gap-2">
-                  <Field label="Customer OTP">
-                    <input className={fieldClass} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} />
-                  </Field>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={busy}
-                    onClick={() =>
-                      void run("OTP sent", async () => {
-                        const sent = await api.sendDeskOtp(record.id, "casa");
-                        setDevCode(sent.dev_code || "");
-                      })
-                    }
-                  >
-                    Send OTP
-                  </button>
-                  <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void run("CASA approved", () => api.verifyDeskOtp(record.id, "casa", otpCode))}>
-                    Verify OTP
-                  </button>
+                <div className="sm:col-span-2">
                   <button
                     type="button"
                     className="btn btn-primary"

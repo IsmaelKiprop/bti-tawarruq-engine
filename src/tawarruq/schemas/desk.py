@@ -19,6 +19,7 @@ class DeskCaseCreate(BaseModel):
     approved_facility_amount: str
     facility_product_type: str
     assigned_approver_id: str
+    profit: str | None = None
     institution_id: str | None = None
 
 

@@ -198,6 +198,17 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
     ],
     note: "Super Admin and BTI Ops keep BTI staff and FI logins on separate books. Invite FI Admin only after the FI is Active, from the FI book. Super Admin may also invite Super Admin, BTI Ops, BTI Finance, Shariah / Audit, and Reconciliation. FI Admin invites FI Ops, FI Approver, and the other FI desk roles for their institution. Super Admin and BTI Ops do not invite FI Ops or FI Approver. API keys are Super Admin only.",
   },
+  "/origination": {
+    title: "What Origination is",
+    lead: "The FI Airtime tawarruq desk. Step 1 captures the customer, profit, and FI Approver. After approve, the customer uses the existing journey at /customer/{ref} — there is no desk OTP.",
+    dealTitle: "How a deal uses it",
+    dealSteps: [
+      "FI Ops enters ID, amount, profit, and the assigned FI Approver, then sends the case.",
+      "The assigned approver approves on the same first screen. That emails the customer journey with the Murabaha offer.",
+      "The customer accepts on /customer/{ref}. FI Ops then completes purchase, Murabaha, resale, CASA proceeds, and clearing.",
+    ],
+    note: "Approval Queue still lists assigned requests. Later steps email the same journey link. Bursa and Sedania desks use that journey too.",
+  },
   "/settings": {
     title: "What settings cover",
     lead: "Your own portal account: profile/HR record, password, MFA, theme, and shortcuts for desks you can open. Super Admin also sets platform knobs here.",
@@ -208,7 +219,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Enable authenticator or email MFA; privileged Buruuj roles should keep MFA on.",
       "Use role workspace links for institutions, users, billing, and ops when your permissions allow.",
     ],
-    note: "Super Admin sets Sedania % Charge and per-FI BTI % Charge here. Saving needs password and OTP. Process explainers for desks live under Documentation.",
+    note: "Super Admin sets the live Tawarruq provider (Sedania or Bursa), that provider’s rate, the start timestamp, and per-FI BTI % Charge. Saving needs password and OTP. The latest active row is the live desk. Process explainers for desks live under Documentation.",
   },
   "/integrations": {
     title: "What integrations are",
@@ -402,6 +413,16 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
       { n: 4, title: "They sign in", body: "Forced password change, then they complete profile/HR on Settings." },
     ],
   },
+  "/origination": {
+    title: "How Origination works",
+    intro: "Profit and approval live on step 1. The customer journey replaces desk OTP.",
+    steps: [
+      { n: 1, title: "Submit", body: "ID, amount, profit, Airtime, FI Approver." },
+      { n: 2, title: "Approve", body: "Assigned FI Approver decides here. That emails /customer/{ref}." },
+      { n: 3, title: "Customer accepts", body: "Murabaha stays blocked until the offer is accepted on the journey." },
+      { n: 4, title: "Finish the desk", body: "Purchase, resale, CASA, clearing. Each later step emails the same link." },
+    ],
+  },
   "/settings": {
     title: "How settings work",
     intro: "Self-service for the signed-in login. Admins still govern roles and access from Users.",
@@ -409,7 +430,7 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
       { n: 1, title: "Profile & HR", body: "Update name, job title, department, employee number, phone, and office." },
       { n: 2, title: "Security", body: "Change password and enable MFA (authenticator or email)." },
       { n: 3, title: "Shortcuts", body: "Open desks your role can reach without hunting the sidebar." },
-      { n: 4, title: "Platform (Super Admin)", body: "Set Sedania % Charge (default 0.0035%) and per-FI BTI % Charge (default 0.004%). Saving needs password and OTP." },
+      { n: 4, title: "Platform (Super Admin)", body: "Pick Sedania or Bursa, set that provider’s rate and start time, plus per-FI BTI % Charge (default 0.004%). Saving needs password and OTP. Latest active row is the live desk." },
     ],
   },
   "/integrations": {

@@ -4,7 +4,7 @@ Record of the FI tester / BTI Ops suggestions that are now in the engine and por
 
 Kenya Ops was **not** rewritten. FI desk work is a new **Origination** page (`/origination`). SMTP invite mail is still later.
 
-Schema: Alembic **`016`** (API key reveal), **`017`** (`fi_desk_cases`), **`018`** (platform settings), **`019`** (charge percents). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **Shariah officers** land on Shariah Audit: BTI-wide sees all FIs, FI-bound sees their tenant. **FI Ops** sees Origination, All Workflows, Settings. **FI Approver** sees Origination, Approval Queue, Settings. No Dashboard, Shariah, or Ops Monitor.
+Schema: Alembic **`016`** (API key reveal), **`017`** (`fi_desk_cases`), **`018`** (platform settings), **`019`** (charge percents), **`020`** (provider rate history). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **Shariah officers** land on Shariah Audit: BTI-wide sees all FIs, FI-bound sees their tenant. **FI Ops** sees Origination, All Workflows, Settings, plus the live Tawarruq desk (`/malaysia` or `/sedania`) when Super Admin’s latest provider matches. **FI Approver** sees Origination, Approval Queue, Settings. No Dashboard, Shariah, or Ops Monitor. Kenya / Approvals / Billing stay hidden.
 
 ---
 
@@ -18,7 +18,7 @@ Schema: Alembic **`016`** (API key reveal), **`017`** (`fi_desk_cases`), **`018`
 | Copy UI should be clean | Same copy panel on profile, Webhooks, Institutions, Dashboard | One panel: prefix visible, full secret hidden until password + Show. |
 | Super Admin issues keys; FI Admin only requests | Webhooks + profile | `POST /institutions/{id}/api-keys` is Super Admin only. FI Admin uses Request. A second request is blocked once issued. |
 | GET must not dump plaintext keys | `GET /institutions/{id}/api-keys/request` | Status, prefix, timestamps. `api_key` and `hmac_secret` are null until reveal. |
-| FI Ops needs an eight-step desk | `/origination` | Gated wizard. First sidebar tab. FI Ops and FI Approver land here after login. |
+| FI Ops needs an eight-step desk | `/origination` | Gated wizard. Profit and FI Approver sit on step 1. Approval Queue stays for the assigned approver. FI Ops and FI Approver land here after login. |
 | No Dashboard / Shariah / Ops for FI Ops | Sidebar | Those three are hidden for FI Ops and FI Approver. Login ignores a leftover `/users` URL and sends them to Origination. |
 | Approval Queue for FI Approver | `/origination/queue` | Lists assigned requests. Customer name column. Search by customer or requester. Filter by officer, status, date. Open jumps to the desk. |
 | All Workflows for FI Ops | `/origination/workflows` | Lists origination cases. Filter by customer, status, date. Clearing marks the case **Complete** (not In Progress). Open jumps to the desk. |
@@ -28,8 +28,8 @@ Schema: Alembic **`016`** (API key reveal), **`017`** (`fi_desk_cases`), **`018`
 | Buyer / Seller and facility on Murabaha | Origination step 4 | Buyer (name, email, phone) and Seller (FI) first, then facility account, repayment installments, first and last installment due dates. |
 | Current commodity owner on resale | Origination step 5 | Separate rows: owner, email, phone (from the customer). |
 | CASA on Complete proceeds | Origination step 6 | Customer CASA account and branch are required. |
-| Later steps wait for Approval | Origination step 2 | FI Ops picks an FI Approver and sends the case. That approver decides on the same page (not Kenya `/approvals`). |
-| Customer OTP for tester-grade checks | Steps 4–6 | Send OTP (email when `SMTP_HOST` is set). If SMTP is off, the code is shown on screen. 10 minutes. Purposes: `murabaha`, `agent`, `casa`. |
+| Later steps wait for Approval | Origination step 1 | FI Ops picks an FI Approver and sends the case. That approver decides on the same first screen (not Kenya `/approvals`). The separate approval tab is hidden. |
+| Customer journey instead of OTP | Approve + later steps | Approve creates the existing `/customer/{ref}` journey and emails the offer. Murabaha waits for the customer to accept. Later desk steps, Bursa, and Sedania email the same journey link. |
 | Every desk action must leave a Shariah trail | Shariah Audit | Each create / decide / step / OTP writes `log_shariah_step` with a timestamp. |
 | Shariah Audit must be visible to testers | `/shariah` | Unhidden in the tester shell. Super Admin / BTI Ops / BTI-wide Shariah: all institutions or one. FI Shariah / FI Admin: own tenant. |
 | Audit for Shariah officers at BTI and FI level | `/shariah`, Users | Super Admin invites **Shariah / Audit (BTI-wide)** from the BTI book, or tenant Shariah from **FI users**. Seed: `bti.shariah@…` (all FIs) and `shariah@…` (one FI). |
@@ -71,12 +71,11 @@ New desk. Kenya `/kenya` is unchanged and stays hidden while the tester shell is
 
 | Step | Title | Who | Gate |
 |------|-------|-----|------|
-| 1 | Origination | FI Ops | Document type, ID, amount (≥ 0), **Commodity type** Airtime, pick FI Approver |
-| 2 | Approval | Assigned FI Approver | Approve or return. Other steps stay locked until approve |
-| 3 | Initiate Tawarruq | FI Ops | Confirm purchase Yes. Locked after moving to step 4 |
-| 4 | Murabaha Sale | FI Ops | Buyer (customer) and Seller (FI), facility account, installment count and due dates, OTP `murabaha` |
-| 5 | Commodity Resale | FI Ops | Current commodity owner, email, and phone. OTP purpose `agent` |
-| 6 | Resale Proceeds | FI Ops | OTP purpose `casa`. Customer CASA account and branch required |
+| 1 | Origination + approval | FI Ops then assigned FI Approver | Document type, ID, amount (≥ 0), **profit**, **Commodity type** Airtime, pick FI Approver. Approver decides on this same screen. Approve emails `/customer/{ref}` |
+| 3 | Initiate Tawarruq | FI Ops | Confirm purchase Yes. Locked after moving to step 4. Emails the journey |
+| 4 | Murabaha Sale | FI Ops | Buyer (customer) and Seller (FI), facility account, installment count and due dates. Customer must accept the offer on their journey first |
+| 5 | Commodity Resale | FI Ops | Current commodity owner, email, and phone. Emails the journey |
+| 6 | Resale Proceeds | FI Ops | Customer CASA account and branch required. Emails the journey |
 | 7 | Clearing | FI Ops | Settlement reference |
 | 8 | Complete | FI Ops | Closes the case |
 
@@ -90,14 +89,12 @@ Home path: FI Ops and FI Approver → `/origination`. FI Approver only sees case
 | GET / POST | `/desk/cases` | FI Ops creates. Approver lists assigned cases. Shariah may list |
 | GET | `/desk/cases/{id}` | Tenant + assigned approver |
 | POST | `/desk/cases/{id}/decide` | Assigned FI Approver `{ "decision": "approve" \| "return", "comments"? }` |
-| POST | `/desk/cases/{id}/steps/{n}` | FI Ops, `n` 1–8, `{ "fields": {…} }` |
-| POST | `/desk/cases/{id}/otp/send` | FI Ops `{ "purpose": "murabaha" \| "agent" \| "casa" }` |
-| POST | `/desk/cases/{id}/otp/verify` | FI Ops `{ "purpose", "code" }` |
+| POST | `/desk/cases/{id}/steps/{n}` | FI Ops, `n` 3–8, `{ "fields": {…} }` |
 | GET | `/desk/audit` | `view_shariah` |
 
 `fi_approver` write-block middleware allows `/desk/cases` and `/decide`.
 
-OTP: hashed, 10 minutes. When SMTP sends, `dev_code` is omitted. When SMTP is off, `dev_code` is in the send response and on the Origination page.
+OTP send/verify remain on the API but the Origination UI no longer uses them. Approve attaches the existing customer journey (`notify_offer_ready`). Later steps call `notify_step_ready` with the same `/customer/{ref}` link.
 
 Table: `fi_desk_cases` (Alembic `017`).
 
@@ -138,7 +135,7 @@ $env:PYTHONPATH="src"
 python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py tests/test_invite_matrix.py tests/test_ops_login.py::test_shariah_officer_audit_at_bti_and_fi_level tests/test_ops_login.py::test_super_admin_sets_sedania_charge_pct -q
 ```
 
-`test_fi_desk.py`: eight steps, Airtime-only product, OTP, proceeds account/branch, clearing seals **Complete**, Shariah audit rows, reveal requires a session password. Charge test: default 0.0035 / 0.004, password + OTP to save, FI Admin 403.
+`test_fi_desk.py`: profit required on create, approve attaches journey and writes the offer mail file, Murabaha waits for customer accept (no desk OTP), proceeds account/branch, clearing seals **Complete**, Shariah audit rows, reveal requires a session password. Charge test: default 0.0035 / 0.004, second Sedania rate replaces the first, Bursa sets `active_provider`, password + OTP to save, FI Admin 403.
 
 ---
 
@@ -146,9 +143,9 @@ python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py test
 
 | Item | Notes |
 |------|--------|
-| SMTP for invites and OTP | Codes and temp passwords still show in the portal / API when `SMTP_HOST` is unset |
+| SMTP for invites and journey mail | Temp passwords and journey copies still file locally when `SMTP_HOST` is unset |
 | Rewrite of Kenya Ops | Origination is a separate desk |
-| Lift tester shell | Kenya, Malaysia, Approvals, Billing stay hidden until `TESTER_SHELL` is false |
+| Lift tester shell | Kenya, Approvals, Billing stay hidden until `TESTER_SHELL` is false. Bursa / Sedania show when Super Admin’s latest provider matches |
 | Keys issued before `016` | No `reveal_key`; Super Admin re-issues |
 | KYC file store / live PEP | Unchanged: text references and status enums |
 
@@ -162,7 +159,7 @@ python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py test
 | Copy / reveal UI | `portal/src/components/SecretCopyPanel.tsx` |
 | Reveal + request | `src/tawarruq/api/routes_extended.py`, Alembic `016_api_key_reveal.py` |
 | Desk | `src/tawarruq/services/fi_desk_service.py`, `api/routes_desk.py`, `models/fi_desk.py`, Alembic `017_fi_desk_cases.py` |
-| Platform charges | `src/tawarruq/services/platform_settings_service.py`, Alembic `018_platform_settings.py`, `019_charge_pcts.py`, `portal/src/pages/SettingsPage.tsx` |
+| Platform charges | `src/tawarruq/services/platform_settings_service.py`, Alembic `018_platform_settings.py`, `019_charge_pcts.py`, `020_provider_rates.py`, `portal/src/pages/SettingsPage.tsx` |
 | Origination UI | `portal/src/pages/OriginationDeskPage.tsx`, `config/fiDesk.ts`, `DeskCaseListPage.tsx` |
 | Shariah UI | `portal/src/pages/ShariahCompliancePage.tsx` |
 | Users books | `portal/src/pages/UsersPage.tsx`, `config/roles.ts` |

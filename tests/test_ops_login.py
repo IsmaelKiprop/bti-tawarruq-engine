@@ -305,6 +305,8 @@ def test_super_admin_sets_sedania_charge_pct():
     loaded = client.get("/api/v1/ops/settings", headers=admin_headers)
     assert loaded.status_code == 200, loaded.text
     assert loaded.json()["sedania_charge_pct"] == 0.0035
+    assert loaded.json()["active_provider"] == "sedania"
+    assert loaded.json()["rate_pct"] == 0.0035
     assert any(item["id"] == institution_id and item["bti_charge_pct"] == 0.004 for item in loaded.json()["institutions"])
 
     denied = client.patch(
@@ -314,23 +316,73 @@ def test_super_admin_sets_sedania_charge_pct():
     )
     assert denied.status_code == 400
 
-    challenge = client.post("/api/v1/ops/settings/challenge", headers=admin_headers, json={"password": password})
-    assert challenge.status_code == 200, challenge.text
-    otp = challenge.json()["dev_code"]
-    assert otp
+    def _otp() -> str:
+        challenge = client.post("/api/v1/ops/settings/challenge", headers=admin_headers, json={"password": password})
+        assert challenge.status_code == 200, challenge.text
+        code = challenge.json()["dev_code"]
+        assert code
+        return code
 
     saved = client.patch(
         "/api/v1/ops/settings",
         headers=admin_headers,
         json={
             "password": password,
-            "otp_code": otp,
+            "otp_code": _otp(),
             "sedania_charge_pct": 0.0035,
             "institutions": [{"id": institution_id, "bti_charge_pct": 0.004}],
         },
     )
     assert saved.status_code == 200, saved.text
     assert saved.json()["sedania_charge_pct"] == 0.0035
+    assert saved.json()["active_provider"] == "sedania"
+
+    second_sedania = client.patch(
+        "/api/v1/ops/settings",
+        headers=admin_headers,
+        json={
+            "password": password,
+            "otp_code": _otp(),
+            "active_provider": "sedania",
+            "rate_pct": 0.005,
+        },
+    )
+    assert second_sedania.status_code == 200, second_sedania.text
+    assert second_sedania.json()["active_provider"] == "sedania"
+    assert second_sedania.json()["rate_pct"] == 0.005
+    assert second_sedania.json()["sedania_charge_pct"] == 0.005
+
+    bursa = client.patch(
+        "/api/v1/ops/settings",
+        headers=admin_headers,
+        json={
+            "password": password,
+            "otp_code": _otp(),
+            "active_provider": "bursa",
+            "rate_pct": 0.01,
+        },
+    )
+    assert bursa.status_code == 200, bursa.text
+    assert bursa.json()["active_provider"] == "bursa"
+    assert bursa.json()["rate_pct"] == 0.01
+    me = client.get("/api/v1/ops/auth/me", headers=admin_headers)
+    assert me.status_code == 200, me.text
+    assert me.json()["active_provider"] == "bursa"
+
+    restored = client.patch(
+        "/api/v1/ops/settings",
+        headers=admin_headers,
+        json={
+            "password": password,
+            "otp_code": _otp(),
+            "active_provider": "sedania",
+            "rate_pct": 0.0035,
+            "institutions": [{"id": institution_id, "bti_charge_pct": 0.004}],
+        },
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["active_provider"] == "sedania"
+    assert restored.json()["rate_pct"] == 0.0035
 
     too_high = client.patch(
         "/api/v1/ops/settings",

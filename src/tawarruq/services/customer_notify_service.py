@@ -228,6 +228,69 @@ def notify_trade_documents_ready(
     )
 
 
+def notify_step_ready(
+    db: Session,
+    *,
+    email: str | None,
+    customer_name: str | None,
+    customer_ref: str,
+    title: str,
+    body_line: str,
+    institution_name: str | None = None,
+) -> OfferNotifyResult:
+    """Email the customer a later-step update with their journey link. Never raises."""
+    journey_url = customer_journey_url(customer_ref)
+    to_email = normalize_email(email)
+    if not to_email:
+        return OfferNotifyResult(
+            status="skipped_no_email",
+            email=None,
+            journey_url=journey_url,
+            smtp_sent=False,
+            mail_path=None,
+            reason="This customer has no email. Share the journey link yourself.",
+        )
+    name = (customer_name or "Customer").strip() or "Customer"
+    house = (institution_name or "Your institution").strip() or "Your institution"
+    subject = f"{title} {customer_ref}"
+    body = (
+        f"Hello {name},\n\n"
+        f"{house}: {body_line}\n\n"
+        "Open your customer journey to review and continue:\n"
+        f"{journey_url}\n\n"
+        "Buruuj Tawarruq Engine\n"
+    )
+    mail_path: str | None = None
+    try:
+        settings = get_settings()
+        path = settings.customer_mail_path / f"{customer_ref}-{title.lower().replace(' ', '-')}.txt"
+        path.write_text(f"To: {to_email}\nSubject: {subject}\n\n{body}", encoding="utf-8")
+        mail_path = str(path)
+    except Exception:
+        logger.exception("Could not write customer step mail file")
+    smtp_sent = _send_smtp(to_email, subject, body)
+    status = "sent" if smtp_sent else "filed"
+    try:
+        log_audit(
+            db,
+            entity_type="customer_journey",
+            entity_id=customer_ref,
+            actor=AuditActor.SYSTEM,
+            action="journey.step_notified",
+            details=f"status={status} to={to_email} title={title}",
+        )
+    except Exception:
+        logger.exception("Could not audit step email")
+    return OfferNotifyResult(
+        status=status,
+        email=to_email,
+        journey_url=journey_url,
+        smtp_sent=smtp_sent,
+        mail_path=mail_path,
+        reason=None if smtp_sent else "SMTP is not configured or the send failed. A local copy was written.",
+    )
+
+
 def _send_smtp(
     to_email: str,
     subject: str,

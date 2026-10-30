@@ -272,6 +272,20 @@ def create_disbursement(
         event=WebhookEvent.DISBURSEMENT_CREATED,
         data={"disbursement_id": disbursement.id, "amount": str(disbursement.amount)},
     )
+    try:
+        from tawarruq.services.customer_notify_service import notify_step_ready
+
+        notify_step_ready(
+            db,
+            email=getattr(application.customer, "email", None),
+            customer_name=application.customer_name,
+            customer_ref=application.customer_ref,
+            title="Bursa disbursement",
+            body_line="Funds have been disbursed. Open your journey for the Tawarruq certificate.",
+            institution_name=application.institution.name if application.institution else None,
+        )
+    except Exception:
+        pass
     return disbursement
 
 
@@ -349,4 +363,20 @@ def confirm_manual_leg(
         evidence_ref=certificate_number,
         details=f"leg={leg_number}",
     )
+    try:
+        from tawarruq.services.customer_notify_service import notify_step_ready
+
+        application = db.get(FinancingApplication, transaction.application_id)
+        if application:
+            notify_step_ready(
+                db,
+                email=getattr(application.customer, "email", None),
+                customer_name=application.customer_name,
+                customer_ref=application.customer_ref,
+                title=f"Bursa certificate leg {int(leg_number)}",
+                body_line=f"E-certificate {certificate_number} has been recorded for this facility.",
+                institution_name=application.institution.name if application.institution else None,
+            )
+    except Exception:
+        pass
     return leg

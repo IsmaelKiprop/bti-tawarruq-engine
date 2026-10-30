@@ -478,6 +478,20 @@ def execute_bank_financing(
         institution_id=institution.id,
         application_id=application.id,
     )
+    try:
+        from tawarruq.services.customer_notify_service import notify_step_ready
+
+        notify_step_ready(
+            db,
+            email=customer.email,
+            customer_name=customer.full_name,
+            customer_ref=application.customer_ref,
+            title="Sedania financing started",
+            body_line="Your Sedania facility has been created. Open your journey to follow the trade documents.",
+            institution_name=institution.name,
+        )
+    except Exception:
+        pass
 
     try:
         _stamp_cmp_and_agency(db, execution, institution, customer, amount)
@@ -521,6 +535,20 @@ def execute_bank_financing(
             details=f"CASA {execution.casa_account} credited {amount} {execution.currency}",
         )
         db.flush()
+        try:
+            from tawarruq.services.customer_notify_service import notify_step_ready
+
+            notify_step_ready(
+                db,
+                email=customer.email,
+                customer_name=customer.full_name,
+                customer_ref=application.customer_ref,
+                title="Sedania documents ready",
+                body_line="Trade documents are ready on your customer journey.",
+                institution_name=institution.name,
+            )
+        except Exception:
+            pass
         return execution
     except (IntegrationError, HTTPException, ValueError) as exc:
         logger.exception("Sedania financing failed execution_id=%s", execution.id)

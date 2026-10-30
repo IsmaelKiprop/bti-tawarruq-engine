@@ -97,11 +97,13 @@ createRoot(document.getElementById("root")!).render(
               <Route element={<RequireRole roles={["institution_ops"]} />}>
                 <Route path="origination/workflows" element={<DeskCaseListPage mode="workflows" />} />
               </Route>
+              <Route element={<RequireAnyPermission permissions={["write_ops", "write_bti_ops"]} />}>
+                <Route path="malaysia" element={<MalaysiaManualBridgePage />} />
+                <Route path="sedania" element={<SedaniaFinancingPage />} />
+              </Route>
               <Route element={<RequirePermission permission="write_ops" />}>
                 <Route path="customers" element={<CustomersPage />} />
                 <Route path="customers/:customerId" element={<CustomersPage />} />
-                <Route path="malaysia" element={<MalaysiaManualBridgePage />} />
-                <Route path="sedania" element={<SedaniaFinancingPage />} />
                 <Route path="kenya" element={<KenyaFlowPage />} />
                 <Route path="repayments" element={<RepaymentsPage />} />
               </Route>

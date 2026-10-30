@@ -708,7 +708,7 @@ export function MalaysiaManualBridgePage() {
                     <input
                       value={certNumber}
                       onChange={(e) => setCertNumber(e.target.value)}
-                      placeholder="CPO28AUG26-0009491-000"
+                      placeholder="CPO01SEP26-0009839-000"
                       required
                     />
                   </label>

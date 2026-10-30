@@ -82,6 +82,29 @@ def seal_completed_case(case: FiDeskCase) -> FiDeskCase:
     return case
 
 
+def refresh_journey_status(db: Session, case: FiDeskCase) -> FiDeskCase:
+    payload = _parse_payload(case.payload_json)
+    journey = payload.get("journey")
+    if not isinstance(journey, dict) or not journey.get("application_id"):
+        return case
+    accepted = _journey_offer_accepted(db, payload)
+    accepted_at = journey.get("accepted_at")
+    if accepted and not accepted_at:
+        from tawarruq.models.application import FinancingApplication
+
+        application = db.get(FinancingApplication, journey["application_id"])
+        if application and application.offer and application.offer.accepted_at:
+            accepted_at = application.offer.accepted_at.isoformat()
+    if journey.get("offer_accepted") == accepted and journey.get("accepted_at") == accepted_at:
+        return case
+    journey["offer_accepted"] = accepted
+    if accepted_at:
+        journey["accepted_at"] = accepted_at
+    payload["journey"] = journey
+    case.payload_json = _dump_payload(payload)
+    return case
+
+
 def serialize_case(case: FiDeskCase) -> DeskCaseRead:
     seal_completed_case(case)
     return DeskCaseRead(
@@ -181,6 +204,7 @@ def create_case(
             ("customer_email", payload.customer_email),
             ("approved_facility_amount", payload.approved_facility_amount),
             ("facility_product_type", payload.facility_product_type),
+            ("profit", payload.profit),
         )
         if not str(value or "").strip()
     ]
@@ -195,6 +219,12 @@ def create_case(
         raise HTTPException(status_code=400, detail="Approved facility amount must be a number")
     if amount < 0:
         raise HTTPException(status_code=400, detail="Approved facility amount cannot be negative")
+    try:
+        profit_amount = float(str(payload.profit or "").replace(",", "").strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Profit must be a number")
+    if profit_amount < 0:
+        raise HTTPException(status_code=400, detail="Profit cannot be negative")
     fields = payload.model_dump()
     fields.pop("institution_id", None)
     fields.pop("assigned_approver_id", None)
@@ -244,6 +274,9 @@ def decide_case(db: Session, case: FiDeskCase, *, decision: str, comments: str, 
         case.status = "approved"
         case.current_step = 3
         _stamp(payload, "approved")
+        case.payload_json = _dump_payload(payload)
+        _attach_customer_journey(db, case)
+        payload = _parse_payload(case.payload_json)
         details = "FI Approver approved origination"
     elif decision == "return":
         case.status = "returned"
@@ -291,8 +324,11 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
         profit = str(current.get("profit") or "")
         if not profit.strip():
             raise HTTPException(status_code=400, detail="Enter the Murabaha profit")
-        if (payload.get("murabaha") or {}).get("sale_status") != "Complete":
-            raise HTTPException(status_code=400, detail="Customer OTP must complete the Murabaha sale first")
+        if not _journey_offer_accepted(db, payload):
+            raise HTTPException(status_code=400, detail="Customer must accept the Murabaha offer on their journey first")
+        current["sale_status"] = "Complete"
+        _stamp(payload, "sale")
+        current.setdefault("sale_timestamp", payload["timestamps"].get("sale"))
         facility_account = str(current.get("facility_account") or "").strip()
         installments_raw = str(current.get("repayment_installments") or "").strip()
         first_due = str(current.get("first_installment_due_date") or "").strip()
@@ -325,12 +361,10 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
         except ValueError:
             current["deferred_sale_price"] = f"{cost}+{profit}"
     if step == 5:
-        if current.get("agent_appointment_status") != "Done":
-            raise HTTPException(status_code=400, detail="Customer OTP must appoint the agent first")
+        current["agent_appointment_status"] = "Done"
         current.setdefault("agent_name", "Soqo Capital")
     if step == 6:
-        if current.get("final_status") != "Complete":
-            raise HTTPException(status_code=400, detail="Customer OTP must approve the CASA deposit first")
+        current["final_status"] = "Complete"
         account = str(current.get("customer_account_number") or "").strip()
         branch = str(current.get("customer_branch") or "").strip()
         if not account or not branch:
@@ -360,6 +394,7 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
         case.status = "in_progress"
         case.current_step = min(8, max(case.current_step, step + 1))
     _audit(db, case, step, actor, f"Desk step {step} completed", current)
+    _notify_desk_step(db, case, step)
     return case
 
 
@@ -493,3 +528,111 @@ def refresh_resale_status(case: FiDeskCase) -> FiDeskCase:
         payload["resale"] = resale
         case.payload_json = _dump_payload(payload)
     return case
+
+
+def _journey_offer_accepted(db: Session, payload: dict[str, Any]) -> bool:
+    from tawarruq.models.application import FinancingApplication
+
+    application_id = (payload.get("journey") or {}).get("application_id")
+    if not application_id:
+        return False
+    application = db.get(FinancingApplication, application_id)
+    return bool(application and application.offer and application.offer.accepted_at)
+
+
+def _attach_customer_journey(db: Session, case: FiDeskCase) -> None:
+    from decimal import Decimal
+
+    from tawarruq.enums import ApplicationStatus, AuditActor
+    from tawarruq.models.application import FinancingOffer
+    from tawarruq.models.customer import Customer
+    from tawarruq.services.application_service import create_application, generate_customer_ref
+    from tawarruq.services.customer_notify_service import notify_offer_ready
+    from tawarruq.services.customer_service import link_customer_to_application
+
+    payload = _parse_payload(case.payload_json)
+    if (payload.get("journey") or {}).get("application_id"):
+        return
+    orig = payload.get("origination") or {}
+    phone = str(orig.get("customer_phone") or "").strip()
+    email = str(orig.get("customer_email") or "").strip()
+    name = str(orig.get("customer_name") or "").strip()
+    national_id = str(orig.get("customer_id") or "").strip()
+    amount = Decimal(str(orig.get("approved_facility_amount") or "0"))
+    profit = Decimal(str(orig.get("profit") or "0"))
+    customer = (
+        db.query(Customer)
+        .filter(Customer.institution_id == case.institution_id, Customer.phone == phone)
+        .first()
+    )
+    if not customer:
+        customer = Customer(
+            institution_id=case.institution_id,
+            phone=phone,
+            email=email or None,
+            full_name=name or phone or "Customer",
+            national_id=national_id or None,
+            wallet_number=phone or national_id or "0",
+        )
+        db.add(customer)
+        db.flush()
+    elif email and not customer.email:
+        customer.email = email
+    institution = case.institution or db.get(Institution, case.institution_id)
+    application = create_application(
+        db,
+        customer_ref=generate_customer_ref(db, institution) if institution else None,
+        customer_name=name,
+        currency="KES",
+        amount_requested=amount,
+        term_months=1,
+        purpose="Origination desk Airtime tawarruq",
+        institution_id=case.institution_id,
+        actor=AuditActor.HUMAN,
+    )
+    link_customer_to_application(db, application.id, customer.id)
+    offer = FinancingOffer(
+        application_id=application.id,
+        cost_price=amount,
+        profit_amount=profit,
+        total_payable=amount + profit,
+    )
+    application.status = ApplicationStatus.OFFER_PENDING
+    db.add(offer)
+    db.flush()
+    db.refresh(application, attribute_names=["customer", "institution", "offer"])
+    notify_offer_ready(db, application)
+    payload["journey"] = {
+        "application_id": application.id,
+        "customer_ref": application.customer_ref,
+        "customer_id": customer.id,
+    }
+    case.payload_json = _dump_payload(payload)
+
+
+def _notify_desk_step(db: Session, case: FiDeskCase, step: int) -> None:
+    from tawarruq.services.customer_notify_service import notify_step_ready
+
+    payload = _parse_payload(case.payload_json)
+    orig = payload.get("origination") or {}
+    journey = payload.get("journey") or {}
+    titles = {
+        3: ("Tawarruq purchase", "The commodity purchase is complete."),
+        4: ("Murabaha sale", "The Murabaha sale has been recorded."),
+        5: ("Commodity resale", "The resale agent has been appointed."),
+        6: ("Resale proceeds", "CASA proceeds have been recorded."),
+        7: ("Clearing complete", "Clearing is complete."),
+        8: ("Facility complete", "Your facility is complete."),
+    }
+    if step not in titles:
+        return
+    title, line = titles[step]
+    notify_step_ready(
+        db,
+        email=orig.get("customer_email"),
+        customer_name=orig.get("customer_name"),
+        customer_ref=str(journey.get("customer_ref") or orig.get("customer_id") or case.id[:8]),
+        title=title,
+        body_line=line,
+        institution_name=case.institution.name if case.institution else None,
+    )

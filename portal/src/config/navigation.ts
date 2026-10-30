@@ -38,6 +38,8 @@ export interface NavItem {
   product?: ProductModule;
   /** Hide on customer-server editions (Institutions directory). */
   hideOnOnprem?: boolean;
+  /** Live Tawarruq provider. Super Admin always sees both desks. */
+  provider?: "sedania" | "bursa";
 }
 
 export interface NavSection {
@@ -195,8 +197,9 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Sedania Financing",
         Icon: IconMalaysia,
         hint: "Wakeel or Rasul, muqassah, CASA",
-        permission: "write_ops",
+        anyPermissions: ["write_ops", "write_bti_ops"],
         product: "sedania",
+        provider: "sedania",
       },
     ],
   },
@@ -209,8 +212,9 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Malaysia Manual Bridge",
         Icon: IconMalaysia,
         hint: "Desk packet in, e-cert out",
-        permission: "write_ops",
+        anyPermissions: ["write_ops", "write_bti_ops"],
         product: "malaysia",
+        provider: "bursa",
       },
     ],
   },

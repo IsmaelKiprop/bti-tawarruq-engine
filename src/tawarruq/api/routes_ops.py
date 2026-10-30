@@ -416,6 +416,9 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
             employee_number = user.employee_number
             phone = user.phone
             office = user.office
+    from tawarruq.services.platform_settings_service import latest_active_rate
+
+    provider_row = latest_active_rate(db)
     return AuthContextRead(
         auth_enabled=settings.auth_enabled,
         authenticated=role is not None or not settings.auth_enabled,
@@ -441,6 +444,7 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
         deployment_mode=settings.normalized_mode,
         enabled_products=settings.products,
         brand_name=settings.brand_display,
+        active_provider=provider_row.provider if provider_row else "sedania",
     )
 
 
@@ -817,14 +821,20 @@ class InstitutionChargeWrite(BaseModel):
 
 
 class PlatformSettingsRead(BaseModel):
-    sedania_charge_pct: float = Field(..., ge=0, le=100, description="Sedania % Charge, 0 to 100")
+    active_provider: str = Field("sedania", description="sedania | bursa")
+    sedania_charge_pct: float = Field(..., ge=0, le=100, description="Latest provider rate, 0 to 100")
+    rate_pct: float = Field(..., ge=0, le=100, description="Latest active rate for the selected provider")
+    effective_from: str | None = None
     institutions: list[InstitutionChargeRead] = Field(default_factory=list)
 
 
 class PlatformSettingsUpdate(BaseModel):
     password: str | None = None
     otp_code: str | None = None
-    sedania_charge_pct: float | None = Field(None, ge=0, le=100, description="Sedania % Charge, 0 to 100")
+    active_provider: str | None = Field(None, description="sedania | bursa")
+    sedania_charge_pct: float | None = Field(None, ge=0, le=100, description="Rate % Charge, 0 to 100")
+    rate_pct: float | None = Field(None, ge=0, le=100, description="Rate % Charge, 0 to 100")
+    effective_from: str | None = None
     institutions: list[InstitutionChargeWrite] | None = None
 
 
@@ -852,12 +862,23 @@ def _require_charge_password(user: OpsUser, password: str) -> None:
 
 
 def _serialize_platform_settings(db: Session) -> PlatformSettingsRead:
-    from tawarruq.services.platform_settings_service import get_or_create_platform_settings, list_institution_charges
+    from tawarruq.services.platform_settings_service import (
+        ensure_default_provider_rate,
+        get_or_create_platform_settings,
+        latest_active_rate,
+        list_institution_charges,
+    )
 
-    row = get_or_create_platform_settings(db)
+    get_or_create_platform_settings(db)
+    current = latest_active_rate(db) or ensure_default_provider_rate(db)
     books = list_institution_charges(db)
+    rate = float(current.rate_pct)
+    started = current.effective_from.isoformat() if current.effective_from else None
     return PlatformSettingsRead(
-        sedania_charge_pct=float(row.sedania_charge_pct),
+        active_provider=current.provider,
+        sedania_charge_pct=rate,
+        rate_pct=rate,
+        effective_from=started,
         institutions=[
             InstitutionChargeRead(
                 id=item.id,
@@ -912,7 +933,7 @@ def update_platform_settings(
     payload: PlatformSettingsUpdate, request: Request, db: Session = Depends(get_db)
 ) -> PlatformSettingsRead:
     require_platform_admin(request)
-    from tawarruq.services.platform_settings_service import update_institution_bti_charge, update_sedania_charge_pct
+    from tawarruq.services.platform_settings_service import record_provider_rate, update_institution_bti_charge
     from tawarruq.services.rbac import auth_is_enabled
 
     actor_id = getattr(request.state, "ops_user_id", None)
@@ -924,9 +945,16 @@ def update_platform_settings(
         if not verify_email_otp(user, payload.otp_code):
             raise HTTPException(status_code=403, detail="Valid OTP is required to change charges")
     try:
-        row = None
-        if payload.sedania_charge_pct is not None:
-            row = update_sedania_charge_pct(db, payload.sedania_charge_pct, actor_id=actor_id)
+        recorded = None
+        rate = payload.rate_pct if payload.rate_pct is not None else payload.sedania_charge_pct
+        if payload.active_provider or rate is not None or payload.effective_from:
+            recorded = record_provider_rate(
+                db,
+                provider=payload.active_provider or "sedania",
+                rate_pct=rate if rate is not None else 0.0035,
+                effective_from=payload.effective_from,
+                actor_id=actor_id,
+            )
         for item in payload.institutions or []:
             institution = db.get(Institution, item.id)
             if not institution:
@@ -937,10 +965,10 @@ def update_platform_settings(
     log_audit(
         db,
         entity_type="platform_settings",
-        entity_id=row.id if row else "default",
+        entity_id=recorded.id if recorded else "default",
         actor=AuditActor.HUMAN,
         action="update_charges",
-        details=f"sedania_charge_pct={payload.sedania_charge_pct}, fi_count={len(payload.institutions or [])}",
+        details=f"provider={payload.active_provider}, rate_pct={rate}, fi_count={len(payload.institutions or [])}",
         actor_user_id=actor_id,
         group_id=getattr(request.state, "audit_group_id", None),
         action_group="settings",

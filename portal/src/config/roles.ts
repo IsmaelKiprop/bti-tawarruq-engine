@@ -130,6 +130,7 @@ type NavVisibility = {
   excludeRoles?: OpsRole[];
   product?: ProductModule;
   hideOnOnprem?: boolean;
+  provider?: "sedania" | "bursa";
 };
 
 export type RoleProfile = {
@@ -294,6 +295,8 @@ const TESTER_VISIBLE_PATHS = [
   "/settings",
   "/origination",
   "/shariah",
+  "/malaysia",
+  "/sedania",
 ] as const;
 
 export function isTesterVisiblePath(to: string): boolean {
@@ -323,6 +326,9 @@ export function canSeeNavItem(
   if (isDealerRole(user.role)) {
     if (TESTER_SHELL) return item.to === "/" || item.to === "/settings";
     return item.to === "/agent-dealers" || item.to === "/dealers";
+  }
+  if (item.provider && user.role !== "platform_admin" && (user.active_provider || "sedania") !== item.provider) {
+    return false;
   }
   if (item.excludeRoles?.includes(user.role as OpsRole)) return false;
   if (item.roles?.length && !item.roles.includes(user.role as OpsRole)) return false;

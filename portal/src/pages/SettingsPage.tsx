@@ -51,6 +51,8 @@ export function SettingsPage() {
   );
   const isSuperAdmin = user?.role === "platform_admin";
   const [sedaniaCharge, setSedaniaCharge] = useState("0.0035");
+  const [activeProvider, setActiveProvider] = useState("sedania");
+  const [effectiveFrom, setEffectiveFrom] = useState("");
   const [fiCharges, setFiCharges] = useState<InstitutionCharge[]>([]);
   const [chargePassword, setChargePassword] = useState("");
   const [chargeOtp, setChargeOtp] = useState("");
@@ -58,8 +60,16 @@ export function SettingsPage() {
   const [platformBusy, setPlatformBusy] = useState(false);
   const [platformMsg, setPlatformMsg] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
 
-  function applyPlatform(settings: { sedania_charge_pct: number; institutions?: InstitutionCharge[] }) {
-    setSedaniaCharge(String(settings.sedania_charge_pct));
+  function applyPlatform(settings: {
+    active_provider?: string;
+    sedania_charge_pct: number;
+    rate_pct?: number;
+    effective_from?: string | null;
+    institutions?: InstitutionCharge[];
+  }) {
+    setActiveProvider(settings.active_provider || "sedania");
+    setSedaniaCharge(String(settings.rate_pct ?? settings.sedania_charge_pct));
+    setEffectiveFrom(settings.effective_from ? settings.effective_from.slice(0, 16) : "");
     setFiCharges(settings.institutions || []);
   }
 
@@ -128,7 +138,10 @@ export function SettingsPage() {
       const saved = await api.updatePlatformSettings({
         password: chargePassword,
         otp_code: chargeOtp.trim(),
+        active_provider: activeProvider,
+        rate_pct: sedania,
         sedania_charge_pct: sedania,
+        effective_from: effectiveFrom || undefined,
         institutions,
       });
       applyPlatform(saved);
@@ -315,14 +328,21 @@ export function SettingsPage() {
           <section className="panel settings-panel settings-span">
             <div className="panel-header">
               <div>
-                <h2>Platform charges</h2>
-                <p className="muted">Super Admin only. Password and OTP required to save. Foundation for Finance and Reconciliation.</p>
+                <h2>Tawarruq provider</h2>
+                <p className="muted">Super Admin only. Password and OTP required to save. History keeps prior rates; this form shows the latest.</p>
               </div>
             </div>
             {platformMsg ? <Alert tone={platformMsg.tone}>{platformMsg.text}</Alert> : null}
             <form className="settings-form settings-form-wide" onSubmit={onSavePlatform}>
               <label>
-                Sedania % Charge
+                Tawarruq Provider
+                <select value={activeProvider} onChange={(e) => setActiveProvider(e.target.value)} required>
+                  <option value="sedania">Sedania</option>
+                  <option value="bursa">Bursa</option>
+                </select>
+              </label>
+              <label>
+                Rate
                 <div className="settings-pct">
                   <input
                     type="number"
@@ -337,8 +357,12 @@ export function SettingsPage() {
                   <span>%</span>
                 </div>
               </label>
+              <label>
+                Timestamp start
+                <input type="datetime-local" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+              </label>
               <p className="meta" style={{ margin: 0 }}>
-                Platform-wide. Default 0.0035%. Range 0 to 100.
+                Latest active rate only. Default Sedania 0.0035%. Switching to Bursa opens the Malaysia desk when Sedania is not ready.
               </p>
               <div>
                 <strong>BTI % Charge</strong>

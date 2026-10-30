@@ -53,4 +53,17 @@ SEDANIA_API_URL=
 SEDANIA_API_KEY=
 ```
 
-Mock is the default. Live posts to `/v1/trading/purchase`, `/transfer-murabahah`, `/liquidate`, and `/physical-delivery`.
+Mock is the default. Do not smash live Sedania without both `SEDANIA_API_URL` and `SEDANIA_API_KEY`.
+
+### Spec vs this client
+
+The financing PDF describes bank CASA / physical-delivery outcomes. The HTTP adapter in `src/tawarruq/integrations/sedania/client.py` posts Bearer JSON to invented paths on `SEDANIA_API_URL`:
+
+| Engine method | Client path | Spec outcome |
+|---------------|-------------|--------------|
+| `purchase` | `POST /v1/trading/purchase` | Bank buy + qabd hukmi |
+| `transfer_murabahah` | `POST /v1/trading/transfer-murabahah` | Murabahah transfer |
+| `liquidate` | `POST /v1/trading/liquidate` | Independent sale |
+| `arrange_physical_delivery` | `POST /v1/trading/physical-delivery` | qabd hakiki after settlement |
+
+Those paths are the engine contract, not a published Sedania OpenAPI. Confirm them with Sedania before `SEDANIA_MODE=live`. Until then the mock client fills the same result shape.

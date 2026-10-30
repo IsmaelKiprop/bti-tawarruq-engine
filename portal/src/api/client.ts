@@ -56,6 +56,7 @@ export interface SessionUser {
   employee_number?: string | null;
   phone?: string | null;
   office?: string | null;
+  active_provider?: "sedania" | "bursa" | string | null;
 }
 
 export function getStoredSessionUser(): SessionUser | null {
@@ -512,6 +513,7 @@ export interface AuthContext {
   deployment_mode?: string;
   enabled_products?: string[];
   brand_name?: string;
+  active_provider?: string;
 }
 
 export interface OpsMetrics {
@@ -565,6 +567,7 @@ export interface LoginResponse {
   mfa_enabled?: boolean;
   mfa_method?: "totp" | "email" | null;
   mfa_dev_code?: string | null;
+  active_provider?: string;
 }
 
 export interface PendingApproval {
@@ -657,7 +660,10 @@ export interface InstitutionCharge {
 }
 
 export interface PlatformSettings {
+  active_provider?: "sedania" | "bursa" | string;
   sedania_charge_pct: number;
+  rate_pct?: number;
+  effective_from?: string | null;
   institutions?: InstitutionCharge[];
 }
 
@@ -1326,6 +1332,9 @@ export const api = {
     password: string;
     otp_code: string;
     sedania_charge_pct?: number;
+    active_provider?: string;
+    rate_pct?: number;
+    effective_from?: string | null;
     institutions?: { id: string; bti_charge_pct: number }[];
   }) => request<PlatformSettings>("/ops/settings", { method: "PATCH", body: JSON.stringify(body) }),
 

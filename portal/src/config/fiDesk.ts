@@ -9,6 +9,8 @@ export const DESK_STEPS = [
   { n: 8, id: "complete", title: "Complete" },
 ] as const;
 
+export const VISIBLE_DESK_STEPS = DESK_STEPS.filter((item) => item.id !== "approval");
+
 export const DOCUMENT_TYPES = ["National ID", "Passport", "Alien ID", "Other"];
 export const PRODUCT_TYPES = ["Airtime"] as const;
 
@@ -53,7 +55,7 @@ export function deskDateKey(value?: string | null): string {
 export function maxDeskStep(currentStep: number, status: string): number {
   if (status === "draft") return 1;
   if (status === "returned") return 1;
-  if (status === "pending_approval") return 2;
+  if (status === "pending_approval") return 1;
   if (status === "complete") return 8;
   return Math.min(8, Math.max(1, currentStep));
 }

@@ -358,6 +358,7 @@ class AuthContextRead(BaseModel):
     deployment_mode: str = Field('managed', description='managed | onprem')
     enabled_products: list[str] = Field(default_factory=list)
     brand_name: str = Field('Buruuj Fintech')
+    active_provider: str = Field('sedania', description='sedania | bursa')
 
 class OpsLoginRequest(BaseModel):
     email: str = Field(..., examples=['admin@bti.local'])

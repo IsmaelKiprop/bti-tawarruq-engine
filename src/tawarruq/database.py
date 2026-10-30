@@ -47,6 +47,7 @@ def init_db() -> None:
     _ensure_institution_kyc_columns()
     _ensure_api_key_reveal_column()
     _ensure_platform_settings_table()
+    _ensure_provider_rates_table()
     register_append_only_guards()
 
 
@@ -520,3 +521,31 @@ def _ensure_platform_settings_table() -> None:
                 """
             )
         )
+
+
+def _ensure_provider_rates_table() -> None:
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "tawarruq_provider_rates" in inspector.get_table_names():
+        return
+    dt = "DATETIME" if settings.is_sqlite else "TIMESTAMP"
+    bool_true = "1" if settings.is_sqlite else "TRUE"
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                f"""
+                CREATE TABLE tawarruq_provider_rates (
+                    id VARCHAR(36) NOT NULL PRIMARY KEY,
+                    provider VARCHAR(16) NOT NULL,
+                    rate_pct NUMERIC(10, 6) NOT NULL,
+                    effective_from {dt} NOT NULL,
+                    active BOOLEAN NOT NULL DEFAULT {bool_true},
+                    created_at {dt},
+                    created_by_id VARCHAR(36),
+                    FOREIGN KEY(created_by_id) REFERENCES ops_users (id)
+                )
+                """
+            )
+        )
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tawarruq_provider_rates_provider ON tawarruq_provider_rates (provider)"))

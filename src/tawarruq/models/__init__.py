@@ -26,6 +26,7 @@ from tawarruq.models.kenya_flow import (
 from tawarruq.models.controls import BillingInvoice, PendingApproval, ReconciliationItem
 from tawarruq.models.ops_user import OpsUser
 from tawarruq.models.platform_settings import PlatformSettings
+from tawarruq.models.provider_rate import TawarruqProviderRate
 from tawarruq.models.mobile_account import MobileAccount, MobileInvite
 from tawarruq.models.mobile_notification import MobileNotification
 from tawarruq.models.transaction import CommodityTransaction, TransactionLeg
@@ -63,6 +64,7 @@ __all__ = [
     "ShariahAuditLog",
     "OpsUser",
     "PlatformSettings",
+    "TawarruqProviderRate",
     "PendingApproval",
     "BillingInvoice",
     "ReconciliationItem",

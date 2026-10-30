@@ -140,15 +140,16 @@ python -m pytest tests/test_institution_onboarding.py tests/test_fi_desk.py test
 
 ## 4d. Origination desk and Shariah (portal)
 
-Tester shell: Super Admin sees Dashboard, Onboard FI, Institutions, Users, Origination, Shariah, Ops Monitor, Audit. FI Ops sees Origination, All Workflows, Settings. FI Approver sees Origination, Approval Queue, Settings. Kenya Ops stays hidden. Full list: [TESTER_FEEDBACK.md](TESTER_FEEDBACK.md).
+Tester shell: Super Admin sees Dashboard, Onboard FI, Institutions, Users, Origination, Shariah, Ops Monitor, Audit, plus the live Tawarruq desk (`/malaysia` or `/sedania`). FI Ops sees Origination, All Workflows, Settings, and that same live desk. FI Approver sees Origination, Approval Queue, Settings. Kenya Ops stays hidden. Full list: [TESTER_FEEDBACK.md](TESTER_FEEDBACK.md).
 
 1. FI Admin invites FI Ops and FI Approver on Users.
-2. Sign in as FI Ops. Home is **Origination**. Complete step 1, pick the FI Approver, send.
-3. Sign in as that FI Approver. Same page, step 2: approve (or return).
-4. Back as FI Ops: steps 3–8. OTP on 4–6: Send OTP. If SMTP is off the code is on screen. Enter it, then complete the step.
-5. Shariah Audit: pick the desk case (Super Admin may pick All or one FI). Every action has a timestamp.
+2. Sign in as FI Ops. Home is **Origination**. Complete step 1 with profit, pick the FI Approver, send.
+3. Sign in as that FI Approver. Same first screen: approve (or return). Approve emails the customer journey.
+4. Customer opens `/customer/{ref}` from the email (or the journey URL on step 1) and accepts the Murabaha offer.
+5. Back as FI Ops: complete purchase, then Murabaha (blocked until accept), resale, CASA, and clearing. Each later step emails the same journey. No desk OTP.
+6. Shariah Audit: pick the desk case (Super Admin may pick All or one FI). Every action has a timestamp.
 
-Swagger: `POST /desk/cases`, `POST /desk/cases/{id}/decide`, `POST /desk/cases/{id}/steps/{n}`, `POST /desk/cases/{id}/otp/send` and `.../otp/verify`, `GET /desk/audit`.
+Swagger: `POST /desk/cases`, `POST /desk/cases/{id}/decide`, `POST /desk/cases/{id}/steps/{n}`, `GET /desk/audit`. Customer accept: `POST /customer/applications/{ref}/accept`.
 
 ---
 

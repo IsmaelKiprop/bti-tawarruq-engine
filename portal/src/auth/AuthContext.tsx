@@ -137,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         employee_number: ctx.employee_number ?? stored?.employee_number ?? null,
         phone: ctx.phone ?? stored?.phone ?? null,
         office: ctx.office ?? stored?.office ?? null,
+        active_provider: ctx.active_provider ?? stored?.active_provider ?? "sedania",
       };
       setStoredSessionUser(session);
       setUser(session);
