@@ -122,13 +122,9 @@ def test_desk_steps_journey_and_shariah_scope(tmp_path, monkeypatch):
         "/api/v1/desk/cases",
         headers=ops,
         json={
-            "customer_id": "CUST-1",
-            "document_type": "National ID",
             "customer_name": "Amina Otieno",
-            "customer_phone": "+254700000001",
             "customer_email": "amina@example.com",
             "approved_facility_amount": "10000",
-            "facility_product_type": "Airtime",
             "assigned_approver_id": ids["approver_id"],
             "profit": "500",
         },
@@ -147,8 +143,8 @@ def test_desk_steps_journey_and_shariah_scope(tmp_path, monkeypatch):
         json={"decision": "approve", "comments": "Limit ok"},
     )
     assert decided.status_code == 200, decided.text
-    assert decided.json()["status"] == "approved"
-    assert decided.json()["current_step"] == 3
+    assert decided.json()["status"] == "in_progress"
+    assert decided.json()["current_step"] == 4
     journey = decided.json()["payload"]["journey"]
     assert journey["customer_ref"]
     assert journey["application_id"]
@@ -158,12 +154,6 @@ def test_desk_steps_journey_and_shariah_scope(tmp_path, monkeypatch):
     assert "Accept your Murabaha offer" in mail_text
     assert f"/customer/{journey['customer_ref']}" in mail_text
 
-    step3 = client.post(
-        f"/api/v1/desk/cases/{case_id}/steps/3",
-        headers=ops,
-        json={"fields": {"purchase_complete": "Yes"}},
-    )
-    assert step3.status_code == 200, step3.text
     locked3 = client.post(
         f"/api/v1/desk/cases/{case_id}/steps/3",
         headers=ops,
@@ -174,70 +164,18 @@ def test_desk_steps_journey_and_shariah_scope(tmp_path, monkeypatch):
     missing_accept = client.post(
         f"/api/v1/desk/cases/{case_id}/steps/4",
         headers=ops,
-        json={
-            "fields": {
-                "profit": "500",
-                "offer_reference": "OFF-1",
-                "contract_reference": "CON-1",
-                "facility_account": "FAC-1001",
-                "repayment_installments": "12",
-                "first_installment_due_date": "2026-11-01",
-                "last_installment_due_date": "2027-10-01",
-            }
-        },
+        json={"fields": {"profit": "500"}},
     )
     assert missing_accept.status_code == 400, missing_accept.text
     assert "accept" in missing_accept.json()["detail"].lower()
 
     accepted = client.post(f"/api/v1/customer/applications/{journey['customer_ref']}/accept")
     assert accepted.status_code == 200, accepted.text
-    waiting = client.get(f"/api/v1/desk/cases/{case_id}", headers=ops)
-    assert waiting.status_code == 200, waiting.text
-    assert waiting.json()["payload"]["journey"]["offer_accepted"] is True
-
-    missing_facility = client.post(
-        f"/api/v1/desk/cases/{case_id}/steps/4",
-        headers=ops,
-        json={"fields": {"profit": "500", "offer_reference": "OFF-1", "contract_reference": "CON-1"}},
-    )
-    assert missing_facility.status_code == 400
-    step4 = client.post(
-        f"/api/v1/desk/cases/{case_id}/steps/4",
-        headers=ops,
-        json={
-            "fields": {
-                "profit": "500",
-                "offer_reference": "OFF-1",
-                "contract_reference": "CON-1",
-                "facility_account": "FAC-1001",
-                "repayment_installments": "12",
-                "first_installment_due_date": "2026-11-01",
-                "last_installment_due_date": "2027-10-01",
-            }
-        },
-    )
-    assert step4.status_code == 200, step4.text
-
-    step5 = client.post(f"/api/v1/desk/cases/{case_id}/steps/5", headers=ops, json={"fields": {}})
-    assert step5.status_code == 200, step5.text
-    missing_account = client.post(f"/api/v1/desk/cases/{case_id}/steps/6", headers=ops, json={"fields": {}})
-    assert missing_account.status_code == 400
-    step6 = client.post(
-        f"/api/v1/desk/cases/{case_id}/steps/6",
-        headers=ops,
-        json={"fields": {"customer_account_number": "0112345678", "customer_branch": "Westlands"}},
-    )
-    assert step6.status_code == 200, step6.text
-    assert step6.json()["payload"]["proceeds"]["customer_account_number"] == "0112345678"
-    assert step6.json()["payload"]["proceeds"]["customer_branch"] == "Westlands"
-
-    step7 = client.post(f"/api/v1/desk/cases/{case_id}/steps/7", headers=ops, json={"fields": {"settlement_ref": "CLR-1"}})
-    assert step7.status_code == 200, step7.text
-    assert step7.json()["status"] == "complete"
-    step8 = client.post(f"/api/v1/desk/cases/{case_id}/steps/8", headers=ops, json={"fields": {}})
-    assert step8.status_code == 200, step8.text
-    assert step8.json()["status"] == "complete"
-    assert step8.json()["payload"]["timestamps"]
+    finished = client.get(f"/api/v1/desk/cases/{case_id}", headers=ops)
+    assert finished.status_code == 200, finished.text
+    assert finished.json()["payload"]["journey"]["offer_accepted"] is True
+    assert finished.json()["status"] == "complete"
+    assert finished.json()["payload"]["timestamps"]
 
     audit = client.get("/api/v1/desk/audit", headers=ops)
     assert audit.status_code == 200, audit.text

@@ -95,14 +95,13 @@ def refresh_journey_status(db: Session, case: FiDeskCase) -> FiDeskCase:
         application = db.get(FinancingApplication, journey["application_id"])
         if application and application.offer and application.offer.accepted_at:
             accepted_at = application.offer.accepted_at.isoformat()
-    if journey.get("offer_accepted") == accepted and journey.get("accepted_at") == accepted_at:
-        return case
-    journey["offer_accepted"] = accepted
-    if accepted_at:
-        journey["accepted_at"] = accepted_at
-    payload["journey"] = journey
-    case.payload_json = _dump_payload(payload)
-    return case
+    if journey.get("offer_accepted") != accepted or journey.get("accepted_at") != accepted_at:
+        journey["offer_accepted"] = accepted
+        if accepted_at:
+            journey["accepted_at"] = accepted_at
+        payload["journey"] = journey
+        case.payload_json = _dump_payload(payload)
+    return auto_progress_case(db, case)
 
 
 def serialize_case(case: FiDeskCase) -> DeskCaseRead:
@@ -194,23 +193,21 @@ def create_case(
         or approver.institution_id != institution_id
     ):
         raise HTTPException(status_code=400, detail="Pick an FI Approver on this institution")
+    name = str(payload.customer_name or "").strip()
+    email = str(payload.customer_email or "").strip()
     missing = [
-        name
-        for name, value in (
-            ("customer_id", payload.customer_id),
-            ("document_type", payload.document_type),
-            ("customer_name", payload.customer_name),
-            ("customer_phone", payload.customer_phone),
-            ("customer_email", payload.customer_email),
+        field
+        for field, value in (
+            ("customer_name", name),
+            ("customer_email", email),
             ("approved_facility_amount", payload.approved_facility_amount),
-            ("facility_product_type", payload.facility_product_type),
             ("profit", payload.profit),
         )
         if not str(value or "").strip()
     ]
     if missing:
         raise HTTPException(status_code=400, detail=f"Complete origination fields: {', '.join(missing)}")
-    product = str(payload.facility_product_type or "").strip()
+    product = str(payload.facility_product_type or "Airtime").strip() or "Airtime"
     if product.lower() != "airtime":
         raise HTTPException(status_code=400, detail="Commodity type must be Airtime")
     try:
@@ -228,6 +225,12 @@ def create_case(
     fields = payload.model_dump()
     fields.pop("institution_id", None)
     fields.pop("assigned_approver_id", None)
+    fields["customer_name"] = name
+    fields["customer_email"] = email
+    fields["facility_product_type"] = "Airtime"
+    fields["document_type"] = str(payload.document_type or "").strip() or "Not provided"
+    fields["customer_id"] = str(payload.customer_id or "").strip() or email
+    fields["customer_phone"] = str(payload.customer_phone or "").strip()
     body = {
         "origination": fields,
         "initiate": {
@@ -288,6 +291,8 @@ def decide_case(db: Session, case: FiDeskCase, *, decision: str, comments: str, 
     case.approval_comments = comments
     case.payload_json = _dump_payload(payload)
     _audit(db, case, 2, actor.email, details, {"decision": decision, "comments": comments})
+    if decision == "approve":
+        auto_progress_case(db, case)
     return case
 
 
@@ -540,6 +545,63 @@ def _journey_offer_accepted(db: Session, payload: dict[str, Any]) -> bool:
     return bool(application and application.offer and application.offer.accepted_at)
 
 
+def _desk_contact_phone(email: str, case_id: str) -> str:
+    compact = "".join(ch for ch in f"{case_id}{email}" if ch.isalnum())[-9:].ljust(9, "0")
+    return f"+254{compact}"
+
+
+def _hidden_step_fields(case: FiDeskCase, step: int, payload: dict[str, Any]) -> dict[str, Any]:
+    orig = payload.get("origination") or {}
+    today = datetime.now(UTC).date()
+    short = case.id.replace("-", "")[:8]
+    if step == 3:
+        return {"purchase_complete": "Yes"}
+    if step == 4:
+        return {
+            "profit": str(orig.get("profit") or ""),
+            "offer_reference": f"OFF-{short}",
+            "contract_reference": f"CON-{short}",
+            "facility_account": f"FAC-{short}",
+            "repayment_installments": "12",
+            "first_installment_due_date": (today + timedelta(days=30)).isoformat(),
+            "last_installment_due_date": (today + timedelta(days=365)).isoformat(),
+        }
+    if step == 6:
+        return {
+            "customer_account_number": f"CASA-{short}",
+            "customer_branch": "Head office",
+        }
+    if step == 7:
+        return {"settlement_ref": f"CLR-{short}"}
+    return {}
+
+
+def auto_progress_case(db: Session, case: FiDeskCase) -> FiDeskCase:
+    if case.status in {"pending_approval", "returned", "complete"}:
+        return case
+    if case.current_step == 3:
+        complete_step(db, case, 3, _hidden_step_fields(case, 3, _parse_payload(case.payload_json)), actor="system")
+    payload = _parse_payload(case.payload_json)
+    if not _journey_offer_accepted(db, payload):
+        return case
+    guard = 0
+    while case.status != "complete" and case.current_step <= 8 and guard < 8:
+        step = case.current_step
+        complete_step(db, case, step, _hidden_step_fields(case, step, _parse_payload(case.payload_json)), actor="system")
+        guard += 1
+        if case.current_step == step and case.status != "complete":
+            break
+    return case
+
+
+def progress_cases_for_application(db: Session, application_id: str) -> None:
+    rows = db.query(FiDeskCase).filter(FiDeskCase.status.in_(["approved", "in_progress"])).all()
+    for case in rows:
+        journey_id = (_parse_payload(case.payload_json).get("journey") or {}).get("application_id")
+        if journey_id == application_id:
+            refresh_journey_status(db, case)
+
+
 def _attach_customer_journey(db: Session, case: FiDeskCase) -> None:
     from decimal import Decimal
 
@@ -560,19 +622,28 @@ def _attach_customer_journey(db: Session, case: FiDeskCase) -> None:
     national_id = str(orig.get("customer_id") or "").strip()
     amount = Decimal(str(orig.get("approved_facility_amount") or "0"))
     profit = Decimal(str(orig.get("profit") or "0"))
-    customer = (
-        db.query(Customer)
-        .filter(Customer.institution_id == case.institution_id, Customer.phone == phone)
-        .first()
-    )
+    customer = None
+    if email:
+        customer = (
+            db.query(Customer)
+            .filter(Customer.institution_id == case.institution_id, Customer.email == email)
+            .first()
+        )
+    if not customer and phone:
+        customer = (
+            db.query(Customer)
+            .filter(Customer.institution_id == case.institution_id, Customer.phone == phone)
+            .first()
+        )
     if not customer:
+        phone = phone or _desk_contact_phone(email, case.id)
         customer = Customer(
             institution_id=case.institution_id,
             phone=phone,
             email=email or None,
-            full_name=name or phone or "Customer",
+            full_name=name or email or "Customer",
             national_id=national_id or None,
-            wallet_number=phone or national_id or "0",
+            wallet_number=phone,
         )
         db.add(customer)
         db.flush()

@@ -200,12 +200,12 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
   },
   "/origination": {
     title: "What Origination is",
-    lead: "The FI Airtime tawarruq desk. Step 1 captures the customer, profit, and FI Approver. After approve, the customer uses the existing journey at /customer/{ref} — there is no desk OTP.",
+    lead: "The FI Airtime tawarruq desk. FI Ops enters name, email, amount, profit, and FI Approver. After approve, the customer accepts on /customer/{ref}. Later trade steps run behind the scenes.",
     dealTitle: "How a deal uses it",
     dealSteps: [
-      "FI Ops enters ID, amount, profit, and the assigned FI Approver, then sends the case.",
-      "The assigned approver approves on the same first screen. That emails the customer journey with the Murabaha offer.",
-      "The customer accepts on /customer/{ref}. FI Ops then completes purchase, Murabaha, resale, CASA proceeds, and clearing.",
+      "FI Ops enters name, email, amount, profit, and the assigned FI Approver, then sends the case.",
+      "The assigned approver approves on the same screen. That emails the customer journey with the Murabaha offer.",
+      "The customer accepts on /customer/{ref}. Purchase, Murabaha, resale, CASA, and clearing run automatically.",
     ],
     note: "Approval Queue still lists assigned requests. Later steps email the same journey link. Bursa and Sedania desks use that journey too.",
   },
@@ -415,12 +415,11 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
   },
   "/origination": {
     title: "How Origination works",
-    intro: "Profit and approval live on step 1. The customer journey replaces desk OTP.",
+    intro: "Name, email, amount, profit, and approval. The later trade steps run behind the scenes after the customer accepts.",
     steps: [
-      { n: 1, title: "Submit", body: "ID, amount, profit, Airtime, FI Approver." },
+      { n: 1, title: "Submit", body: "Name, email, amount, profit, Airtime, FI Approver." },
       { n: 2, title: "Approve", body: "Assigned FI Approver decides here. That emails /customer/{ref}." },
-      { n: 3, title: "Customer accepts", body: "Murabaha stays blocked until the offer is accepted on the journey." },
-      { n: 4, title: "Finish the desk", body: "Purchase, resale, CASA, clearing. Each later step emails the same link." },
+      { n: 3, title: "Customer accepts", body: "The offer is accepted on the journey. The desk then finishes the trade automatically." },
     ],
   },
   "/settings": {

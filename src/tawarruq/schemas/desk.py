@@ -11,15 +11,15 @@ class DeskApproverRead(BaseModel):
 
 
 class DeskCaseCreate(BaseModel):
-    customer_id: str
-    document_type: str
     customer_name: str
-    customer_phone: str
     customer_email: str
     approved_facility_amount: str
-    facility_product_type: str
     assigned_approver_id: str
     profit: str | None = None
+    facility_product_type: str = "Airtime"
+    customer_id: str | None = None
+    document_type: str | None = None
+    customer_phone: str | None = None
     institution_id: str | None = None
 
 

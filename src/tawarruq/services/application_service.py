@@ -285,6 +285,9 @@ def accept_offer(db: Session, application_id: str, *, actor: AuditActor = AuditA
         event=WebhookEvent.OFFER_ACCEPTED,
         data={"application_id": application.id, "offer_id": application.offer.id},
     )
+    from tawarruq.services.fi_desk_service import progress_cases_for_application
+
+    progress_cases_for_application(db, application.id)
     return application.offer
 
 
