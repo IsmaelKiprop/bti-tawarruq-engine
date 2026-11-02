@@ -1,11 +1,10 @@
-"""HTML/PDF certificate attachments for customer email."""
+"""PDF certificate attachments for customer email."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from sqlalchemy.orm import Session
 
-from tawarruq.services.document_brand import kv_sections, render_branded_document
+from sqlalchemy.orm import Session
 
 Attachment = tuple[str, bytes, str]
 
@@ -19,141 +18,190 @@ DESK_CERTS = {
 }
 
 
-def html_attachment(filename: str, html: str) -> Attachment:
+def _safe_name(filename: str, suffix: str) -> str:
     safe = "".join(ch if ch.isalnum() or ch in ".-_" else "-" for ch in filename).strip("-") or "certificate"
-    if not safe.lower().endswith(".html"):
-        safe = f"{safe}.html"
-    return (safe, html.encode("utf-8"), "text/html")
+    if not safe.lower().endswith(suffix):
+        safe = f"{safe}{suffix}"
+    return safe
 
 
-def pdf_attachment(path: str | None, filename: str | None = None) -> Attachment | None:
+def _pdf_text(value: object) -> str:
+    if value is None or value == "":
+        return "-"
+    return str(value).encode("latin-1", "replace").decode("latin-1")
+
+
+def render_certificate_pdf(
+    *,
+    title: str,
+    subtitle: str,
+    doc_ref: str,
+    sections: list[tuple[str, list[tuple[str, object]]]],
+    note: str | None = None,
+) -> bytes:
+    from fpdf import FPDF
+
+    pdf = FPDF(unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.set_margins(16, 16, 16)
+    pdf.add_page()
+    width = 178
+    pdf.set_fill_color(11, 31, 58)
+    pdf.rect(0, 0, 210, 32, "F")
+    pdf.set_xy(16, 8)
+    pdf.set_text_color(201, 162, 39)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(width, 6, "BURUUJ FINTECH")
+    pdf.set_xy(16, 16)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(width, 6, "Tawarruq certificate")
+    pdf.set_xy(16, 40)
+    pdf.set_text_color(11, 31, 58)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.multi_cell(width, 8, _pdf_text(title))
+    pdf.set_text_color(92, 107, 124)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.multi_cell(width, 5, _pdf_text(subtitle))
+    pdf.ln(2)
+    pdf.set_fill_color(244, 246, 249)
+    pdf.set_text_color(11, 31, 58)
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(width, 8, f"  Ref  {_pdf_text(doc_ref)}", fill=True)
+    pdf.ln(12)
+    for heading, rows in sections:
+        pdf.set_x(16)
+        pdf.set_text_color(11, 31, 58)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(width, 8, _pdf_text(heading))
+        pdf.ln(8)
+        for label, value in rows:
+            pdf.set_x(16)
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_text_color(92, 107, 124)
+            pdf.cell(55, 6, _pdf_text(label))
+            pdf.set_text_color(18, 32, 51)
+            pdf.multi_cell(width - 55, 6, _pdf_text(value))
+        pdf.ln(2)
+    if note:
+        pdf.ln(4)
+        pdf.set_x(16)
+        pdf.set_text_color(92, 107, 124)
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.multi_cell(width, 5, _pdf_text(note))
+    pdf.set_y(-16)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(92, 107, 124)
+    pdf.cell(0, 6, "Confidential - for customer and institution use", align="C")
+    return bytes(pdf.output())
+
+
+def pdf_bytes_attachment(filename: str, content: bytes) -> Attachment:
+    return (_safe_name(filename, ".pdf"), content, "application/pdf")
+
+
+def pdf_file_attachment(path: str | None, filename: str | None = None) -> Attachment | None:
     if not path:
         return None
     file = Path(path)
     if not file.is_file():
         return None
     name = filename or file.name
-    if not name.lower().endswith(".pdf"):
-        name = f"{name}.pdf"
-    return (name, file.read_bytes(), "application/pdf")
-
-
-def render_bsas_certificate_html(certificate) -> str:
-    number = getattr(certificate, "certificate_number", None) or "BSAS"
-    return render_branded_document(
-        title="Islamic Services Receipt",
-        subtitle="Bursa Suq Al-Sila' e-certificate recorded on this facility.",
-        doc_ref=number,
-        eyebrow="Bursa Malaysia Islamic Services",
-        sections_html=kv_sections(
-            [
-                (
-                    "Certificate",
-                    [
-                        ("Number", number),
-                        ("Issuer", getattr(certificate, "issuer", None)),
-                        ("Seller", getattr(certificate, "seller", None)),
-                        ("Buyer", getattr(certificate, "buyer", None)),
-                        ("Bid no", getattr(certificate, "bid_no", None)),
-                    ],
-                ),
-                (
-                    "Commodity",
-                    [
-                        ("Product", getattr(certificate, "product_code", None)),
-                        ("Description", getattr(certificate, "product_description", None)),
-                        ("Unit", getattr(certificate, "unit", None)),
-                        ("Volume", getattr(certificate, "volume", None)),
-                    ],
-                ),
-                (
-                    "Value",
-                    [
-                        ("Currency", getattr(certificate, "currency", None)),
-                        ("Price", getattr(certificate, "price", None)),
-                        ("MYR equivalent", getattr(certificate, "price_myr_equivalent", None)),
-                        ("Value", getattr(certificate, "value_amount", None)),
-                        ("Selling date", getattr(certificate, "selling_date", None)),
-                    ],
-                ),
-            ]
-        ),
-        note="This copy was issued from the Buruuj Tawarruq engine after the desk recorded the Bursa receipt.",
-        filename_hint=str(number),
-    )
+    return pdf_bytes_attachment(name, file.read_bytes())
 
 
 def bsas_certificate_attachments(certificate) -> list[Attachment]:
     items: list[Attachment] = []
-    pdf = pdf_attachment(getattr(certificate, "pdf_path", None), getattr(certificate, "pdf_filename", None))
-    if pdf:
-        items.append(pdf)
+    uploaded = pdf_file_attachment(getattr(certificate, "pdf_path", None), getattr(certificate, "pdf_filename", None))
+    if uploaded:
+        items.append(uploaded)
+        return items
     number = getattr(certificate, "certificate_number", None) or "bsas-receipt"
-    items.append(html_attachment(f"{number}-receipt.html", render_bsas_certificate_html(certificate)))
+    content = render_certificate_pdf(
+        title="Islamic Services Receipt",
+        subtitle="Bursa Suq Al-Sila e-certificate recorded on this facility.",
+        doc_ref=str(number),
+        sections=[
+            (
+                "Certificate",
+                [
+                    ("Number", number),
+                    ("Issuer", getattr(certificate, "issuer", None)),
+                    ("Seller", getattr(certificate, "seller", None)),
+                    ("Buyer", getattr(certificate, "buyer", None)),
+                    ("Bid no", getattr(certificate, "bid_no", None)),
+                ],
+            ),
+            (
+                "Commodity",
+                [
+                    ("Product", getattr(certificate, "product_code", None)),
+                    ("Description", getattr(certificate, "product_description", None)),
+                    ("Unit", getattr(certificate, "unit", None)),
+                    ("Volume", getattr(certificate, "volume", None)),
+                    ("Value", getattr(certificate, "value_amount", None)),
+                    ("Selling date", getattr(certificate, "selling_date", None)),
+                ],
+            ),
+        ],
+        note="Issued from the Buruuj Tawarruq engine after the desk recorded the Bursa receipt.",
+    )
+    items.append(pdf_bytes_attachment(f"{number}-receipt.pdf", content))
     return items
 
 
-def render_tawarruq_certificate_html(*, certificate_number: str, customer_name: str, institution_name: str, amount: str, currency: str) -> str:
-    return render_branded_document(
+def tawarruq_certificate_attachments(*, certificate_number: str, customer_name: str, institution_name: str, amount: str, currency: str) -> list[Attachment]:
+    content = render_certificate_pdf(
         title="Tawarruq financing certificate",
         subtitle="Evidence that this facility completed commodity tawarruq and disbursement.",
         doc_ref=certificate_number,
-        sections_html=kv_sections(
-            [
-                (
-                    "Certificate",
-                    [
-                        ("Number", certificate_number),
-                        ("Issuer", "Buruuj Fintech"),
-                        ("Institution", institution_name),
-                        ("Customer", customer_name),
-                    ],
-                ),
-                ("Facility", [("Amount", f"{currency} {amount}")]),
-            ]
-        ),
+        sections=[
+            (
+                "Certificate",
+                [
+                    ("Number", certificate_number),
+                    ("Issuer", "Buruuj Fintech"),
+                    ("Institution", institution_name),
+                    ("Customer", customer_name),
+                ],
+            ),
+            ("Facility", [("Amount", f"{currency} {amount}")]),
+        ],
         note="Keep this certificate with the customer journey record.",
-        filename_hint=certificate_number,
     )
+    return [pdf_bytes_attachment(f"{certificate_number}.pdf", content)]
 
 
-def tawarruq_certificate_attachments(*, certificate_number: str, customer_name: str, institution_name: str, amount: str, currency: str) -> list[Attachment]:
-    html = render_tawarruq_certificate_html(
-        certificate_number=certificate_number,
-        customer_name=customer_name,
-        institution_name=institution_name,
-        amount=amount,
-        currency=currency,
-    )
-    return [html_attachment(f"{certificate_number}.html", html)]
-
-
-def render_desk_certificate_html(case, step: int) -> str | None:
-    spec = DESK_CERTS.get(step)
-    if not spec:
-        return None
-    title, slug = spec
-    payload = {}
+def _desk_payload(case) -> dict:
     try:
         import json
 
-        payload = json.loads(case.payload_json or "{}")
+        return json.loads(case.payload_json or "{}")
     except Exception:
-        payload = {}
+        return {}
+
+
+def desk_step_attachments(case, step: int) -> list[Attachment]:
+    items: list[Attachment] = []
+    payload = _desk_payload(case)
     orig = payload.get("origination") or {}
     initiate = payload.get("initiate") or {}
     murabaha = payload.get("murabaha") or {}
-    resale = payload.get("resale") or {}
     proceeds = payload.get("proceeds") or {}
     clearing = payload.get("clearing") or {}
-    ref = (payload.get("journey") or {}).get("customer_ref") or case.id[:8]
+    ref = (payload.get("journey") or {}).get("customer_ref") or getattr(case, "id", "case")[:8]
     institution = case.institution.name if getattr(case, "institution", None) else "Institution"
-    return render_branded_document(
-        title=title,
-        subtitle="Tawarruq desk certificate for this customer facility.",
-        doc_ref=f"{slug.upper()}-{ref}",
-        sections_html=kv_sections(
-            [
+    steps = list(range(3, step + 1)) if step == 8 else [step]
+    for item in steps:
+        spec = DESK_CERTS.get(item)
+        if not spec:
+            continue
+        title, slug = spec
+        content = render_certificate_pdf(
+            title=title,
+            subtitle="Tawarruq desk certificate for this customer facility.",
+            doc_ref=f"{slug.upper()}-{ref}",
+            sections=[
                 (
                     "Customer",
                     [
@@ -177,23 +225,10 @@ def render_desk_certificate_html(case, step: int) -> str | None:
                         ("Clearing", clearing.get("settlement_ref")),
                     ],
                 ),
-            ]
-        ),
-        note="This certificate is issued with the customer email. The same record is on the customer journey.",
-        filename_hint=f"{slug}-{ref}",
-    )
-
-
-def desk_step_attachments(case, step: int) -> list[Attachment]:
-    items: list[Attachment] = []
-    steps = list(range(3, step + 1)) if step == 8 else [step]
-    for item in steps:
-        html = render_desk_certificate_html(case, item)
-        if not html:
-            continue
-        slug = DESK_CERTS[item][1]
-        ref = getattr(case, "id", "case")[:8]
-        items.append(html_attachment(f"{ref}-{slug}-certificate.html", html))
+            ],
+            note="This PDF is issued with the customer email. The same record is on the customer journey.",
+        )
+        items.append(pdf_bytes_attachment(f"{str(ref)[:8]}-{slug}-certificate.pdf", content))
     return items
 
 
@@ -202,10 +237,27 @@ def sedania_pack_attachments(db: Session, execution) -> list[Attachment]:
     from tawarruq.services.sedania_financing_service import render_execution_document
 
     items: list[Attachment] = []
-    for kind in TRADE_DOC_LABELS:
+    for kind, label in TRADE_DOC_LABELS.items():
         try:
-            html, filename = render_execution_document(db, execution, kind)
+            _html, filename = render_execution_document(db, execution, kind)
         except Exception:
             continue
-        items.append(html_attachment(filename, html))
+        content = render_certificate_pdf(
+            title=str(label),
+            subtitle="AS SIDQ trade document for this Sedania facility.",
+            doc_ref=Path(filename).stem,
+            sections=[
+                (
+                    "Facility",
+                    [
+                        ("Customer", getattr(getattr(execution, "customer", None), "full_name", None)),
+                        ("Institution", getattr(getattr(execution, "institution", None), "name", None)),
+                        ("Amount", f"{execution.currency} {execution.amount}"),
+                        ("Deferred", f"{execution.currency} {execution.deferred_price}"),
+                    ],
+                )
+            ],
+            note="Open the customer journey for the full branded document if needed.",
+        )
+        items.append(pdf_bytes_attachment(f"{Path(filename).stem}.pdf", content))
     return items

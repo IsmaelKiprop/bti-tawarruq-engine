@@ -177,7 +177,7 @@ def test_desk_steps_journey_and_shariah_scope(tmp_path, monkeypatch):
     assert finished.json()["payload"]["journey"]["offer_accepted"] is True
     assert finished.json()["status"] == "complete"
     assert finished.json()["payload"]["timestamps"]
-    certs = list((tmp_path / "mail").glob("*certificate.html"))
+    certs = list((tmp_path / "mail").glob("*certificate.pdf"))
     assert certs, list((tmp_path / "mail").iterdir())
     purchase_mail = next((tmp_path / "mail").glob("*tawarruq-purchase*"), None)
     assert purchase_mail is not None
