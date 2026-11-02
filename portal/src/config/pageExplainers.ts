@@ -45,8 +45,9 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Complete Identity, Regulatory, Ownership, Representatives, Settlement, then Commercial.",
       "Next is blocked until the current page is complete. You cannot skip ahead. Save draft keeps incomplete work.",
       "Super Admin: Activate institution. BTI Ops: Submit for Super Admin approval.",
+      "The primary contact receives an email on submit, activate, return, or reject. That email is not a login.",
     ],
-    note: "Document fields take a reference (filename or ticket id) in this slice. File upload comes later.",
+    note: "Document fields take a reference (filename or ticket id) in this slice. File upload comes later. Invite FI Admin separately after Active.",
   },
   "/sedania": {
     title: "What Sedania Financing is",
@@ -305,8 +306,8 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
     intro: "One KYC category per page. Super Admin activate is immediate. BTI Ops waits for Super Admin.",
     steps: [
       { n: 1, title: "Capture KYC", body: "Identity through Commercial. Next is blocked until the page is complete." },
-      { n: 2, title: "Submit", body: "Review, then Super Admin activates or BTI Ops submits for approval." },
-      { n: 3, title: "Activate or wait", body: "Super Admin goes live now. BTI Ops waits for approve." },
+      { n: 2, title: "Submit", body: "Review, then Super Admin activates or BTI Ops submits for approval. The primary contact is emailed." },
+      { n: 3, title: "Activate or wait", body: "Super Admin goes live now. BTI Ops waits for approve. FI Admin is invited separately." },
     ],
   },
   "/ops": {

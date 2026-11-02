@@ -77,11 +77,14 @@ def _kyc(name="Coastal Islamic Bank", code="COAST1"):
     }
 
 
-def test_super_admin_submit_activates_and_allows_invite(client, monkeypatch):
+def test_super_admin_submit_activates_and_allows_invite(client, monkeypatch, tmp_path):
     from tawarruq.config import get_settings
 
     admin = _key(ApiKeyRole.PLATFORM_ADMIN)
     monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("CUSTOMER_MAIL_DIR", str(tmp_path / "mail"))
+    monkeypatch.setenv("RESEND_API_KEY", "")
+    monkeypatch.setenv("SMTP_HOST", "")
     get_settings.cache_clear()
     headers = {"X-API-Key": admin}
 
@@ -95,6 +98,12 @@ def test_super_admin_submit_activates_and_allows_invite(client, monkeypatch):
     assert submitted.status_code == 200, submitted.text
     assert submitted.json()["lifecycle_status"] == "active"
     assert submitted.json()["application_status"] == "ACTIVE"
+    notice = tmp_path / "mail" / "fi_onboarding" / "COAST1-approved.txt"
+    assert notice.exists(), list((tmp_path / "mail").rglob("*"))
+    text = notice.read_text(encoding="utf-8")
+    assert "amina@coastal.example" in text
+    assert "is now Active" in text
+    assert "separate invite" in text
 
     invite = client.post(
         "/api/v1/ops/auth/users",
@@ -110,12 +119,15 @@ def test_super_admin_submit_activates_and_allows_invite(client, monkeypatch):
     get_settings.cache_clear()
 
 
-def test_bti_ops_submit_needs_super_admin_and_blocks_invite(client, monkeypatch):
+def test_bti_ops_submit_needs_super_admin_and_blocks_invite(client, monkeypatch, tmp_path):
     from tawarruq.config import get_settings
 
     ops = _key(ApiKeyRole.BTI_OPS)
     admin = _key(ApiKeyRole.PLATFORM_ADMIN)
     monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("CUSTOMER_MAIL_DIR", str(tmp_path / "mail"))
+    monkeypatch.setenv("RESEND_API_KEY", "")
+    monkeypatch.setenv("SMTP_HOST", "")
     get_settings.cache_clear()
     ops_headers = {"X-API-Key": ops}
     admin_headers = {"X-API-Key": admin}
@@ -126,6 +138,9 @@ def test_bti_ops_submit_needs_super_admin_and_blocks_invite(client, monkeypatch)
     submitted = client.post(f"/api/v1/institutions/{fi_id}/onboarding/submit", headers=ops_headers)
     assert submitted.status_code == 200, submitted.text
     assert submitted.json()["lifecycle_status"] == "pending_approval"
+    received = tmp_path / "mail" / "fi_onboarding" / "RIFT1-submitted.txt"
+    assert received.exists(), list((tmp_path / "mail").rglob("*"))
+    assert "Super Admin will review" in received.read_text(encoding="utf-8")
 
     invite_body = {
         "email": "fi.lead@rift.example",
@@ -145,6 +160,9 @@ def test_bti_ops_submit_needs_super_admin_and_blocks_invite(client, monkeypatch)
     )
     assert decided.status_code == 200, decided.text
     assert decided.json()["lifecycle_status"] == "active"
+    approved = tmp_path / "mail" / "fi_onboarding" / "RIFT1-approved.txt"
+    assert approved.exists()
+    assert "is now Active" in approved.read_text(encoding="utf-8")
 
     desk_denied = client.post(
         "/api/v1/ops/auth/users",
@@ -160,6 +178,54 @@ def test_bti_ops_submit_needs_super_admin_and_blocks_invite(client, monkeypatch)
 
     invite = client.post("/api/v1/ops/auth/users", headers=ops_headers, json=invite_body)
     assert invite.status_code in {200, 201}, invite.text
+    get_settings.cache_clear()
+
+
+def test_return_and_reject_email_primary_contact(client, monkeypatch, tmp_path):
+    from tawarruq.config import get_settings
+
+    ops = _key(ApiKeyRole.BTI_OPS)
+    admin = _key(ApiKeyRole.PLATFORM_ADMIN)
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("CUSTOMER_MAIL_DIR", str(tmp_path / "mail"))
+    monkeypatch.setenv("RESEND_API_KEY", "")
+    monkeypatch.setenv("SMTP_HOST", "")
+    get_settings.cache_clear()
+    ops_headers = {"X-API-Key": ops}
+    admin_headers = {"X-API-Key": admin}
+
+    created = client.post("/api/v1/institutions/onboarding", headers=ops_headers, json=_kyc("Lake SACCO", "LAKE1"))
+    assert created.status_code == 201, created.text
+    fi_id = created.json()["id"]
+    submitted = client.post(f"/api/v1/institutions/{fi_id}/onboarding/submit", headers=ops_headers)
+    assert submitted.status_code == 200, submitted.text
+
+    returned = client.post(
+        f"/api/v1/institutions/{fi_id}/onboarding/decide",
+        headers=admin_headers,
+        json={"decision": "return", "reason": "Licence scan is missing."},
+    )
+    assert returned.status_code == 200, returned.text
+    notice = tmp_path / "mail" / "fi_onboarding" / "LAKE1-returned.txt"
+    assert notice.exists()
+    text = notice.read_text(encoding="utf-8")
+    assert "amina@coastal.example" in text
+    assert "Licence scan is missing." in text
+    assert "This is not a portal login." in text
+
+    again = client.post(f"/api/v1/institutions/{fi_id}/onboarding/submit", headers=ops_headers)
+    assert again.status_code == 200, again.text
+    rejected = client.post(
+        f"/api/v1/institutions/{fi_id}/onboarding/decide",
+        headers=admin_headers,
+        json={"decision": "reject", "reason": "Regulator licence is expired."},
+    )
+    assert rejected.status_code == 200, rejected.text
+    denied = tmp_path / "mail" / "fi_onboarding" / "LAKE1-rejected.txt"
+    assert denied.exists()
+    denied_text = denied.read_text(encoding="utf-8")
+    assert "not approved" in denied_text
+    assert "Regulator licence is expired." in denied_text
     get_settings.cache_clear()
 
 

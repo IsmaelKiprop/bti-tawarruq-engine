@@ -220,8 +220,8 @@ export function InstitutionOnboardPage() {
       setForm(formFromOnboarding(done as unknown as Record<string, unknown>));
       setMessage(
         isSuperAdmin
-          ? `${done.name} is active. You can invite its FI Admin from Users.`
-          : `${done.name} is waiting for Super Admin approval.`,
+          ? `${done.name} is active. The primary contact was emailed. Invite FI Admin from Users.`
+          : `${done.name} is waiting for Super Admin approval. The primary contact was emailed.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submit failed");
@@ -232,17 +232,23 @@ export function InstitutionOnboardPage() {
 
   async function onDecide(decision: "approve" | "return") {
     if (!record?.id) return;
+    let reason: string | undefined;
+    if (decision === "return") {
+      const typed = window.prompt("Reason to return this KYC (emailed to the primary contact):", "");
+      if (typed === null) return;
+      reason = typed.trim() || undefined;
+    }
     setBusy(true);
     setError("");
     setMessage("");
     try {
-      const done = await api.decideInstitutionOnboarding(record.id, { decision });
+      const done = await api.decideInstitutionOnboarding(record.id, { decision, reason });
       setRecord(done);
       setForm(formFromOnboarding(done as unknown as Record<string, unknown>));
       setMessage(
         decision === "approve"
-          ? `${done.name} is active. You can invite its FI Admin from Users.`
-          : `${done.name} was returned to draft.`,
+          ? `${done.name} is active. The primary contact was emailed. Invite FI Admin from Users.`
+          : `${done.name} was returned to draft. The primary contact was emailed.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Decision failed");
@@ -634,8 +640,8 @@ export function InstitutionOnboardPage() {
               </dl>
               <p className="m-0 text-sm text-muted">
                 {isSuperAdmin
-                  ? "Super Admin activate is immediate. No maker-checker on this onboarding."
-                  : "BTI Ops submit waits for Super Admin approval before the institution can be staffed."}
+                  ? "Super Admin activate is immediate. The primary contact is emailed. Invite FI Admin separately after Active."
+                  : "BTI Ops submit waits for Super Admin approval. The primary contact is emailed. This is not a portal login."}
               </p>
               {isSuperAdmin && record?.lifecycle_status === "pending_approval" ? (
                 <div className="flex flex-wrap gap-2">

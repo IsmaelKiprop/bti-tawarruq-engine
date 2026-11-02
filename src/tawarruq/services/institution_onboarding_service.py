@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -12,6 +13,8 @@ from tawarruq.enums import ApiKeyRole, AuditActor
 from tawarruq.models.institution import Institution
 from tawarruq.models.institution_profile import InstitutionProfile
 from tawarruq.services.audit_service import log_audit
+
+logger = logging.getLogger(__name__)
 
 INSTITUTION_TYPES = {
     "SACCO",
@@ -438,6 +441,78 @@ def save_onboarding(
     return institution, profile
 
 
+def notify_fi_onboarding(
+    institution: Institution,
+    profile: InstitutionProfile,
+    *,
+    kind: str,
+    reason: str | None = None,
+) -> None:
+    """Email the FI primary contact. Never raises. Does not create a portal login."""
+    from tawarruq.config import get_settings
+    from tawarruq.services.customer_notify_service import _send_smtp, normalize_email
+
+    to_email = normalize_email(profile.primary_contact_work_email) or normalize_email(profile.support_email)
+    if not to_email:
+        return
+    name = (profile.primary_contact_full_name or "Colleague").strip() or "Colleague"
+    house = institution.name
+    portal = (get_settings().portal_public_url or "https://ops.buruujfintech.com").rstrip("/")
+    if kind == "submitted":
+        subject = f"KYC received for {house}"
+        body = (
+            f"Assalamu alaikum {name},\n\n"
+            f"We have received the KYC onboarding for {house} ({institution.code}). "
+            "Super Admin will review it.\n\n"
+            "You will hear from us when a decision is made. This is not a portal login.\n\n"
+            "Buruuj Fintech — BTI Tawarruq Engine\n"
+        )
+    elif kind == "approved":
+        subject = f"{house} is active on Buruuj Tawarruq"
+        body = (
+            f"Assalamu alaikum {name},\n\n"
+            f"{house} ({institution.code}) is now Active on the Buruuj Tawarruq engine.\n\n"
+            "FI Admin will receive a separate invite to sign in. "
+            f"Portal: {portal}\n\n"
+            "This message is not a login.\n\n"
+            "Buruuj Fintech — BTI Tawarruq Engine\n"
+        )
+    elif kind == "returned":
+        detail = (reason or "").strip() or "BTI asked for more information."
+        subject = f"KYC returned for {house}"
+        body = (
+            f"Assalamu alaikum {name},\n\n"
+            f"The KYC for {house} ({institution.code}) was returned for more information.\n\n"
+            f"{detail}\n\n"
+            "Please wait for BTI to follow up. This is not a portal login.\n\n"
+            "Buruuj Fintech — BTI Tawarruq Engine\n"
+        )
+    elif kind == "rejected":
+        detail = (reason or "").strip() or "The application was not approved."
+        subject = f"KYC not approved for {house}"
+        body = (
+            f"Assalamu alaikum {name},\n\n"
+            f"The KYC for {house} ({institution.code}) was not approved.\n\n"
+            f"{detail}\n\n"
+            "Please wait for BTI to follow up. This is not a portal login.\n\n"
+            "Buruuj Fintech — BTI Tawarruq Engine\n"
+        )
+    else:
+        return
+    try:
+        settings = get_settings()
+        mail_dir = settings.customer_mail_path / "fi_onboarding"
+        mail_dir.mkdir(parents=True, exist_ok=True)
+        path = mail_dir / f"{institution.code}-{kind}.txt"
+        path.write_text(f"To: {to_email}\nSubject: {subject}\n\n{body}", encoding="utf-8")
+    except Exception:
+        logger.exception("Could not file FI onboarding mail for %s", institution.code)
+    try:
+        _send_smtp(to_email, subject, body)
+    except Exception:
+        logger.exception("Could not send FI onboarding mail to %s", to_email)
+
+
 def submit_onboarding(
     db: Session,
     institution: Institution,
@@ -474,6 +549,11 @@ def submit_onboarding(
         institution_id=institution.id,
         actor_user_id=actor_id,
         action_group="institutions",
+    )
+    notify_fi_onboarding(
+        institution,
+        profile,
+        kind="approved" if institution.lifecycle_status == "active" else "submitted",
     )
     return institution, profile
 
@@ -520,6 +600,9 @@ def decide_onboarding(
         actor_user_id=actor_id,
         action_group="institutions",
     )
+    kind = {"approve": "approved", "return": "returned", "reject": "rejected"}.get(decision)
+    if kind:
+        notify_fi_onboarding(institution, profile, kind=kind, reason=profile.approval_reason)
     return institution, profile
 
 
