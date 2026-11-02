@@ -385,6 +385,7 @@ def test_super_admin_sets_sedania_charge_pct():
     assert restored.json()["rate_pct"] == 0.0035
     assert {item["code"] for item in restored.json()["providers"]} == {"sedania", "bursa"}
     assert restored.json()["smtp_configured"] is False
+    assert restored.json().get("mail_provider", "none") == "none"
 
     assigned = client.patch(
         "/api/v1/ops/settings",

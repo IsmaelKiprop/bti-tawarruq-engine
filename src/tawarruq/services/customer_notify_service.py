@@ -119,7 +119,7 @@ def notify_offer_ready(db: Session, application: FinancingApplication) -> OfferN
         journey_url=journey_url,
         smtp_sent=smtp_sent,
         mail_path=mail_path,
-        reason=None if smtp_sent else "SMTP is not configured or the send failed. A local copy was written.",
+        reason=None if smtp_sent else "Email is not configured or the send failed. A local copy was written.",
     )
 
 
@@ -224,7 +224,7 @@ def notify_trade_documents_ready(
         journey_url=journey_url,
         smtp_sent=smtp_sent,
         mail_path=mail_path,
-        reason=None if smtp_sent else "SMTP is not configured or the send failed. A local copy was written.",
+        reason=None if smtp_sent else "Email is not configured or the send failed. A local copy was written.",
     )
 
 
@@ -287,8 +287,52 @@ def notify_step_ready(
         journey_url=journey_url,
         smtp_sent=smtp_sent,
         mail_path=mail_path,
-        reason=None if smtp_sent else "SMTP is not configured or the send failed. A local copy was written.",
+        reason=None if smtp_sent else "Email is not configured or the send failed. A local copy was written.",
     )
+
+
+def _send_resend(
+    to_email: str,
+    subject: str,
+    body: str,
+    attachments: list[tuple[str, bytes, str]] | None,
+    *,
+    api_key: str,
+    from_addr: str,
+) -> bool:
+    import base64
+    import json
+    import urllib.error
+    import urllib.request
+
+    payload: dict[str, object] = {
+        "from": from_addr,
+        "to": [to_email],
+        "subject": subject,
+        "text": body,
+    }
+    if attachments:
+        payload["attachments"] = [
+            {"filename": filename, "content": base64.b64encode(content).decode("ascii")}
+            for filename, content, _ctype in attachments
+        ]
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+    )
+    request.add_header("Authorization", f"Bearer {api_key}")
+    request.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return 200 <= int(response.status) < 300
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        logger.exception("Resend rejected email to %s: %s", to_email, detail)
+        return False
+    except Exception:
+        logger.exception("Could not send email via Resend")
+        return False
 
 
 def _send_smtp(
@@ -298,6 +342,16 @@ def _send_smtp(
     attachments: list[tuple[str, bytes, str]] | None = None,
 ) -> bool:
     from tawarruq.services.platform_settings_service import effective_smtp
+
+    settings = get_settings()
+    api_key = (settings.resend_api_key or "").strip()
+    if api_key:
+        from_addr = (settings.resend_from or "").strip() or "ops@buruujfintech.com"
+        if "<" not in from_addr and "@" in from_addr:
+            from_addr = f"Buruuj Fintech <{from_addr}>"
+        if _send_resend(to_email, subject, body, attachments, api_key=api_key, from_addr=from_addr):
+            return True
+        logger.warning("Resend send failed for %s; trying SMTP if configured", to_email)
 
     host, port, user, password, from_addr = effective_smtp()
     if not host:

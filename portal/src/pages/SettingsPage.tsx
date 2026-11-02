@@ -58,6 +58,7 @@ export function SettingsPage() {
   const [smtpPassword, setSmtpPassword] = useState("");
   const [smtpFrom, setSmtpFrom] = useState("");
   const [smtpConfigured, setSmtpConfigured] = useState(false);
+  const [mailProvider, setMailProvider] = useState("none");
   const [chargePassword, setChargePassword] = useState("");
   const [chargeOtp, setChargeOtp] = useState("");
   const [chargeDevCode, setChargeDevCode] = useState("");
@@ -68,6 +69,7 @@ export function SettingsPage() {
     providers?: ProviderBook[];
     institutions?: InstitutionCharge[];
     smtp_configured?: boolean;
+    mail_provider?: string;
     smtp_host?: string;
     smtp_port?: number;
     smtp_user?: string;
@@ -76,6 +78,7 @@ export function SettingsPage() {
     setProviders(settings.providers || []);
     setFiCharges(settings.institutions || []);
     setSmtpConfigured(Boolean(settings.smtp_configured));
+    setMailProvider(settings.mail_provider || (settings.smtp_configured ? "smtp" : "none"));
     setSmtpHost(settings.smtp_host || "");
     setSmtpPort(String(settings.smtp_port || 587));
     setSmtpUser(settings.smtp_user || "");
@@ -487,10 +490,13 @@ export function SettingsPage() {
                 )}
               </div>
               <div>
-                <strong>Customer email (SMTP)</strong>
+                <strong>Customer email</strong>
                 <p className="meta" style={{ margin: "0.15rem 0 0.45rem" }}>
-                  Leave host blank until the mailbox exists. Journey mail files locally until SMTP is set.
-                  {smtpConfigured ? " SMTP is configured." : " SMTP is off."}
+                  {mailProvider === "resend"
+                    ? "Sending via Resend from ops@buruujfintech.com. SMTP host can stay blank."
+                    : smtpConfigured
+                      ? "SMTP is configured."
+                      : "Leave SMTP host blank. Journey mail files locally until Resend or SMTP is set."}
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label>

@@ -93,16 +93,14 @@ def _deliver_email_code(*, email: str, subject: str, body: str, code: str) -> di
     path.write_text(f"To: {email}\nSubject: {subject}\n\n{body}\n\nCODE={code}\n", encoding="utf-8")
 
     smtp_sent = False
-    if settings.smtp_host:
-        try:
-            from tawarruq.services.customer_notify_service import _send_smtp
+    try:
+        from tawarruq.services.customer_notify_service import _send_smtp
 
-            smtp_sent = bool(_send_smtp(email, subject, body))
-        except Exception:
-            logger.exception("SMTP send failed for mobile auth to %s", email)
+        smtp_sent = bool(_send_smtp(email, subject, body))
+    except Exception:
+        logger.exception("Email send failed for mobile auth to %s", email)
 
-    # Expose code only when SMTP is off (local / mock demos)
-    include_dev = not settings.smtp_host
+    include_dev = not smtp_sent
     return {
         "smtp_sent": smtp_sent,
         "mail_path": str(path),

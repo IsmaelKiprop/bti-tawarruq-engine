@@ -188,9 +188,23 @@ def update_institution_provider(db: Session, institution: Institution, provider:
     return institution
 
 
-def smtp_is_configured(db: Session | None = None) -> bool:
+def resend_is_configured() -> bool:
+    from tawarruq.config import get_settings
+
+    return bool((get_settings().resend_api_key or "").strip())
+
+
+def mail_provider(db: Session | None = None) -> str:
+    if resend_is_configured():
+        return "resend"
     host, _port, _user, _password, _from_addr = effective_smtp(db)
-    return bool(host)
+    if host:
+        return "smtp"
+    return "none"
+
+
+def smtp_is_configured(db: Session | None = None) -> bool:
+    return mail_provider(db) != "none"
 
 
 def effective_smtp(db: Session | None = None) -> tuple[str, int, str, str, str]:

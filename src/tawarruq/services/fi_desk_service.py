@@ -7,7 +7,6 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from tawarruq.config import get_settings
 from tawarruq.enums import ApiKeyRole, ShariahStepId
 from tawarruq.models.fi_desk import FiDeskCase
 from tawarruq.models.institution import Institution
@@ -421,8 +420,7 @@ def send_otp(db: Session, case: FiDeskCase, purpose: str) -> dict[str, Any]:
     orig = payload.get("origination") or {}
     email = str(orig.get("customer_email") or "")
     smtp_sent = False
-    settings = get_settings()
-    if settings.smtp_host and email:
+    if email:
         try:
             from tawarruq.services.customer_notify_service import _send_smtp
 

@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = "amanah@bti-fintech.local"
+    resend_api_key: str = ""
+    resend_from: str = "Buruuj Fintech <ops@buruujfintech.com>"
 
     portal_public_url: str = "http://127.0.0.1:5173"
     customer_mail_dir: str = "./data/customer_mail"

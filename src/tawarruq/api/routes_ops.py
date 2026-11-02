@@ -845,6 +845,7 @@ class PlatformSettingsRead(BaseModel):
     providers: list[ProviderBookRead] = Field(default_factory=list)
     institutions: list[InstitutionChargeRead] = Field(default_factory=list)
     smtp_configured: bool = False
+    mail_provider: str = "none"
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""
@@ -897,6 +898,7 @@ def _serialize_platform_settings(db: Session) -> PlatformSettingsRead:
         latest_active_rate,
         list_institution_charges,
         list_providers,
+        mail_provider,
         smtp_is_configured,
     )
 
@@ -932,6 +934,7 @@ def _serialize_platform_settings(db: Session) -> PlatformSettingsRead:
             for item in books
         ],
         smtp_configured=smtp_is_configured(db),
+        mail_provider=mail_provider(db),
         smtp_host=settings_row.smtp_host or "",
         smtp_port=int(settings_row.smtp_port or 587),
         smtp_user=settings_row.smtp_user or "",

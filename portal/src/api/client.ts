@@ -676,6 +676,7 @@ export interface PlatformSettings {
   providers?: ProviderBook[];
   institutions?: InstitutionCharge[];
   smtp_configured?: boolean;
+  mail_provider?: "resend" | "smtp" | "none" | string;
   smtp_host?: string;
   smtp_port?: number;
   smtp_user?: string;

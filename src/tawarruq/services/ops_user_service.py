@@ -106,13 +106,12 @@ def deliver_ops_invite_email(
         logger.exception("Could not file ops invite mail for %s", user.email)
 
     smtp_sent = False
-    if settings.smtp_host:
-        try:
-            from tawarruq.services.customer_notify_service import _send_smtp
+    try:
+        from tawarruq.services.customer_notify_service import _send_smtp
 
-            smtp_sent = bool(_send_smtp(user.email, subject, body))
-        except Exception:
-            logger.exception("SMTP send failed for ops invite to %s", user.email)
+        smtp_sent = bool(_send_smtp(user.email, subject, body))
+    except Exception:
+        logger.exception("Email send failed for ops invite to %s", user.email)
 
     return {
         "smtp_sent": smtp_sent,
@@ -235,18 +234,17 @@ def issue_email_otp(user: OpsUser, *, purpose: str = "login") -> dict[str, Any]:
     path.write_text(f"To: {user.email}\nSubject: {subject}\n\n{body}\n", encoding="utf-8")
 
     smtp_sent = False
-    if settings.smtp_host:
-        try:
-            from tawarruq.services.customer_notify_service import _send_smtp
+    try:
+        from tawarruq.services.customer_notify_service import _send_smtp
 
-            smtp_sent = bool(_send_smtp(user.email, subject, body))
-        except Exception:
-            logger.exception("SMTP send failed for ops MFA to %s", user.email)
+        smtp_sent = bool(_send_smtp(user.email, subject, body))
+    except Exception:
+        logger.exception("Email send failed for ops MFA to %s", user.email)
 
     return {
         "smtp_sent": smtp_sent,
         "mail_path": str(path),
-        "dev_code": None if settings.smtp_host else code,
+        "dev_code": None if smtp_sent else code,
         "email": user.email,
     }
 

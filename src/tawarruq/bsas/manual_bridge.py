@@ -11,27 +11,14 @@ def _send_manual_bridge_email(subject: str, body: str, attachment_path: Path) ->
     settings = get_settings()
     if not settings.manual_bridge_email_enabled or not settings.manual_bridge_email_to:
         return
-    if not settings.smtp_host:
-        return
-    import smtplib
-    from email.mime.application import MIMEApplication
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
+    from tawarruq.services.customer_notify_service import _send_smtp
 
-    msg = MIMEMultipart()
-    msg["Subject"] = subject
-    msg["From"] = settings.smtp_from
-    msg["To"] = settings.manual_bridge_email_to
-    msg.attach(MIMEText(body, "plain"))
-    with attachment_path.open("rb") as handle:
-        part = MIMEApplication(handle.read(), Name=attachment_path.name)
-        part["Content-Disposition"] = f'attachment; filename="{attachment_path.name}"'
-        msg.attach(part)
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-        if settings.smtp_user:
-            server.starttls()
-            server.login(settings.smtp_user, settings.smtp_password)
-        server.send_message(msg)
+    _send_smtp(
+        settings.manual_bridge_email_to,
+        subject,
+        body,
+        [(attachment_path.name, attachment_path.read_bytes(), "application/octet-stream")],
+    )
 
 
 class ManualBridgeBackend(BSASBackend):
