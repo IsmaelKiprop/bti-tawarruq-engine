@@ -5,8 +5,6 @@ services:
       POSTGRES_USER: tawarruq
       POSTGRES_PASSWORD: tawarruq
       POSTGRES_DB: tawarruq
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,8 +15,6 @@ services:
 
   api:
     build: .
-    ports:
-      - "8000:8000"
     environment:
       - DATABASE_URL=postgresql+psycopg://tawarruq:tawarruq@postgres:5432/tawarruq
       - AMANAH_WRITE_ENABLED=true
