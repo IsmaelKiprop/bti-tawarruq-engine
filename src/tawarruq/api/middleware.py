@@ -74,8 +74,12 @@ def _write_forbidden(role: str, path: str, method: str) -> bool:
     return role in {item.value for item in WRITE_BLOCKED_ROLES}
 
 
+def _is_sedania_callback_path(path: str) -> bool:
+    return path.rstrip("/").endswith("/sedania/callback")
+
+
 def _is_public_callback_path(path: str) -> bool:
-    return "/kenya/callbacks/" in path
+    return "/kenya/callbacks/" in path or _is_sedania_callback_path(path)
 
 
 def _bearer_token(request: Request) -> str | None:
@@ -113,6 +117,14 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
 
         # Let CORSMiddleware answer browser preflight without auth.
         if request.method == "OPTIONS":
+            return await call_next(request)
+
+        if _is_sedania_callback_path(path):
+            expected = (settings.sedania_callback_token or "").strip()
+            if expected:
+                got = request.headers.get("X-Callback-Token") or _bearer_token(request)
+                if got != expected:
+                    return JSONResponse(status_code=401, content={"detail": "Invalid As-Sidq callback token"})
             return await call_next(request)
 
         if _is_public_callback_path(path) and settings.callback_auth_token:

@@ -19,6 +19,7 @@ TRADE_DOC_LABELS = {
     VaultCertificateKind.CASA_ADVICE: "CASA credit advice",
     VaultCertificateKind.PHYSICAL_DELIVERY: "Physical delivery notice",
     VaultCertificateKind.CMP: "Commodity Murabahah Program",
+    VaultCertificateKind.ASIDQ_CERT: "As-Sidq master certificate",
 }
 
 DOC_KIND_ALIASES = {
@@ -38,6 +39,9 @@ DOC_KIND_ALIASES = {
     "physical": VaultCertificateKind.PHYSICAL_DELIVERY,
     "physical_delivery": VaultCertificateKind.PHYSICAL_DELIVERY,
     "cmp": VaultCertificateKind.CMP,
+    "asidq": VaultCertificateKind.ASIDQ_CERT,
+    "asidq_cert": VaultCertificateKind.ASIDQ_CERT,
+    "master_cert": VaultCertificateKind.ASIDQ_CERT,
 }
 
 

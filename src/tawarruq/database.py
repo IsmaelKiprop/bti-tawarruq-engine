@@ -466,6 +466,18 @@ def _ensure_sedania_financing_columns() -> None:
             f"ALTER TABLE tawarruq_executions ADD COLUMN physical_delivery_notified_at {dt}"
         ),
         "repayment_settled_at": f"ALTER TABLE tawarruq_executions ADD COLUMN repayment_settled_at {dt}",
+        "as_sidq_ref_no": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_ref_no VARCHAR(100)",
+        "as_sidq_status_code": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_status_code INTEGER",
+        "as_sidq_status_desc": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_status_desc VARCHAR(100)",
+        "as_sidq_trading_status": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_trading_status VARCHAR(100)",
+        "as_sidq_product_code": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_product_code VARCHAR(30)",
+        "as_sidq_cert_url": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_cert_url VARCHAR(512)",
+        "as_sidq_cert_a": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_cert_a VARCHAR(100)",
+        "as_sidq_cert_b": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_cert_b VARCHAR(100)",
+        "as_sidq_cert_c": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_cert_c VARCHAR(100)",
+        "as_sidq_callback_json": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_callback_json TEXT",
+        "as_sidq_cancel_reason": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_cancel_reason VARCHAR(50)",
+        "as_sidq_cancel_request_id": "ALTER TABLE tawarruq_executions ADD COLUMN as_sidq_cancel_request_id VARCHAR(32)",
     }
     with engine.begin() as conn:
         for name, ddl in additions.items():
@@ -473,6 +485,9 @@ def _ensure_sedania_financing_columns() -> None:
                 conn.execute(text(ddl))
         if "path" not in existing:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tawarruq_executions_path ON tawarruq_executions (path)"))
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_tawarruq_executions_as_sidq_ref_no ON tawarruq_executions (as_sidq_ref_no)")
+        )
 
 
 def _ensure_institution_kyc_columns() -> None:

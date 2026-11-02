@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tawarruq.database import Base
@@ -56,6 +56,18 @@ class TawarruqExecution(Base):
     repayment_settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     callback_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     callback_delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    as_sidq_ref_no: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    as_sidq_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    as_sidq_status_desc: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    as_sidq_trading_status: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    as_sidq_product_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    as_sidq_cert_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    as_sidq_cert_a: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    as_sidq_cert_b: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    as_sidq_cert_c: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    as_sidq_callback_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    as_sidq_cancel_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    as_sidq_cancel_request_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

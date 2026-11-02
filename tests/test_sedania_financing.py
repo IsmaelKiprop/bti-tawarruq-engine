@@ -79,7 +79,7 @@ def test_approved_wakeel_runs_muqassah_and_credits_casa(client):
     assert body["casa_account"] == "CASA-DIB-0001"
     assert body["purchase_order_ref"].startswith("PO-ASSIDQ-")
     assert body["commodity_invoice_ref"].startswith("INV-AIRTIME-")
-    assert body["delivery_order_ref"].startswith("DO-AIRTIME-")
+    assert body["delivery_order_ref"]
     assert body["trading_ecert_ref"].startswith("ECERT-ASSIDQ-")
     assert body["wakalah"]["token_id"].startswith("WAKALAH-")
     for kind in ("purchase_order", "commodity_invoice", "delivery_order", "trading_ecert", "muqassah", "casa_advice"):
@@ -98,6 +98,11 @@ def test_approved_wakeel_runs_muqassah_and_credits_casa(client):
     steps = {step["id"]: step["status"] for step in body["steps"]}
     assert steps["muqassah"] == "done"
     assert steps["casa"] == "done"
+    assert body["as_sidq_ref_no"]
+    assert body["as_sidq_cert_a"]
+    assert body["as_sidq_cert_b"]
+    assert body["as_sidq_cert_c"]
+    assert body["as_sidq_status_desc"] == "COMPLETE"
 
 
 def test_aaoifi_rasul_skips_muqassah_and_credits_casa(client):
@@ -163,6 +168,80 @@ def test_physical_delivery_waits_for_settlement(client):
     html = client.get(f"/api/v1/sedania/financing/{body['execution_id']}/documents/physical_delivery")
     assert html.status_code == 200
     assert "qabd hakiki" in html.text.lower() or "Physical delivery" in html.text
+    assert body["as_sidq_status_desc"] == "KEEP"
+    assert body["as_sidq_cert_c"] is None
+
+
+def test_cancel_completed_trade_on_asidq(client):
+    bank = _dib(client)
+    customer = _onboard(client, bank["id"], phone="60123450666")
+    created = client.post(
+        "/api/v1/sedania/financing",
+        json={
+            "customer_id": customer["id"],
+            "amount": "10000.00",
+            "tenor": 12,
+            "currency": "MYR",
+            "institution_id": bank["id"],
+        },
+    )
+    assert created.status_code == 200, created.text
+    execution_id = created.json()["execution_id"]
+    cancelled = client.post(
+        f"/api/v1/sedania/financing/{execution_id}/cancel",
+        json={"reason": "incorrect_financing_amount"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelled"
+
+
+def test_asidq_callback_is_public_and_idempotent(client):
+    bank = _dib(client)
+    customer = _onboard(client, bank["id"], phone="60123450555")
+    created = client.post(
+        "/api/v1/sedania/financing",
+        json={
+            "customer_id": customer["id"],
+            "amount": "10000.00",
+            "tenor": 12,
+            "currency": "MYR",
+            "institution_id": bank["id"],
+        },
+    )
+    assert created.status_code == 200, created.text
+    ref = created.json()["as_sidq_ref_no"]
+    again = client.post(
+        "/api/v1/sedania/callback",
+        json={
+            "ref_no": ref,
+            "status_code": 200,
+            "status_desc": "COMPLETE",
+            "message": {"description": "Trading completed"},
+            "callback": {
+                "ref_no": ref,
+                "trading_status": "COMPLETE",
+                "delivery_order_no": created.json()["delivery_order_ref"],
+                "cert_no": {
+                    "A": created.json()["as_sidq_cert_a"],
+                    "B": created.json()["as_sidq_cert_b"],
+                    "C": created.json()["as_sidq_cert_c"],
+                },
+                "cert": "https://sedania.example/api/v1/streamPdf?ref_no=" + ref,
+                "cust_name": "Amina Rahman",
+                "cust_id": "x",
+                "supplying_party": "TELECOMMUNICATION_AIRTIME_AGGREGATOR",
+                "buying_party": "SEDANIA_RANDOM_PURCHASER",
+                "issue_date": 1785463766,
+                "commodity_type": "TELCO_AIRTIME",
+                "value": "10000.00",
+                "unit": 1,
+            },
+        },
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["ok"] is True
+    loaded = client.get(f"/api/v1/sedania/financing/{created.json()['execution_id']}")
+    assert loaded.json()["status"] == "completed"
 
 
 def test_sacco_path_still_avoids_casa_and_issues_trade_pack(client):

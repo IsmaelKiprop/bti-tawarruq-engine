@@ -173,9 +173,12 @@ class ExecutionStatus(StrEnum):
     AWAITING_SETTLEMENT = "awaiting_settlement"
     PHYSICAL_DELIVERY = "physical_delivery"
     WEBHOOK_RELAY = "webhook_relay"
+    PENDING_AS_SIDQ = "pending_as_sidq"
+    CANCELLATION_PENDING = "cancellation_pending"
     READY_FOR_SACCO_DISBURSEMENT = "ready_for_sacco_disbursement"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class ExecutionPath(StrEnum):
@@ -221,6 +224,7 @@ class VaultCertificateKind(StrEnum):
     MUQASSAH = "muqassah"
     CASA_ADVICE = "casa_advice"
     PHYSICAL_DELIVERY = "physical_delivery"
+    ASIDQ_CERT = "asidq_cert"
 
 
 class ApiKeyRole(StrEnum):

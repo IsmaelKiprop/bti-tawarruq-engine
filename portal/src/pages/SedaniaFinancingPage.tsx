@@ -4,6 +4,7 @@ import { Alert, EmptyState, LoadingPanel, PageShell, statusBadgeClass } from "..
 import { api, type SedaniaFinancing } from "../api/client";
 
 const DOC_BUTTONS = [
+  { kind: "asidq_cert", label: "As-Sidq certificate" },
   { kind: "purchase_order", label: "Purchase Order" },
   { kind: "commodity_invoice", label: "Commodity Invoice" },
   { kind: "delivery_order", label: "Delivery Order" },
@@ -12,6 +13,13 @@ const DOC_BUTTONS = [
   { kind: "casa_advice", label: "CASA advice" },
   { kind: "physical_delivery", label: "Physical delivery" },
 ];
+
+const CANCEL_REASONS = [
+  { value: "incorrect_customer_details", label: "Incorrect customer details" },
+  { value: "incorrect_financing_amount", label: "Incorrect financing amount" },
+  { value: "incorrect_profit_rate", label: "Incorrect profit rate" },
+  { value: "others", label: "Other" },
+] as const;
 
 export function SedaniaFinancingPage() {
   const pickerRef = useRef<CustomerPickerHandle>(null);
@@ -28,6 +36,8 @@ export function SedaniaFinancingPage() {
   const [deliveryMode, setDeliveryMode] = useState<"constructive" | "physical">("constructive");
   const [casaAccount, setCasaAccount] = useState("CASA-DIB-0001");
   const [appointSasc, setAppointSasc] = useState(true);
+  const [cancelReason, setCancelReason] = useState<(typeof CANCEL_REASONS)[number]["value"]>("incorrect_financing_amount");
+  const [cancelOther, setCancelOther] = useState("");
 
   const loadRuns = useCallback(async () => {
     setLoading(true);
@@ -70,12 +80,51 @@ export function SedaniaFinancingPage() {
       setSelected(run);
       setRuns((current) => [run, ...current.filter((row) => row.execution_id !== run.execution_id)]);
       setMessage(
-        run.delivery_mode === "physical"
-          ? "CMP and AS SIDQ legs completed. Mark settlement, then arrange physical delivery."
-          : "Financing completed through AS SIDQ. Review the trade pack, muqassah, and CASA advice.",
+        run.status === "pending_as_sidq"
+          ? `Submitted to As-Sidq as ${run.as_sidq_ref_no}. Waiting for the trading callback.`
+          : run.delivery_mode === "physical"
+            ? "As-Sidq kept the commodity. Mark settlement, then arrange physical delivery."
+            : "As-Sidq completed. Review the trade pack, muqassah, and CASA advice.",
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sedania financing failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function applyRun(run: SedaniaFinancing, note: string) {
+    setSelected(run);
+    setRuns((current) => current.map((row) => (row.execution_id === run.execution_id ? run : row)));
+    setMessage(note);
+  }
+
+  async function onRefreshStatus() {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      const run = await api.refreshSedaniaFinancing(selected.execution_id);
+      applyRun(run, `As-Sidq status: ${run.as_sidq_status_desc || run.status}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not refresh As-Sidq status");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onCancel() {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      const run = await api.cancelSedaniaFinancing(selected.execution_id, {
+        reason: cancelReason,
+        other_reason: cancelReason === "others" ? cancelOther : undefined,
+      });
+      applyRun(run, `Cancellation ${run.as_sidq_status_desc || run.status}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Cancellation failed");
     } finally {
       setBusy(false);
     }
@@ -201,6 +250,14 @@ export function SedaniaFinancingPage() {
                   <span>CASA</span>
                   <strong>{selected.casa_account || "—"}</strong>
                 </div>
+                <div className="info-item">
+                  <span>As-Sidq ref</span>
+                  <strong className="mono">{selected.as_sidq_ref_no || "—"}</strong>
+                </div>
+                <div className="info-item">
+                  <span>Trading status</span>
+                  <strong>{selected.as_sidq_status_desc || selected.as_sidq_trading_status || "—"}</strong>
+                </div>
               </div>
               <ol className="step-list">
                 {selected.steps.map((step) => (
@@ -230,6 +287,11 @@ export function SedaniaFinancingPage() {
                     </button>
                   );
                 })}
+                {selected.status === "pending_as_sidq" || selected.status === "cancellation_pending" ? (
+                  <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void onRefreshStatus()}>
+                    Refresh As-Sidq status
+                  </button>
+                ) : null}
                 {selected.delivery_mode === "physical" ? (
                   <button
                     type="button"
@@ -241,6 +303,34 @@ export function SedaniaFinancingPage() {
                   </button>
                 ) : null}
               </div>
+              {selected.status !== "cancelled" && selected.as_sidq_ref_no ? (
+                <div className="actions-row wrap">
+                  <label>
+                    Cancel reason
+                    <select
+                      value={cancelReason}
+                      onChange={(event) =>
+                        setCancelReason(event.target.value as (typeof CANCEL_REASONS)[number]["value"])
+                      }
+                    >
+                      {CANCEL_REASONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {cancelReason === "others" ? (
+                    <label>
+                      Other reason
+                      <input value={cancelOther} onChange={(event) => setCancelOther(event.target.value)} />
+                    </label>
+                  ) : null}
+                  <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void onCancel()}>
+                    Cancel on As-Sidq
+                  </button>
+                </div>
+              ) : null}
               <p className="meta">
                 PO {selected.purchase_order_ref || "—"} · Invoice {selected.commodity_invoice_ref || "—"} · DO{" "}
                 {selected.delivery_order_ref || "—"} · e-Cert {selected.trading_ecert_ref || "—"}

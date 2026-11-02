@@ -53,6 +53,7 @@ class SedaniaFinancingRequest(BaseModel):
     )
     callback_url: str | None = None
     client_request_id: str | None = Field(None, description="Optional idempotency key")
+    product_code: str | None = Field(None, description="As-Sidq product_code. Defaults to SEDANIA_PRODUCT_CODE (P01).")
     institution_id: str | None = None
     institution_code: str | None = Field(None, examples=["DIB"])
 
@@ -88,6 +89,14 @@ class SedaniaFinancingRead(SaccoExecuteRead):
     physical_delivery_status: str | None = None
     physical_delivery_notified_at: datetime | None = None
     repayment_settled_at: datetime | None = None
+    as_sidq_ref_no: str | None = None
+    as_sidq_status_code: int | None = None
+    as_sidq_status_desc: str | None = None
+    as_sidq_trading_status: str | None = None
+    as_sidq_cert_url: str | None = None
+    as_sidq_cert_a: str | None = None
+    as_sidq_cert_b: str | None = None
+    as_sidq_cert_c: str | None = None
     cmp: LegalStampRead | None = None
     steps: list[SedaniaStepRead] = Field(default_factory=list)
 
@@ -105,3 +114,11 @@ class SedaniaPhysicalDeliveryRequest(BaseModel):
         True,
         description="Physical delivery is arranged only after the deferred Murabahah price is fully settled.",
     )
+
+
+class SedaniaCancelRequest(BaseModel):
+    reason: str = Field(
+        ...,
+        description="incorrect_customer_details | incorrect_financing_amount | incorrect_profit_rate | others",
+    )
+    other_reason: str | None = None

@@ -55,11 +55,11 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
     dealTitle: "How a deal uses it",
     dealSteps: [
       "Pick the customer and the flow: approved wakeel, or AAOIFI Rasul.",
-      "Run financing. The engine buys airtime, seals qabd hukmi, then sells on Murabahah.",
+      "Run financing. The engine submits one As-Sidq trade, then waits for the callback (mock completes immediately).",
       "On the approved flow, muqassah set-off comes before the CASA credit.",
       "If the customer keeps the commodity, settle the deferred price, then arrange physical delivery.",
     ],
-    note: "Documents on this desk are Purchase Order, Commodity Invoice, Delivery Order, and Trading e-Cert.",
+    note: "Live As-Sidq uses POST /api/v1/trading plus our /sedania/callback. Mock stays the default until SEDANIA_MODE=live.",
   },
   "/ops": {
     title: "What Ops Monitor is",
@@ -447,7 +447,7 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
     intro: "AS SIDQ trades telecommunication airtime. SASC sells independently. The bank pays CASA.",
     steps: [
       { n: 1, title: "Enter the CMP", body: "Customer signs the financing contract and may appoint SASC." },
-      { n: 2, title: "Trade on AS SIDQ", body: "Bank buys, takes qabd hukmi, then sells on Murabahah." },
+      { n: 2, title: "Trade on AS SIDQ", body: "One Trading API submit. Callback (or status poll) returns cert A/B/C." },
       { n: 3, title: "Pay or deliver", body: "Muqassah then CASA, or physical delivery after full settlement." },
     ],
     note: "SACCO execute still pays on the SACCO CBS. This desk is the bank CASA path.",

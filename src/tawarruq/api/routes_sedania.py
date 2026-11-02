@@ -1,6 +1,8 @@
 """Bank Commodity Murabahah financing through Sedania AS SIDQ."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from typing import Any
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -10,12 +12,18 @@ from tawarruq.enums import ExecutionPath
 from tawarruq.models.execution import TawarruqExecution
 from tawarruq.models.institution import Institution
 from tawarruq.schemas.sedania import (
+    SedaniaCancelRequest,
     SedaniaDocumentIndex,
     SedaniaFinancingRead,
     SedaniaFinancingRequest,
     SedaniaPhysicalDeliveryRequest,
 )
 from tawarruq.services.application_service import get_or_create_default_institution
+from tawarruq.services.as_sidq_service import (
+    apply_as_sidq_callback,
+    refresh_as_sidq_status,
+    request_as_sidq_cancel,
+)
 from tawarruq.services.sedania_financing_service import (
     arrange_physical_delivery,
     execute_bank_financing,
@@ -136,11 +144,31 @@ def download_sedania_document(
     request: Request,
     db: Session = Depends(get_db),
 ) -> Response:
+    import base64
+    import json
+
+    from tawarruq.services.sedania_document_service import normalize_sedania_doc_kind
+
     execution = _load_execution(db, request, execution_id)
     try:
-        html, filename = render_execution_document(db, execution, kind)
+        resolved = normalize_sedania_doc_kind(kind)
+        html, filename = render_execution_document(db, execution, resolved)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    for vault in execution.certificates or []:
+        if vault.kind != resolved:
+            continue
+        try:
+            payload = json.loads(vault.payload_json)
+        except json.JSONDecodeError:
+            payload = {}
+        raw = payload.get("pdf_base64")
+        if raw:
+            return Response(
+                content=base64.b64decode(raw),
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'inline; filename="{vault.certificate_number}.pdf"'},
+            )
     return Response(
         content=html,
         media_type="text/html",
@@ -162,6 +190,56 @@ def settle_sedania_financing(
     require_write_ops(request)
     execution = _load_execution(db, request, execution_id)
     mark_repayment_settled(db, execution)
+    db.commit()
+    db.refresh(execution)
+    return to_financing_read(db, execution)
+
+
+@router.post(
+    "/sedania/callback",
+    tags=["Sedania Financing"],
+    summary="As-Sidq Trading Callback API (platform → Buruuj)",
+)
+def sedania_trading_callback(payload: dict[str, Any] = Body(...), db: Session = Depends(get_db)) -> dict:
+    execution = apply_as_sidq_callback(db, payload)
+    db.commit()
+    return {"ok": True, "ref_no": execution.as_sidq_ref_no, "status": execution.status}
+
+
+@router.post(
+    "/sedania/financing/{execution_id}/status",
+    response_model=SedaniaFinancingRead,
+    tags=["Sedania Financing"],
+    summary="Poll As-Sidq Get Trading Status for this facility",
+)
+def refresh_sedania_financing(
+    execution_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> SedaniaFinancingRead:
+    require_write_ops(request)
+    execution = _load_execution(db, request, execution_id)
+    refresh_as_sidq_status(db, execution)
+    db.commit()
+    db.refresh(execution)
+    return to_financing_read(db, execution)
+
+
+@router.post(
+    "/sedania/financing/{execution_id}/cancel",
+    response_model=SedaniaFinancingRead,
+    tags=["Sedania Financing"],
+    summary="Submit an As-Sidq cancellation request",
+)
+def cancel_sedania_financing(
+    execution_id: str,
+    payload: SedaniaCancelRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> SedaniaFinancingRead:
+    require_write_ops(request)
+    execution = _load_execution(db, request, execution_id)
+    request_as_sidq_cancel(db, execution, reason=payload.reason, other_reason=payload.other_reason)
     db.commit()
     db.refresh(execution)
     return to_financing_read(db, execution)

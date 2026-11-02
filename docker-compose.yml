@@ -30,6 +30,11 @@ services:
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - RESEND_FROM=${RESEND_FROM:-ops@buruujfintech.com}
       - PORTAL_PUBLIC_URL=${PORTAL_PUBLIC_URL:-https://ops.buruujfintech.com}
+      - SEDANIA_MODE=${SEDANIA_MODE:-mock}
+      - SEDANIA_API_URL=${SEDANIA_API_URL:-}
+      - SEDANIA_API_KEY=${SEDANIA_API_KEY:-}
+      - SEDANIA_PRODUCT_CODE=${SEDANIA_PRODUCT_CODE:-P01}
+      - SEDANIA_INSTITUTION_PREFIX=${SEDANIA_INSTITUTION_PREFIX:-BTI}
     volumes:
       - ./data:/app/data
     depends_on:

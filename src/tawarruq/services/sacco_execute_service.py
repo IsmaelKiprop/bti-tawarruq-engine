@@ -28,12 +28,6 @@ from tawarruq.enums import (
     WebhookEvent,
 )
 from tawarruq.integrations.base import IntegrationError
-from tawarruq.integrations.sedania.client import (
-    SedaniaLiquidateRequest,
-    SedaniaMurabahahRequest,
-    SedaniaPurchaseRequest,
-    get_sedania_client,
-)
 from tawarruq.models.application import FinancingApplication
 from tawarruq.models.customer import Customer
 from tawarruq.models.disbursement import Disbursement
@@ -299,176 +293,9 @@ def execute_sacco_facility(
             application_id=application.id,
         )
 
-        client = get_sedania_client()
-        execution.status = ExecutionStatus.SPOT_PURCHASE
-        purchase = client.purchase(
-            SedaniaPurchaseRequest(
-                execution_id=execution.id,
-                institution_code=institution.code,
-                customer_id=customer.id,
-                amount=amount,
-                currency=payload.currency,
-            )
-        )
-        if not purchase.success or not purchase.batch_id or not purchase.certificate_number:
-            raise IntegrationError(purchase.error_message or "Sedania purchase did not return a batch")
-        execution.sedania_batch_id = purchase.batch_id
-        from tawarruq.services.sedania_financing_service import store_trade_pack
+        from tawarruq.services.as_sidq_service import submit_as_sidq_trade
 
-        store_trade_pack(db, execution, institution=institution, customer=customer)
-        store_certificate(
-            db,
-            execution_id=execution.id,
-            institution_id=institution.id,
-            application_id=application.id,
-            kind=VaultCertificateKind.PURCHASE,
-            certificate_number=purchase.certificate_number,
-            source="sedania",
-            payload=purchase.payload,
-            source_url=purchase.certificate_url,
-            serial_numbers=purchase.serial_numbers,
-            batch_id=purchase.batch_id,
-        )
-        log_shariah_step(
-            db,
-            step_id=ShariahStepId.CONSTRUCTIVE_POSSESSION,
-            entity_type="tawarruq_execution",
-            entity_id=execution.id,
-            actor_from="sedania",
-            actor_to="sacco",
-            payload={
-                "batch_id": purchase.batch_id,
-                "serial_numbers": purchase.serial_numbers,
-                "certificate_number": purchase.certificate_number,
-            },
-            asset_ref_no=purchase.batch_id,
-            institution_id=institution.id,
-            application_id=application.id,
-        )
-
-        execution.status = ExecutionStatus.DEFERRED_MURABAHAH
-        murabahah = client.transfer_murabahah(
-            SedaniaMurabahahRequest(
-                execution_id=execution.id,
-                batch_id=purchase.batch_id,
-                cost_price=amount,
-                profit_amount=profit,
-                deferred_price=deferred,
-                currency=payload.currency,
-                customer_id=customer.id,
-                tenor_months=payload.tenor,
-            )
-        )
-        if not murabahah.success or not murabahah.certificate_number:
-            raise IntegrationError(murabahah.error_message or "Sedania Murabahah transfer failed")
-        store_certificate(
-            db,
-            execution_id=execution.id,
-            institution_id=institution.id,
-            application_id=application.id,
-            kind=VaultCertificateKind.MURABAHAH,
-            certificate_number=murabahah.certificate_number,
-            source="sedania",
-            payload=murabahah.payload,
-            source_url=murabahah.certificate_url,
-            batch_id=purchase.batch_id,
-        )
-        log_shariah_step(
-            db,
-            step_id=ShariahStepId.OWNERSHIP_TRANSFER,
-            entity_type="tawarruq_execution",
-            entity_id=execution.id,
-            actor_from="sacco",
-            actor_to="customer",
-            payload={
-                "cost_price": str(amount),
-                "profit_amount": str(profit),
-                "deferred_price": str(deferred),
-                "certificate_number": murabahah.certificate_number,
-            },
-            asset_ref_no=purchase.batch_id,
-            institution_id=institution.id,
-            application_id=application.id,
-        )
-
-        execution.status = ExecutionStatus.SPOT_LIQUIDATION
-        liquidation = client.liquidate(
-            SedaniaLiquidateRequest(
-                execution_id=execution.id,
-                batch_id=purchase.batch_id,
-                spot_amount=amount,
-                currency=payload.currency,
-                wakeel_ref=wakalah.token_id,
-                agency_role=SedaniaAgencyRole.WAKEEL,
-                agency_party=SASC_PARTY_CODE,
-            )
-        )
-        if not liquidation.success or not liquidation.certificate_number:
-            raise IntegrationError(liquidation.error_message or "Sedania liquidation failed")
-        store_certificate(
-            db,
-            execution_id=execution.id,
-            institution_id=institution.id,
-            application_id=application.id,
-            kind=VaultCertificateKind.LIQUIDATION,
-            certificate_number=liquidation.certificate_number,
-            source="sedania",
-            payload=liquidation.payload,
-            source_url=liquidation.certificate_url,
-            batch_id=purchase.batch_id,
-        )
-        log_shariah_step(
-            db,
-            step_id=ShariahStepId.THIRD_PARTY_LIQUIDATION,
-            entity_type="tawarruq_execution",
-            entity_id=execution.id,
-            actor_from="bti",
-            actor_to="sedania",
-            payload={"certificate_number": liquidation.certificate_number, "independent_buyer": True},
-            asset_ref_no=purchase.batch_id,
-            institution_id=institution.id,
-            application_id=application.id,
-        )
-
-        _assert_no_bti_cash(db, application.id)
-
-        execution.status = ExecutionStatus.WEBHOOK_RELAY
-        db.flush()
-        read = to_execute_read(db, execution)
-        callback_body = {
-            "execution_id": execution.id,
-            "application_id": application.id,
-            "customer_id": customer.id,
-            "amount": str(amount),
-            "currency": payload.currency,
-            "status": ExecutionStatus.READY_FOR_SACCO_DISBURSEMENT,
-            "cash_disbursement": "sacco_cbs",
-            "certificates": {
-                "purchase": read.certificates.get("purchase").url if read.certificates.get("purchase") else None,
-                "murabahah": read.certificates.get("murabahah").url if read.certificates.get("murabahah") else None,
-                "liquidation": read.certificates.get("liquidation").url if read.certificates.get("liquidation") else None,
-            },
-            "certificate_urls": [
-                read.certificates["purchase"].url if read.certificates.get("purchase") else None,
-                read.certificates["murabahah"].url if read.certificates.get("murabahah") else None,
-                read.certificates["liquidation"].url if read.certificates.get("liquidation") else None,
-            ],
-        }
-        if _relay_certificates(db, execution, callback_body):
-            execution.callback_delivered_at = datetime.now(UTC)
-
-        execution.status = ExecutionStatus.READY_FOR_SACCO_DISBURSEMENT
-        execution.completed_at = datetime.now(UTC)
-        application.status = ApplicationStatus.COMPLETED
-        application.current_phase = TransactionPhase.COMPLETED
-        log_audit(
-            db,
-            entity_type="tawarruq_execution",
-            entity_id=execution.id,
-            actor=AuditActor.SYSTEM,
-            action="tawarruq.execute.ready_for_sacco_disbursement",
-            details="Certificates vaulted. Principal cash remains with the SACCO CBS.",
-        )
+        submit_as_sidq_trade(db, execution, institution, customer)
         db.flush()
         return execution
     except (IntegrationError, HTTPException, ValueError) as exc:
@@ -480,3 +307,48 @@ def execute_sacco_facility(
         if isinstance(exc, HTTPException):
             raise
         raise HTTPException(status_code=502, detail=execution.error_message) from exc
+
+
+def finish_sacco_after_asidq(db: Session, execution: TawarruqExecution) -> TawarruqExecution:
+    application = execution.application
+    _assert_no_bti_cash(db, execution.application_id)
+    execution.status = ExecutionStatus.WEBHOOK_RELAY
+    db.flush()
+    read = to_execute_read(db, execution)
+    callback_body = {
+        "execution_id": execution.id,
+        "application_id": execution.application_id,
+        "customer_id": execution.customer_id,
+        "amount": str(_money(execution.amount)),
+        "currency": execution.currency,
+        "status": ExecutionStatus.READY_FOR_SACCO_DISBURSEMENT,
+        "cash_disbursement": "sacco_cbs",
+        "as_sidq_ref_no": execution.as_sidq_ref_no,
+        "certificates": {
+            "purchase": read.certificates.get("purchase").url if read.certificates.get("purchase") else None,
+            "murabahah": read.certificates.get("murabahah").url if read.certificates.get("murabahah") else None,
+            "liquidation": read.certificates.get("liquidation").url if read.certificates.get("liquidation") else None,
+        },
+        "certificate_urls": [
+            read.certificates["purchase"].url if read.certificates.get("purchase") else None,
+            read.certificates["murabahah"].url if read.certificates.get("murabahah") else None,
+            read.certificates["liquidation"].url if read.certificates.get("liquidation") else None,
+        ],
+    }
+    if _relay_certificates(db, execution, callback_body):
+        execution.callback_delivered_at = datetime.now(UTC)
+    execution.status = ExecutionStatus.READY_FOR_SACCO_DISBURSEMENT
+    execution.completed_at = datetime.now(UTC)
+    if application:
+        application.status = ApplicationStatus.COMPLETED
+        application.current_phase = TransactionPhase.COMPLETED
+    log_audit(
+        db,
+        entity_type="tawarruq_execution",
+        entity_id=execution.id,
+        actor=AuditActor.SYSTEM,
+        action="tawarruq.execute.ready_for_sacco_disbursement",
+        details="Certificates vaulted. Principal cash remains with the SACCO CBS.",
+    )
+    db.flush()
+    return execution

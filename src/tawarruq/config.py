@@ -120,6 +120,12 @@ class Settings(BaseSettings):
     sedania_mode: str = "mock"
     sedania_api_url: str = ""
     sedania_api_key: str = ""
+    sedania_product_code: str = "P01"
+    sedania_institution_prefix: str = "BTI"
+    sedania_sign_requests: bool = False
+    sedania_encrypt_customer: bool = False
+    sedania_aes_key: str = ""
+    sedania_callback_token: str = ""
     sedania_default_profit_rate: float = 0.05
     hmac_max_skew_seconds: int = 300
     legal_token_signing_key: str = ""

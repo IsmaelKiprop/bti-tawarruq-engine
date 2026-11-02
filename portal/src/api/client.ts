@@ -333,6 +333,14 @@ export interface SedaniaFinancing {
   physical_delivery_status: string | null;
   physical_delivery_notified_at: string | null;
   repayment_settled_at: string | null;
+  as_sidq_ref_no: string | null;
+  as_sidq_status_code: number | null;
+  as_sidq_status_desc: string | null;
+  as_sidq_trading_status: string | null;
+  as_sidq_cert_url: string | null;
+  as_sidq_cert_a: string | null;
+  as_sidq_cert_b: string | null;
+  as_sidq_cert_c: string | null;
   steps: SedaniaStep[];
 }
 
@@ -1933,6 +1941,21 @@ export const api = {
     request<SedaniaFinancing>(`/sedania/financing/${executionId}/physical-delivery`, {
       method: "POST",
       body: JSON.stringify({ mark_settled: markSettled }),
+    }),
+
+  refreshSedaniaFinancing: (executionId: string) =>
+    request<SedaniaFinancing>(`/sedania/financing/${executionId}/status`, { method: "POST" }),
+
+  cancelSedaniaFinancing: (
+    executionId: string,
+    body: {
+      reason: "incorrect_customer_details" | "incorrect_financing_amount" | "incorrect_profit_rate" | "others";
+      other_reason?: string;
+    },
+  ) =>
+    request<SedaniaFinancing>(`/sedania/financing/${executionId}/cancel`, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
 };
 

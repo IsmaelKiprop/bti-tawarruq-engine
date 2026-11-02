@@ -66,6 +66,7 @@ def test_sacco_execute_stamps_trades_and_vaults_without_bti_cash(client):
             "tenor": 6,
             "institution_id": sacco["id"],
             "client_request_id": "MWALIMU-REQ-001",
+            "profit_rate": 0.05,
         },
     )
     assert resp.status_code == 200, resp.text
@@ -82,7 +83,7 @@ def test_sacco_execute_stamps_trades_and_vaults_without_bti_cash(client):
         assert kind in body["certificates"]
         assert body["certificates"][kind]["url"]
     assert body["certificates"]["purchase"]["serial_numbers"]
-    assert body["certificates"]["purchase"]["source"] == "sedania"
+    assert body["certificates"]["purchase"]["source"] == "as_sidq"
 
     purchase_url = body["certificates"]["purchase"]["url"]
     vault_resp = client.get(purchase_url.replace("http://127.0.0.1:8000", ""))
@@ -90,7 +91,7 @@ def test_sacco_execute_stamps_trades_and_vaults_without_bti_cash(client):
     vault = vault_resp.json()
     assert vault["kind"] == "purchase"
     assert vault["payload"]["qabd_hukmi"] is True
-    assert "Certificate 1" in vault["payload"]["title"]
+    assert "Certificate A" in vault["payload"]["title"] or "Leg 1" in vault["payload"]["title"]
 
     db = SessionLocal()
     try:
@@ -107,6 +108,7 @@ def test_sacco_execute_stamps_trades_and_vaults_without_bti_cash(client):
             "tenor": 6,
             "institution_id": sacco["id"],
             "client_request_id": "MWALIMU-REQ-001",
+            "profit_rate": 0.05,
         },
     )
     assert replay.status_code == 200
