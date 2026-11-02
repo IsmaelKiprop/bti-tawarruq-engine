@@ -297,8 +297,10 @@ def _send_smtp(
     body: str,
     attachments: list[tuple[str, bytes, str]] | None = None,
 ) -> bool:
-    settings = get_settings()
-    if not settings.smtp_host:
+    from tawarruq.services.platform_settings_service import effective_smtp
+
+    host, port, user, password, from_addr = effective_smtp()
+    if not host:
         return False
     try:
         import smtplib
@@ -316,12 +318,12 @@ def _send_smtp(
         else:
             msg = MIMEText(body, "plain")
         msg["Subject"] = subject
-        msg["From"] = settings.smtp_from
+        msg["From"] = from_addr
         msg["To"] = to_email
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-            if settings.smtp_user:
+        with smtplib.SMTP(host, port) as server:
+            if user:
                 server.starttls()
-                server.login(settings.smtp_user, settings.smtp_password)
+                server.login(user, password)
             server.send_message(msg)
         return True
     except Exception:

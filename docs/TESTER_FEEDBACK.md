@@ -2,9 +2,9 @@
 
 Record of the FI tester / BTI Ops suggestions that are now in the engine and portal. Companion guides stay the source of truth for fields and runbooks: [FI_ONBOARDING.md](FI_ONBOARDING.md), [USERS_ACCESS_CONTROLS.md](USERS_ACCESS_CONTROLS.md), [SHARIAH_AUDIT.md](SHARIAH_AUDIT.md).
 
-Kenya Ops was **not** rewritten. FI desk work is a new **Origination** page (`/origination`). SMTP invite mail is still later.
+Kenya Ops was **not** rewritten. FI desk work is a new **Origination** page (`/origination`). SMTP can wait until the mailbox exists.
 
-Schema: Alembic **`016`** (API key reveal), **`017`** (`fi_desk_cases`), **`018`** (platform settings), **`019`** (charge percents), **`020`** (provider rate history). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **Shariah officers** land on Shariah Audit: BTI-wide sees all FIs, FI-bound sees their tenant. **FI Ops** sees Origination, All Workflows, Settings, plus the live Tawarruq desk (`/malaysia` or `/sedania`) when Super Admin’s latest provider matches. **FI Approver** sees Origination, Approval Queue, Settings. No Dashboard, Shariah, or Ops Monitor. Kenya / Approvals / Billing stay hidden.
+Schema: Alembic **`016`** (API key reveal), **`017`** (`fi_desk_cases`), **`018`** (platform settings), **`019`** (charge percents), **`020`** (provider rate history), **`021`** (provider book + per-FI provider + SMTP). `TESTER_SHELL` stays on. Super Admin / BTI Ops / FI Admin see Dashboard, Onboard FI, Institutions, Users, Settings, Ops Monitor, Audit, Origination, and Shariah. **Shariah officers** land on Shariah Audit: BTI-wide sees all FIs, FI-bound sees their tenant. **FI Ops** sees Origination, All Workflows, Settings, plus the live Tawarruq desk (`/malaysia` or `/sedania`) for that FI’s assigned provider. **FI Approver** sees Origination, Approval Queue, Settings. No Dashboard, Shariah, or Ops Monitor. Kenya / Approvals / Billing stay hidden. Super Admin keeps both desks and the provider book.
 
 ---
 
@@ -135,7 +135,7 @@ $env:PYTHONPATH="src"
 python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py tests/test_invite_matrix.py tests/test_ops_login.py::test_shariah_officer_audit_at_bti_and_fi_level tests/test_ops_login.py::test_super_admin_sets_sedania_charge_pct -q
 ```
 
-`test_fi_desk.py`: profit required on create, approve attaches journey and writes the offer mail file, Murabaha waits for customer accept (no desk OTP), proceeds account/branch, clearing seals **Complete**, Shariah audit rows, reveal requires a session password. Charge test: default 0.0035 / 0.004, second Sedania rate replaces the first, Bursa sets `active_provider`, password + OTP to save, FI Admin 403.
+`test_fi_desk.py`: profit required on create, approve attaches journey and writes the offer mail file, Murabaha waits for customer accept (no desk OTP), proceeds account/branch, clearing seals **Complete**, Shariah audit rows, reveal requires a session password. Charge test: default 0.0035 / 0.004, provider book seeds Sedania + Bursa, Super Admin assigns one provider per FI, FI `/ops/auth/me` follows that assignment, SMTP stays off until host is saved, password + OTP to save, FI Admin 403.
 
 ---
 
@@ -143,9 +143,9 @@ python -m pytest tests/test_fi_desk.py tests/test_institution_onboarding.py test
 
 | Item | Notes |
 |------|--------|
-| SMTP for invites and journey mail | Temp passwords and journey copies still file locally when `SMTP_HOST` is unset |
+| Live SMTP mailbox | Super Admin can save host/user/from on Settings. Leave host blank until the mailbox exists; invites and journey copies file locally |
 | Rewrite of Kenya Ops | Origination is a separate desk |
-| Lift tester shell | Kenya, Approvals, Billing stay hidden until `TESTER_SHELL` is false. Bursa / Sedania show when Super Admin’s latest provider matches |
+| Lift tester shell | Kenya, Approvals, Billing stay hidden until `TESTER_SHELL` is false. Bursa / Sedania follow the FI’s assigned provider |
 | Keys issued before `016` | No `reveal_key`; Super Admin re-issues |
 | KYC file store / live PEP | Unchanged: text references and status enums |
 

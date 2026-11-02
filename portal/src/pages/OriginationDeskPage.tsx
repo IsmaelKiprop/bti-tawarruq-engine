@@ -61,6 +61,7 @@ export function OriginationDeskPage() {
   const [form, setForm] = useState({
     customer_name: "",
     customer_email: "",
+    customer_phone: "",
     approved_facility_amount: "",
     assigned_approver_id: "",
     profit: "",
@@ -87,6 +88,7 @@ export function OriginationDeskPage() {
       ...current,
       customer_name: orig.customer_name || current.customer_name,
       customer_email: orig.customer_email || current.customer_email,
+      customer_phone: orig.customer_phone || current.customer_phone,
       approved_facility_amount: orig.approved_facility_amount || current.approved_facility_amount,
       profit: orig.profit || current.profit,
       assigned_approver_id: next.assigned_approver_id || current.assigned_approver_id,
@@ -149,7 +151,7 @@ export function OriginationDeskPage() {
         <div>
           <h2 className="m-0 text-lg font-semibold">Origination</h2>
           <p className="muted m-0 mt-1 text-sm">
-            {isApprover ? "Approve assigned facility requests." : "Name, email, amount, profit, then FI Approver. The rest runs after the customer accepts."}
+            {isApprover ? "Approve assigned facility requests." : "Name, email, phone, amount, profit, then FI Approver. The rest runs after the customer accepts."}
           </p>
         </div>
         {canWrite ? (
@@ -201,6 +203,9 @@ export function OriginationDeskPage() {
           </Field>
           <Field label="Customer email">
             <input className={fieldClass} type="email" value={form.customer_email} disabled={originationLocked} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} />
+          </Field>
+          <Field label="Customer phone">
+            <input className={fieldClass} type="tel" value={form.customer_phone} disabled={originationLocked} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} />
           </Field>
           <Field label="Approved facility amount">
             <input
@@ -278,6 +283,7 @@ export function OriginationDeskPage() {
                     api.createDeskCase({
                       customer_name: form.customer_name,
                       customer_email: form.customer_email,
+                      customer_phone: form.customer_phone,
                       approved_facility_amount: form.approved_facility_amount,
                       facility_product_type: "Airtime",
                       assigned_approver_id: form.assigned_approver_id,

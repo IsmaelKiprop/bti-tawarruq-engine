@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type InstitutionCharge } from "../api/client";
+import { api, type InstitutionCharge, type ProviderBook } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Alert, PageShell } from "../components/PageShell";
 import { useTheme } from "../hooks/useTheme";
@@ -50,10 +50,14 @@ export function SettingsPage() {
     [user?.role],
   );
   const isSuperAdmin = user?.role === "platform_admin";
-  const [sedaniaCharge, setSedaniaCharge] = useState("0.0035");
-  const [activeProvider, setActiveProvider] = useState("sedania");
-  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [providers, setProviders] = useState<ProviderBook[]>([]);
   const [fiCharges, setFiCharges] = useState<InstitutionCharge[]>([]);
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("587");
+  const [smtpUser, setSmtpUser] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [smtpFrom, setSmtpFrom] = useState("");
+  const [smtpConfigured, setSmtpConfigured] = useState(false);
   const [chargePassword, setChargePassword] = useState("");
   const [chargeOtp, setChargeOtp] = useState("");
   const [chargeDevCode, setChargeDevCode] = useState("");
@@ -61,16 +65,22 @@ export function SettingsPage() {
   const [platformMsg, setPlatformMsg] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
 
   function applyPlatform(settings: {
-    active_provider?: string;
-    sedania_charge_pct: number;
-    rate_pct?: number;
-    effective_from?: string | null;
+    providers?: ProviderBook[];
     institutions?: InstitutionCharge[];
+    smtp_configured?: boolean;
+    smtp_host?: string;
+    smtp_port?: number;
+    smtp_user?: string;
+    smtp_from?: string;
   }) {
-    setActiveProvider(settings.active_provider || "sedania");
-    setSedaniaCharge(String(settings.rate_pct ?? settings.sedania_charge_pct));
-    setEffectiveFrom(settings.effective_from ? settings.effective_from.slice(0, 16) : "");
+    setProviders(settings.providers || []);
     setFiCharges(settings.institutions || []);
+    setSmtpConfigured(Boolean(settings.smtp_configured));
+    setSmtpHost(settings.smtp_host || "");
+    setSmtpPort(String(settings.smtp_port || 587));
+    setSmtpUser(settings.smtp_user || "");
+    setSmtpFrom(settings.smtp_from || "");
+    setSmtpPassword("");
   }
 
   useEffect(() => {
@@ -120,13 +130,36 @@ export function SettingsPage() {
 
   async function onSavePlatform(event: FormEvent) {
     event.preventDefault();
-    const sedania = parsePct(sedaniaCharge, "Sedania % Charge");
-    if (sedania == null) return;
-    const institutions: { id: string; bti_charge_pct: number }[] = [];
+    const book: { code: string; company_name: string; country: string; website: string; rate_pct: number }[] = [];
+    for (const item of providers) {
+      if (!item.company_name.trim()) {
+        setPlatformMsg({ tone: "error", text: `Company name is required for ${item.code}.` });
+        return;
+      }
+      const pct = parsePct(String(item.rate_pct), `Rate for ${item.company_name || item.code}`);
+      if (pct == null) return;
+      book.push({
+        code: item.code,
+        company_name: item.company_name.trim(),
+        country: String(item.country || "").trim(),
+        website: String(item.website || "").trim(),
+        rate_pct: pct,
+      });
+    }
+    const institutions: { id: string; bti_charge_pct: number; tawarruq_provider: string }[] = [];
     for (const item of fiCharges) {
       const pct = parsePct(String(item.bti_charge_pct), `BTI % Charge for ${item.name}`);
       if (pct == null) return;
-      institutions.push({ id: item.id, bti_charge_pct: pct });
+      institutions.push({
+        id: item.id,
+        bti_charge_pct: pct,
+        tawarruq_provider: item.tawarruq_provider || "sedania",
+      });
+    }
+    const port = Number(smtpPort);
+    if (!Number.isFinite(port) || port < 1 || port > 65535) {
+      setPlatformMsg({ tone: "error", text: "SMTP port must be between 1 and 65535." });
+      return;
     }
     if (!chargePassword.trim() || !chargeOtp.trim()) {
       setPlatformMsg({ tone: "error", text: "Password and OTP are required to save charges." });
@@ -138,17 +171,19 @@ export function SettingsPage() {
       const saved = await api.updatePlatformSettings({
         password: chargePassword,
         otp_code: chargeOtp.trim(),
-        active_provider: activeProvider,
-        rate_pct: sedania,
-        sedania_charge_pct: sedania,
-        effective_from: effectiveFrom || undefined,
+        providers: book,
         institutions,
+        smtp_host: smtpHost.trim(),
+        smtp_port: port,
+        smtp_user: smtpUser.trim(),
+        smtp_password: smtpPassword.trim() || undefined,
+        smtp_from: smtpFrom.trim(),
       });
       applyPlatform(saved);
       setChargePassword("");
       setChargeOtp("");
       setChargeDevCode("");
-      setPlatformMsg({ tone: "success", text: "Charges saved." });
+      setPlatformMsg({ tone: "success", text: "Provider book, FI assignment, and SMTP saved." });
     } catch (err) {
       setPlatformMsg({ tone: "error", text: err instanceof Error ? err.message : "Could not save platform settings" });
     } finally {
@@ -328,46 +363,68 @@ export function SettingsPage() {
           <section className="panel settings-panel settings-span">
             <div className="panel-header">
               <div>
-                <h2>Tawarruq provider</h2>
-                <p className="muted">Super Admin only. Password and OTP required to save. History keeps prior rates; this form shows the latest.</p>
+                <h2>Tawarruq providers</h2>
+                <p className="muted">Super Admin book. One provider per FI. Password and OTP required to save.</p>
               </div>
             </div>
             {platformMsg ? <Alert tone={platformMsg.tone}>{platformMsg.text}</Alert> : null}
             <form className="settings-form settings-form-wide" onSubmit={onSavePlatform}>
-              <label>
-                Tawarruq Provider
-                <select value={activeProvider} onChange={(e) => setActiveProvider(e.target.value)} required>
-                  <option value="sedania">Sedania</option>
-                  <option value="bursa">Bursa</option>
-                </select>
-              </label>
-              <label>
-                Rate
-                <div className="settings-pct">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.0001"
-                    inputMode="decimal"
-                    value={sedaniaCharge}
-                    onChange={(e) => setSedaniaCharge(e.target.value)}
-                    required
-                  />
-                  <span>%</span>
+              {providers.map((item) => (
+                <div key={item.code} className="rounded-sm border border-border p-3 grid gap-3 sm:grid-cols-2">
+                  <strong className="sm:col-span-2">{item.code === "bursa" ? "Bursa" : "Sedania"}</strong>
+                  <label>
+                    Company name
+                    <input
+                      value={item.company_name}
+                      onChange={(e) =>
+                        setProviders((rows) => rows.map((row) => (row.code === item.code ? { ...row, company_name: e.target.value } : row)))
+                      }
+                      required
+                    />
+                  </label>
+                  <label>
+                    Country of operation
+                    <input
+                      value={item.country}
+                      onChange={(e) =>
+                        setProviders((rows) => rows.map((row) => (row.code === item.code ? { ...row, country: e.target.value } : row)))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Website
+                    <input
+                      type="url"
+                      value={item.website}
+                      onChange={(e) =>
+                        setProviders((rows) => rows.map((row) => (row.code === item.code ? { ...row, website: e.target.value } : row)))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Rate
+                    <div className="settings-pct">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.0001"
+                        inputMode="decimal"
+                        value={String(item.rate_pct)}
+                        onChange={(e) =>
+                          setProviders((rows) => rows.map((row) => (row.code === item.code ? { ...row, rate_pct: e.target.value } : row)))
+                        }
+                        required
+                      />
+                      <span>%</span>
+                    </div>
+                  </label>
                 </div>
-              </label>
-              <label>
-                Timestamp start
-                <input type="datetime-local" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
-              </label>
-              <p className="meta" style={{ margin: 0 }}>
-                Latest active rate only. Default Sedania 0.0035%. Switching to Bursa opens the Malaysia desk when Sedania is not ready.
-              </p>
+              ))}
               <div>
-                <strong>BTI % Charge</strong>
+                <strong>FI assignment</strong>
                 <p className="meta" style={{ margin: "0.15rem 0 0.45rem" }}>
-                  Unique per FI. Default 0.004% for books already onboarded. New FIs set this on Onboard → Commercial.
+                  Each FI uses one Tawarruq deal at a time. BTI % Charge stays unique per FI.
                 </p>
                 {fiCharges.length === 0 ? (
                   <p className="meta">No institutions yet.</p>
@@ -377,6 +434,7 @@ export function SettingsPage() {
                       <thead>
                         <tr>
                           <th>Institution</th>
+                          <th>Tawarruq provider</th>
                           <th>BTI % Charge</th>
                         </tr>
                       </thead>
@@ -386,6 +444,22 @@ export function SettingsPage() {
                             <td>
                               <div className="font-medium">{item.name}</div>
                               <div className="meta">{item.code}</div>
+                            </td>
+                            <td>
+                              <select
+                                value={item.tawarruq_provider || "sedania"}
+                                onChange={(e) =>
+                                  setFiCharges((rows) =>
+                                    rows.map((row) => (row.id === item.id ? { ...row, tawarruq_provider: e.target.value } : row)),
+                                  )
+                                }
+                              >
+                                {providers.map((provider) => (
+                                  <option key={provider.code} value={provider.code}>
+                                    {provider.company_name || provider.code}
+                                  </option>
+                                ))}
+                              </select>
                             </td>
                             <td>
                               <div className="settings-pct">
@@ -411,6 +485,35 @@ export function SettingsPage() {
                     </table>
                   </div>
                 )}
+              </div>
+              <div>
+                <strong>Customer email (SMTP)</strong>
+                <p className="meta" style={{ margin: "0.15rem 0 0.45rem" }}>
+                  Leave host blank until the mailbox exists. Journey mail files locally until SMTP is set.
+                  {smtpConfigured ? " SMTP is configured." : " SMTP is off."}
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label>
+                    Host
+                    <input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="mail.your-domain.com" />
+                  </label>
+                  <label>
+                    Port
+                    <input type="number" min={1} max={65535} value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} />
+                  </label>
+                  <label>
+                    Username
+                    <input value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} />
+                  </label>
+                  <label>
+                    Password
+                    <input type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} placeholder="Leave blank to keep current" />
+                  </label>
+                  <label className="sm:col-span-2">
+                    From address
+                    <input type="email" value={smtpFrom} onChange={(e) => setSmtpFrom(e.target.value)} placeholder="ops@your-domain.com" />
+                  </label>
+                </div>
               </div>
               <label>
                 Password
@@ -439,7 +542,7 @@ export function SettingsPage() {
               </label>
               {chargeDevCode ? <p className="meta">Tester code: {chargeDevCode}</p> : null}
               <button type="submit" className="btn btn-primary" disabled={platformBusy}>
-                {platformBusy ? "Saving…" : "Save charges"}
+                {platformBusy ? "Saving…" : "Save provider book"}
               </button>
             </form>
           </section>

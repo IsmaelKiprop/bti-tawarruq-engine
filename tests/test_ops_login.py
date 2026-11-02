@@ -383,6 +383,57 @@ def test_super_admin_sets_sedania_charge_pct():
     assert restored.status_code == 200, restored.text
     assert restored.json()["active_provider"] == "sedania"
     assert restored.json()["rate_pct"] == 0.0035
+    assert {item["code"] for item in restored.json()["providers"]} == {"sedania", "bursa"}
+    assert restored.json()["smtp_configured"] is False
+
+    assigned = client.patch(
+        "/api/v1/ops/settings",
+        headers=admin_headers,
+        json={
+            "password": password,
+            "otp_code": _otp(),
+            "institutions": [{"id": institution_id, "bti_charge_pct": 0.004, "tawarruq_provider": "bursa"}],
+            "providers": [
+                {
+                    "code": "bursa",
+                    "company_name": "Bursa Malaysia Islamic Services Sdn. Bhd.",
+                    "country": "Malaysia",
+                    "website": "https://www.bursamalaysia.com",
+                    "rate_pct": 0.01,
+                }
+            ],
+        },
+    )
+    assert assigned.status_code == 200, assigned.text
+    assert any(item["id"] == institution_id and item["tawarruq_provider"] == "bursa" for item in assigned.json()["institutions"])
+    bursa_book = next(item for item in assigned.json()["providers"] if item["code"] == "bursa")
+    assert bursa_book["company_name"].startswith("Bursa")
+    assert bursa_book["country"] == "Malaysia"
+    assert bursa_book["website"].startswith("https://")
+    assert bursa_book["rate_pct"] == 0.01
+
+    smtp = client.patch(
+        "/api/v1/ops/settings",
+        headers=admin_headers,
+        json={
+            "password": password,
+            "otp_code": _otp(),
+            "smtp_host": "mail.example.test",
+            "smtp_port": 587,
+            "smtp_user": "ops@example.test",
+            "smtp_from": "ops@example.test",
+        },
+    )
+    assert smtp.status_code == 200, smtp.text
+    assert smtp.json()["smtp_configured"] is True
+    assert smtp.json()["smtp_host"] == "mail.example.test"
+    cleared = client.patch(
+        "/api/v1/ops/settings",
+        headers=admin_headers,
+        json={"password": password, "otp_code": _otp(), "smtp_host": ""},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["smtp_configured"] is False
 
     too_high = client.patch(
         "/api/v1/ops/settings",
@@ -399,6 +450,9 @@ def test_super_admin_sets_sedania_charge_pct():
     assert blocked.status_code == 403
     blocked_patch = client.patch("/api/v1/ops/settings", headers=fi_headers, json={"sedania_charge_pct": 8})
     assert blocked_patch.status_code == 403
+    fi_me = client.get("/api/v1/ops/auth/me", headers=fi_headers)
+    assert fi_me.status_code == 200, fi_me.text
+    assert fi_me.json()["active_provider"] == "bursa"
 
 
 def test_invite_user_emails_temp_password_via_smtp(monkeypatch, tmp_path):

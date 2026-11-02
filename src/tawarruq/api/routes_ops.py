@@ -416,9 +416,8 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
             employee_number = user.employee_number
             phone = user.phone
             office = user.office
-    from tawarruq.services.platform_settings_service import latest_active_rate
+    from tawarruq.services.platform_settings_service import resolve_active_provider
 
-    provider_row = latest_active_rate(db)
     return AuthContextRead(
         auth_enabled=settings.auth_enabled,
         authenticated=role is not None or not settings.auth_enabled,
@@ -444,7 +443,7 @@ def auth_me(request: Request, db: Session = Depends(get_db)) -> AuthContextRead:
         deployment_mode=settings.normalized_mode,
         enabled_products=settings.products,
         brand_name=settings.brand_display,
-        active_provider=provider_row.provider if provider_row else "sedania",
+        active_provider=resolve_active_provider(db, institution_id),
     )
 
 
@@ -813,11 +812,29 @@ class InstitutionChargeRead(BaseModel):
     name: str
     code: str
     bti_charge_pct: float
+    tawarruq_provider: str = "sedania"
 
 
 class InstitutionChargeWrite(BaseModel):
     id: str
     bti_charge_pct: float = Field(..., ge=0, le=100)
+    tawarruq_provider: str | None = None
+
+
+class ProviderBookRead(BaseModel):
+    code: str
+    company_name: str
+    country: str = ""
+    website: str = ""
+    rate_pct: float
+
+
+class ProviderBookWrite(BaseModel):
+    code: str
+    company_name: str
+    country: str = ""
+    website: str = ""
+    rate_pct: float = Field(..., ge=0, le=100)
 
 
 class PlatformSettingsRead(BaseModel):
@@ -825,7 +842,13 @@ class PlatformSettingsRead(BaseModel):
     sedania_charge_pct: float = Field(..., ge=0, le=100, description="Latest provider rate, 0 to 100")
     rate_pct: float = Field(..., ge=0, le=100, description="Latest active rate for the selected provider")
     effective_from: str | None = None
+    providers: list[ProviderBookRead] = Field(default_factory=list)
     institutions: list[InstitutionChargeRead] = Field(default_factory=list)
+    smtp_configured: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_from: str = ""
 
 
 class PlatformSettingsUpdate(BaseModel):
@@ -835,7 +858,13 @@ class PlatformSettingsUpdate(BaseModel):
     sedania_charge_pct: float | None = Field(None, ge=0, le=100, description="Rate % Charge, 0 to 100")
     rate_pct: float | None = Field(None, ge=0, le=100, description="Rate % Charge, 0 to 100")
     effective_from: str | None = None
+    providers: list[ProviderBookWrite] | None = None
     institutions: list[InstitutionChargeWrite] | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
 
 
 class PlatformSettingsChallenge(BaseModel):
@@ -867,11 +896,14 @@ def _serialize_platform_settings(db: Session) -> PlatformSettingsRead:
         get_or_create_platform_settings,
         latest_active_rate,
         list_institution_charges,
+        list_providers,
+        smtp_is_configured,
     )
 
-    get_or_create_platform_settings(db)
+    settings_row = get_or_create_platform_settings(db)
     current = latest_active_rate(db) or ensure_default_provider_rate(db)
     books = list_institution_charges(db)
+    providers = list_providers(db)
     rate = float(current.rate_pct)
     started = current.effective_from.isoformat() if current.effective_from else None
     return PlatformSettingsRead(
@@ -879,15 +911,31 @@ def _serialize_platform_settings(db: Session) -> PlatformSettingsRead:
         sedania_charge_pct=rate,
         rate_pct=rate,
         effective_from=started,
+        providers=[
+            ProviderBookRead(
+                code=item.code,
+                company_name=item.company_name,
+                country=item.country or "",
+                website=item.website or "",
+                rate_pct=float(item.rate_pct),
+            )
+            for item in providers
+        ],
         institutions=[
             InstitutionChargeRead(
                 id=item.id,
                 name=item.name,
                 code=item.code,
                 bti_charge_pct=float(item.bti_charge_pct if item.bti_charge_pct is not None else 0.004),
+                tawarruq_provider=getattr(item, "tawarruq_provider", None) or "sedania",
             )
             for item in books
         ],
+        smtp_configured=smtp_is_configured(db),
+        smtp_host=settings_row.smtp_host or "",
+        smtp_port=int(settings_row.smtp_port or 587),
+        smtp_user=settings_row.smtp_user or "",
+        smtp_from=settings_row.smtp_from or "",
     )
 
 
@@ -933,7 +981,13 @@ def update_platform_settings(
     payload: PlatformSettingsUpdate, request: Request, db: Session = Depends(get_db)
 ) -> PlatformSettingsRead:
     require_platform_admin(request)
-    from tawarruq.services.platform_settings_service import record_provider_rate, update_institution_bti_charge
+    from tawarruq.services.platform_settings_service import (
+        record_provider_rate,
+        update_institution_bti_charge,
+        update_institution_provider,
+        update_smtp_settings,
+        upsert_provider,
+    )
     from tawarruq.services.rbac import auth_is_enabled
 
     actor_id = getattr(request.state, "ops_user_id", None)
@@ -955,11 +1009,36 @@ def update_platform_settings(
                 effective_from=payload.effective_from,
                 actor_id=actor_id,
             )
+        for item in payload.providers or []:
+            upsert_provider(
+                db,
+                code=item.code,
+                company_name=item.company_name,
+                country=item.country,
+                website=item.website,
+                rate_pct=item.rate_pct,
+                actor_id=actor_id,
+            )
         for item in payload.institutions or []:
             institution = db.get(Institution, item.id)
             if not institution:
                 raise HTTPException(status_code=404, detail=f"Institution not found: {item.id}")
             update_institution_bti_charge(db, institution, item.bti_charge_pct)
+            if item.tawarruq_provider:
+                update_institution_provider(db, institution, item.tawarruq_provider)
+        if any(
+            value is not None
+            for value in (payload.smtp_host, payload.smtp_port, payload.smtp_user, payload.smtp_password, payload.smtp_from)
+        ):
+            update_smtp_settings(
+                db,
+                smtp_host=payload.smtp_host,
+                smtp_port=payload.smtp_port,
+                smtp_user=payload.smtp_user,
+                smtp_password=payload.smtp_password,
+                smtp_from=payload.smtp_from,
+                actor_id=actor_id,
+            )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     log_audit(

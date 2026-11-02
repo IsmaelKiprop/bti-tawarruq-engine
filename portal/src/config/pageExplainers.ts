@@ -219,7 +219,7 @@ export const PAGE_EXPLAINS: Record<string, PageExplainContent> = {
       "Enable authenticator or email MFA; privileged Buruuj roles should keep MFA on.",
       "Use role workspace links for institutions, users, billing, and ops when your permissions allow.",
     ],
-    note: "Super Admin sets the live Tawarruq provider (Sedania or Bursa), that provider’s rate, the start timestamp, and per-FI BTI % Charge. Saving needs password and OTP. The latest active row is the live desk. Process explainers for desks live under Documentation.",
+    note: "Super Admin keeps the Tawarruq provider book (company, country, rate, website) and assigns one provider per FI. SMTP can wait until the mailbox exists; journey mail files locally until then. Saving needs password and OTP.",
   },
   "/integrations": {
     title: "What integrations are",
@@ -429,7 +429,7 @@ export const HOW_IT_WORKS: Record<string, HowItWorksContent> = {
       { n: 1, title: "Profile & HR", body: "Update name, job title, department, employee number, phone, and office." },
       { n: 2, title: "Security", body: "Change password and enable MFA (authenticator or email)." },
       { n: 3, title: "Shortcuts", body: "Open desks your role can reach without hunting the sidebar." },
-      { n: 4, title: "Platform (Super Admin)", body: "Pick Sedania or Bursa, set that provider’s rate and start time, plus per-FI BTI % Charge (default 0.004%). Saving needs password and OTP. Latest active row is the live desk." },
+      { n: 4, title: "Platform (Super Admin)", body: "Edit the Sedania and Bursa book, assign one provider per FI, and optionally save SMTP. Leave SMTP host blank until the mailbox exists. Saving needs password and OTP." },
     ],
   },
   "/integrations": {

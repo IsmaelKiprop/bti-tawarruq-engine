@@ -657,6 +657,15 @@ export interface InstitutionCharge {
   name: string;
   code: string;
   bti_charge_pct: number | string;
+  tawarruq_provider?: string;
+}
+
+export interface ProviderBook {
+  code: string;
+  company_name: string;
+  country: string;
+  website: string;
+  rate_pct: number | string;
 }
 
 export interface PlatformSettings {
@@ -664,7 +673,13 @@ export interface PlatformSettings {
   sedania_charge_pct: number;
   rate_pct?: number;
   effective_from?: string | null;
+  providers?: ProviderBook[];
   institutions?: InstitutionCharge[];
+  smtp_configured?: boolean;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_from?: string;
 }
 
 export interface OpsUserRecord {
@@ -1335,7 +1350,13 @@ export const api = {
     active_provider?: string;
     rate_pct?: number;
     effective_from?: string | null;
-    institutions?: { id: string; bti_charge_pct: number }[];
+    institutions?: { id: string; bti_charge_pct: number; tawarruq_provider?: string }[];
+    providers?: { code: string; company_name: string; country: string; website: string; rate_pct: number }[];
+    smtp_host?: string;
+    smtp_port?: number;
+    smtp_user?: string;
+    smtp_password?: string;
+    smtp_from?: string;
   }) => request<PlatformSettings>("/ops/settings", { method: "PATCH", body: JSON.stringify(body) }),
 
   getAuthContext: () => request<AuthContext>("/ops/auth/me"),

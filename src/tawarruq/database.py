@@ -48,6 +48,7 @@ def init_db() -> None:
     _ensure_api_key_reveal_column()
     _ensure_platform_settings_table()
     _ensure_provider_rates_table()
+    _ensure_provider_book_and_smtp()
     register_append_only_guards()
 
 
@@ -398,6 +399,7 @@ def _ensure_control_schema() -> None:
             "approval_limit_amount": "ALTER TABLE institutions ADD COLUMN approval_limit_amount NUMERIC(18, 2)",
             "billing_fee_bps": "ALTER TABLE institutions ADD COLUMN billing_fee_bps INTEGER DEFAULT 25 NOT NULL",
             "bti_charge_pct": "ALTER TABLE institutions ADD COLUMN bti_charge_pct NUMERIC(10, 6) DEFAULT 0.004 NOT NULL",
+            "tawarruq_provider": "ALTER TABLE institutions ADD COLUMN tawarruq_provider VARCHAR(16) DEFAULT 'sedania' NOT NULL",
         },
     )
     add_missing(
@@ -549,3 +551,45 @@ def _ensure_provider_rates_table() -> None:
             )
         )
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tawarruq_provider_rates_provider ON tawarruq_provider_rates (provider)"))
+
+
+def _ensure_provider_book_and_smtp() -> None:
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    dt = "DATETIME" if settings.is_sqlite else "TIMESTAMP"
+    bool_true = "1" if settings.is_sqlite else "TRUE"
+    if "tawarruq_providers" not in tables:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"""
+                    CREATE TABLE tawarruq_providers (
+                        id VARCHAR(36) NOT NULL PRIMARY KEY,
+                        code VARCHAR(16) NOT NULL,
+                        company_name VARCHAR(256) NOT NULL,
+                        country VARCHAR(128) NOT NULL DEFAULT '',
+                        website VARCHAR(512) NOT NULL DEFAULT '',
+                        rate_pct NUMERIC(10, 6) NOT NULL,
+                        active BOOLEAN NOT NULL DEFAULT {bool_true},
+                        created_at {dt},
+                        updated_at {dt}
+                    )
+                    """
+                )
+            )
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_tawarruq_providers_code ON tawarruq_providers (code)"))
+    if "platform_settings" in tables:
+        existing = {col["name"] for col in inspector.get_columns("platform_settings")}
+        additions = {
+            "smtp_host": "ALTER TABLE platform_settings ADD COLUMN smtp_host VARCHAR(256) DEFAULT '' NOT NULL",
+            "smtp_port": "ALTER TABLE platform_settings ADD COLUMN smtp_port INTEGER DEFAULT 587 NOT NULL",
+            "smtp_user": "ALTER TABLE platform_settings ADD COLUMN smtp_user VARCHAR(256) DEFAULT '' NOT NULL",
+            "smtp_password": "ALTER TABLE platform_settings ADD COLUMN smtp_password VARCHAR(256) DEFAULT '' NOT NULL",
+            "smtp_from": "ALTER TABLE platform_settings ADD COLUMN smtp_from VARCHAR(256) DEFAULT '' NOT NULL",
+        }
+        with engine.begin() as conn:
+            for name, ddl in additions.items():
+                if name not in existing:
+                    conn.execute(text(ddl))

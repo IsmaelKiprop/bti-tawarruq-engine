@@ -124,6 +124,7 @@ def test_desk_steps_journey_and_shariah_scope(tmp_path, monkeypatch):
         json={
             "customer_name": "Amina Otieno",
             "customer_email": "amina@example.com",
+            "customer_phone": "+254700000001",
             "approved_facility_amount": "10000",
             "assigned_approver_id": ids["approver_id"],
             "profit": "500",

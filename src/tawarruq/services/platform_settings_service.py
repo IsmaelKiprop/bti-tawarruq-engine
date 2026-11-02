@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from tawarruq.models.institution import Institution
 from tawarruq.models.platform_settings import PLATFORM_SETTINGS_ID, PlatformSettings
-from tawarruq.models.provider_rate import PROVIDERS, TawarruqProviderRate
+from tawarruq.models.provider_rate import PROVIDERS, TawarruqProvider, TawarruqProviderRate
 
 CHARGE_PLACES = Decimal("0.000001")
 RATE_PLACES = Decimal("0.00000001")
@@ -17,6 +17,22 @@ DEFAULT_SEDANIA_CHARGE_PCT = Decimal("0.0035")
 DEFAULT_BTI_CHARGE_PCT = Decimal("0.004")
 DEFAULT_PROVIDER = "sedania"
 LEGACY_SEDANIA_DEFAULT = Decimal("5.00")
+DEFAULT_PROVIDER_BOOK = (
+    {
+        "code": "sedania",
+        "company_name": "SEDANIA As Salam Capital Sdn. Bhd.",
+        "country": "Malaysia",
+        "website": "https://www.sedaniagroup.com",
+        "rate_pct": DEFAULT_SEDANIA_CHARGE_PCT,
+    },
+    {
+        "code": "bursa",
+        "company_name": "Bursa Malaysia Islamic Services Sdn. Bhd.",
+        "country": "Malaysia",
+        "website": "https://www.bursamalaysia.com",
+        "rate_pct": DEFAULT_SEDANIA_CHARGE_PCT,
+    },
+)
 
 
 def parse_charge_pct(value: Decimal | float | str | None, *, field: str) -> Decimal:
@@ -100,6 +116,141 @@ def latest_active_rate(db: Session, provider: str | None = None) -> TawarruqProv
 def active_provider(db: Session) -> str:
     row = latest_active_rate(db) or ensure_default_provider_rate(db)
     return row.provider
+
+
+def resolve_active_provider(db: Session, institution_id: str | None = None) -> str:
+    if institution_id:
+        institution = db.get(Institution, institution_id)
+        if institution and getattr(institution, "tawarruq_provider", None):
+            try:
+                return parse_provider(institution.tawarruq_provider)
+            except ValueError:
+                pass
+    return active_provider(db)
+
+
+def ensure_default_providers(db: Session) -> list[TawarruqProvider]:
+    rows: list[TawarruqProvider] = []
+    for seed in DEFAULT_PROVIDER_BOOK:
+        row = db.query(TawarruqProvider).filter(TawarruqProvider.code == seed["code"]).first()
+        if not row:
+            rate = latest_active_rate(db, seed["code"])
+            row = TawarruqProvider(
+                code=seed["code"],
+                company_name=seed["company_name"],
+                country=seed["country"],
+                website=seed["website"],
+                rate_pct=rate.rate_pct if rate else parse_charge_pct(seed["rate_pct"], field="Rate"),
+                active=True,
+            )
+            db.add(row)
+            db.flush()
+        rows.append(row)
+    return rows
+
+
+def list_providers(db: Session) -> list[TawarruqProvider]:
+    ensure_default_providers(db)
+    return db.query(TawarruqProvider).order_by(TawarruqProvider.code.asc()).all()
+
+
+def upsert_provider(
+    db: Session,
+    *,
+    code: str,
+    company_name: str,
+    country: str,
+    website: str,
+    rate_pct: Decimal | float | str,
+    actor_id: str | None,
+) -> TawarruqProvider:
+    chosen = parse_provider(code)
+    name = (company_name or "").strip()
+    if not name:
+        raise ValueError("Provider company name is required")
+    row = db.query(TawarruqProvider).filter(TawarruqProvider.code == chosen).first()
+    if not row:
+        row = TawarruqProvider(code=chosen, company_name=name, country="", website="", rate_pct=DEFAULT_SEDANIA_CHARGE_PCT)
+        db.add(row)
+    row.company_name = name
+    row.country = (country or "").strip()
+    row.website = (website or "").strip()
+    row.rate_pct = parse_charge_pct(rate_pct, field="Rate")
+    row.active = True
+    db.flush()
+    record_provider_rate(db, provider=chosen, rate_pct=row.rate_pct, effective_from=None, actor_id=actor_id)
+    return row
+
+
+def update_institution_provider(db: Session, institution: Institution, provider: str) -> Institution:
+    institution.tawarruq_provider = parse_provider(provider)
+    db.flush()
+    return institution
+
+
+def smtp_is_configured(db: Session | None = None) -> bool:
+    host, _port, _user, _password, _from_addr = effective_smtp(db)
+    return bool(host)
+
+
+def effective_smtp(db: Session | None = None) -> tuple[str, int, str, str, str]:
+    from tawarruq.config import get_settings
+
+    settings = get_settings()
+    host = (settings.smtp_host or "").strip()
+    port = settings.smtp_port or 587
+    user = settings.smtp_user or ""
+    password = settings.smtp_password or ""
+    from_addr = settings.smtp_from or "amanah@bti-fintech.local"
+    row = None
+    if db is not None:
+        row = get_or_create_platform_settings(db)
+    else:
+        try:
+            from tawarruq.database import SessionLocal
+
+            session = SessionLocal()
+            try:
+                row = get_or_create_platform_settings(session)
+            finally:
+                session.close()
+        except Exception:
+            row = None
+    if row and (row.smtp_host or "").strip():
+        host = row.smtp_host.strip()
+        port = int(row.smtp_port or 587)
+        user = row.smtp_user or ""
+        password = row.smtp_password or ""
+        from_addr = (row.smtp_from or "").strip() or from_addr
+    return host, port, user, password, from_addr
+
+
+def update_smtp_settings(
+    db: Session,
+    *,
+    smtp_host: str | None,
+    smtp_port: int | None,
+    smtp_user: str | None,
+    smtp_password: str | None,
+    smtp_from: str | None,
+    actor_id: str | None,
+) -> PlatformSettings:
+    row = get_or_create_platform_settings(db)
+    if smtp_host is not None:
+        row.smtp_host = smtp_host.strip()
+    if smtp_port is not None:
+        if smtp_port < 1 or smtp_port > 65535:
+            raise ValueError("SMTP port must be between 1 and 65535")
+        row.smtp_port = smtp_port
+    if smtp_user is not None:
+        row.smtp_user = smtp_user.strip()
+    if smtp_password:
+        row.smtp_password = smtp_password
+    if smtp_from is not None:
+        row.smtp_from = smtp_from.strip()
+    row.updated_by_id = actor_id
+    db.flush()
+    return row
 
 
 def sedania_profit_rate(db: Session) -> Decimal:

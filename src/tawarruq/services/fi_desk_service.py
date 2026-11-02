@@ -195,11 +195,13 @@ def create_case(
         raise HTTPException(status_code=400, detail="Pick an FI Approver on this institution")
     name = str(payload.customer_name or "").strip()
     email = str(payload.customer_email or "").strip()
+    phone = str(payload.customer_phone or "").strip()
     missing = [
         field
         for field, value in (
             ("customer_name", name),
             ("customer_email", email),
+            ("customer_phone", phone),
             ("approved_facility_amount", payload.approved_facility_amount),
             ("profit", payload.profit),
         )
@@ -227,10 +229,10 @@ def create_case(
     fields.pop("assigned_approver_id", None)
     fields["customer_name"] = name
     fields["customer_email"] = email
+    fields["customer_phone"] = phone
     fields["facility_product_type"] = "Airtime"
     fields["document_type"] = str(payload.document_type or "").strip() or "Not provided"
     fields["customer_id"] = str(payload.customer_id or "").strip() or email
-    fields["customer_phone"] = str(payload.customer_phone or "").strip()
     body = {
         "origination": fields,
         "initiate": {
