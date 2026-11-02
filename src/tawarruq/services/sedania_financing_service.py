@@ -538,14 +538,17 @@ def execute_bank_financing(
         try:
             from tawarruq.services.customer_notify_service import notify_step_ready
 
+            from tawarruq.services.certificate_mail_service import sedania_pack_attachments
+
             notify_step_ready(
                 db,
                 email=customer.email,
                 customer_name=customer.full_name,
                 customer_ref=application.customer_ref,
                 title="Sedania documents ready",
-                body_line="Trade documents are ready on your customer journey.",
+                body_line="Trade documents and certificates are attached.",
                 institution_name=institution.name,
+                attachments=sedania_pack_attachments(db, execution),
             )
         except Exception:
             pass

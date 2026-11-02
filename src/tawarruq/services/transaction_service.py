@@ -275,14 +275,27 @@ def create_disbursement(
     try:
         from tawarruq.services.customer_notify_service import notify_step_ready
 
+        from tawarruq.services.certificate_mail_service import tawarruq_certificate_attachments
+
+        cert = getattr(disbursement, "tawarruq_certificate", None)
+        attachments = []
+        if cert:
+            attachments = tawarruq_certificate_attachments(
+                certificate_number=cert.certificate_number,
+                customer_name=application.customer_name or "Customer",
+                institution_name=application.institution.name if application.institution else "Institution",
+                amount=str(disbursement.amount),
+                currency=application.currency or "",
+            )
         notify_step_ready(
             db,
             email=getattr(application.customer, "email", None),
             customer_name=application.customer_name,
             customer_ref=application.customer_ref,
             title="Bursa disbursement",
-            body_line="Funds have been disbursed. Open your journey for the Tawarruq certificate.",
+            body_line="Funds have been disbursed. The Tawarruq certificate is attached.",
             institution_name=application.institution.name if application.institution else None,
+            attachments=attachments,
         )
     except Exception:
         pass
@@ -368,14 +381,22 @@ def confirm_manual_leg(
 
         application = db.get(FinancingApplication, transaction.application_id)
         if application:
+            from tawarruq.models.certificate import Certificate
+            from tawarruq.services.certificate_mail_service import bsas_certificate_attachments
+
+            attachments = []
+            recorded = db.query(Certificate).filter(Certificate.leg_id == leg.id).first()
+            if recorded:
+                attachments = bsas_certificate_attachments(recorded)
             notify_step_ready(
                 db,
                 email=getattr(application.customer, "email", None),
                 customer_name=application.customer_name,
                 customer_ref=application.customer_ref,
                 title=f"Bursa certificate leg {int(leg_number)}",
-                body_line=f"E-certificate {certificate_number} has been recorded for this facility.",
+                body_line=f"E-certificate {certificate_number} is attached.",
                 institution_name=application.institution.name if application.institution else None,
+                attachments=attachments,
             )
     except Exception:
         pass

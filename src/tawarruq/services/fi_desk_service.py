@@ -682,6 +682,7 @@ def _attach_customer_journey(db: Session, case: FiDeskCase) -> None:
 
 
 def _notify_desk_step(db: Session, case: FiDeskCase, step: int) -> None:
+    from tawarruq.services.certificate_mail_service import desk_step_attachments
     from tawarruq.services.customer_notify_service import notify_step_ready
 
     payload = _parse_payload(case.payload_json)
@@ -706,4 +707,5 @@ def _notify_desk_step(db: Session, case: FiDeskCase, step: int) -> None:
         title=title,
         body_line=line,
         institution_name=case.institution.name if case.institution else None,
+        attachments=desk_step_attachments(case, step),
     )

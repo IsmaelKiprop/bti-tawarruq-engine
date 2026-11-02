@@ -237,6 +237,7 @@ def notify_step_ready(
     title: str,
     body_line: str,
     institution_name: str | None = None,
+    attachments: list[tuple[str, bytes, str]] | None = None,
 ) -> OfferNotifyResult:
     """Email the customer a later-step update with their journey link. Never raises."""
     journey_url = customer_journey_url(customer_ref)
@@ -253,9 +254,11 @@ def notify_step_ready(
     name = (customer_name or "Customer").strip() or "Customer"
     house = (institution_name or "Your institution").strip() or "Your institution"
     subject = f"{title} {customer_ref}"
+    attached = "The certificate is attached.\n\n" if attachments else ""
     body = (
         f"Hello {name},\n\n"
         f"{house}: {body_line}\n\n"
+        f"{attached}"
         "Open your customer journey to review and continue:\n"
         f"{journey_url}\n\n"
         "Buruuj Tawarruq Engine\n"
@@ -266,9 +269,11 @@ def notify_step_ready(
         path = settings.customer_mail_path / f"{customer_ref}-{title.lower().replace(' ', '-')}.txt"
         path.write_text(f"To: {to_email}\nSubject: {subject}\n\n{body}", encoding="utf-8")
         mail_path = str(path)
+        for filename, content, _ctype in attachments or []:
+            (settings.customer_mail_path / filename).write_bytes(content)
     except Exception:
         logger.exception("Could not write customer step mail file")
-    smtp_sent = _send_smtp(to_email, subject, body)
+    smtp_sent = _send_smtp(to_email, subject, body, attachments)
     status = "sent" if smtp_sent else "filed"
     try:
         log_audit(
