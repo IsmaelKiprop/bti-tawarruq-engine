@@ -52,12 +52,6 @@ export function SettingsPage() {
   const isSuperAdmin = user?.role === "platform_admin";
   const [providers, setProviders] = useState<ProviderBook[]>([]);
   const [fiCharges, setFiCharges] = useState<InstitutionCharge[]>([]);
-  const [smtpHost, setSmtpHost] = useState("");
-  const [smtpPort, setSmtpPort] = useState("587");
-  const [smtpUser, setSmtpUser] = useState("");
-  const [smtpPassword, setSmtpPassword] = useState("");
-  const [smtpFrom, setSmtpFrom] = useState("");
-  const [smtpConfigured, setSmtpConfigured] = useState(false);
   const [mailProvider, setMailProvider] = useState("none");
   const [chargePassword, setChargePassword] = useState("");
   const [chargeOtp, setChargeOtp] = useState("");
@@ -70,20 +64,10 @@ export function SettingsPage() {
     institutions?: InstitutionCharge[];
     smtp_configured?: boolean;
     mail_provider?: string;
-    smtp_host?: string;
-    smtp_port?: number;
-    smtp_user?: string;
-    smtp_from?: string;
   }) {
     setProviders(settings.providers || []);
     setFiCharges(settings.institutions || []);
-    setSmtpConfigured(Boolean(settings.smtp_configured));
     setMailProvider(settings.mail_provider || (settings.smtp_configured ? "smtp" : "none"));
-    setSmtpHost(settings.smtp_host || "");
-    setSmtpPort(String(settings.smtp_port || 587));
-    setSmtpUser(settings.smtp_user || "");
-    setSmtpFrom(settings.smtp_from || "");
-    setSmtpPassword("");
   }
 
   useEffect(() => {
@@ -121,7 +105,7 @@ export function SettingsPage() {
         text: sent.smtp_sent
           ? `OTP sent to ${sent.email || "your email"}.`
           : sent.dev_code
-            ? `OTP (SMTP off): ${sent.dev_code}`
+            ? `OTP: ${sent.dev_code}`
             : "OTP issued.",
       });
     } catch (err) {
@@ -159,11 +143,6 @@ export function SettingsPage() {
         tawarruq_provider: item.tawarruq_provider || "sedania",
       });
     }
-    const port = Number(smtpPort);
-    if (!Number.isFinite(port) || port < 1 || port > 65535) {
-      setPlatformMsg({ tone: "error", text: "SMTP port must be between 1 and 65535." });
-      return;
-    }
     if (!chargePassword.trim() || !chargeOtp.trim()) {
       setPlatformMsg({ tone: "error", text: "Password and OTP are required to save charges." });
       return;
@@ -176,17 +155,12 @@ export function SettingsPage() {
         otp_code: chargeOtp.trim(),
         providers: book,
         institutions,
-        smtp_host: smtpHost.trim(),
-        smtp_port: port,
-        smtp_user: smtpUser.trim(),
-        smtp_password: smtpPassword.trim() || undefined,
-        smtp_from: smtpFrom.trim(),
       });
       applyPlatform(saved);
       setChargePassword("");
       setChargeOtp("");
       setChargeDevCode("");
-      setPlatformMsg({ tone: "success", text: "Provider book, FI assignment, and SMTP saved." });
+      setPlatformMsg({ tone: "success", text: "Provider book and FI assignment saved." });
     } catch (err) {
       setPlatformMsg({ tone: "error", text: err instanceof Error ? err.message : "Could not save platform settings" });
     } finally {
@@ -489,38 +463,10 @@ export function SettingsPage() {
                   </div>
                 )}
               </div>
-              <div>
-                <strong>Customer email</strong>
-                <p className="meta" style={{ margin: "0.15rem 0 0.45rem" }}>
-                  {mailProvider === "resend"
-                    ? "Sending via Resend from ops@buruujfintech.com. SMTP host can stay blank."
-                    : smtpConfigured
-                      ? "SMTP is configured."
-                      : "Leave SMTP host blank. Journey mail files locally until Resend or SMTP is set."}
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label>
-                    Host
-                    <input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="mail.your-domain.com" />
-                  </label>
-                  <label>
-                    Port
-                    <input type="number" min={1} max={65535} value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} />
-                  </label>
-                  <label>
-                    Username
-                    <input value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} />
-                  </label>
-                  <label>
-                    Password
-                    <input type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} placeholder="Leave blank to keep current" />
-                  </label>
-                  <label className="sm:col-span-2">
-                    From address
-                    <input type="email" value={smtpFrom} onChange={(e) => setSmtpFrom(e.target.value)} placeholder="ops@your-domain.com" />
-                  </label>
-                </div>
-              </div>
+              <p className="meta">
+                Customer email is sent with Resend from ops@buruujfintech.com
+                {mailProvider === "resend" ? "." : " when the server key is set."}
+              </p>
               <label>
                 Password
                 <input
