@@ -500,7 +500,7 @@ def get_ops_user(user_id: str, request: Request, db: Session = Depends(get_db)) 
     "/ops/auth/users",
     response_model=OpsUserCreatedRead,
     status_code=201,
-    summary="Invite ops user: create account, email temporary password via SMTP",
+    summary="Invite ops user: create account, email temporary password via Resend",
     description=(
         "Requires manage_credentials. Super Admin may invite platform_admin, institution_admin, "
         "bti_ops, shariah_officer, bti_finance, reconciler (not institution_ops or fi_approver). "
@@ -549,12 +549,13 @@ def create_ops_user_endpoint(
     delivery = deliver_ops_invite_email(user=user, temporary_password=temp, kind="invite")
     if delivery["smtp_sent"]:
         invite_message = (
-            f"Invite emailed to {user.email}. They must change the temporary password on first login."
+            f"Invite emailed to {user.email} via Resend (ops@buruujfintech.com). "
+            "They must change the temporary password on first login."
         )
     else:
         invite_message = (
-            "User created. SMTP did not send — copy the temporary password below and share it securely. "
-            "They must change it on first login."
+            "User created. Resend did not send — set RESEND_API_KEY on the API host, or copy the "
+            "temporary password below and share it securely. They must change it on first login."
         )
 
     base = OpsUserRead.model_validate(user)
@@ -645,7 +646,7 @@ def update_ops_user_endpoint(
 @router.post(
     "/ops/auth/users/{user_id}/reset-password",
     response_model=OpsUserPasswordResetRead,
-    summary="Issue a new temporary password, email it via SMTP, force change on next login",
+    summary="Issue a new temporary password, email it via Resend, force change on next login",
 )
 def reset_ops_user_password(
     user_id: str,
@@ -668,11 +669,12 @@ def reset_ops_user_password(
     delivery = deliver_ops_invite_email(user=target, temporary_password=temp, kind="reset")
     if delivery["smtp_sent"]:
         invite_message = (
-            f"Temporary password emailed to {target.email}. They must change it on next login."
+            f"Temporary password emailed to {target.email} via Resend. They must change it on next login."
         )
     else:
         invite_message = (
-            "Password reset. SMTP did not send — copy the temporary password below and share it securely."
+            "Password reset. Resend did not send — set RESEND_API_KEY on the API host, or copy the "
+            "temporary password below and share it securely."
         )
 
     return OpsUserPasswordResetRead(

@@ -178,7 +178,7 @@ export function UsersPage() {
       {message ? <Alert tone="success">{message}</Alert> : null}
       {tempPassword ? (
         <Alert tone="info">
-          Temporary password (SMTP did not send — share once): <strong>{tempPassword}</strong>
+          Temporary password (Resend did not send — share once): <strong>{tempPassword}</strong>
         </Alert>
       ) : null}
 

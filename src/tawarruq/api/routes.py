@@ -67,11 +67,24 @@ COMMON_ERRORS: dict = {
     description="Returns all registered banks/Saccos. Each institution has a default BSAS backend mode.",
 )
 def list_institutions(request: Request, db: Session = Depends(get_db)) -> list[InstitutionRead]:
+    from tawarruq.models.institution_profile import InstitutionProfile
+
     query = db.query(Institution)
     scoped = tenant_filter_institution_id(request, None)
     if scoped:
         query = query.filter(Institution.id == scoped)
-    return query.order_by(Institution.name).all()
+    rows = query.order_by(Institution.name).all()
+    profiles = {
+        p.institution_id: p
+        for p in db.query(InstitutionProfile).filter(InstitutionProfile.institution_id.in_([r.id for r in rows])).all()
+    } if rows else {}
+    out: list[InstitutionRead] = []
+    for row in rows:
+        body = InstitutionRead.model_validate(row).model_dump()
+        profile = profiles.get(row.id)
+        body["primary_regulator"] = profile.primary_regulator if profile else None
+        out.append(InstitutionRead(**body))
+    return out
 
 
 @router.post(

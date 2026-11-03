@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
 from tawarruq.api.deps import require_approve_txn, require_tenant_access, require_write_ops, tenant_filter_institution_id
@@ -145,6 +146,39 @@ def complete_desk_step(
     fi_desk_service.complete_step(db, case, step, payload.fields, actor=actor)
     db.commit()
     return fi_desk_service.serialize_case(_load_case(db, case_id, request))
+
+
+@router.post("/cases/{case_id}/certificates/resend")
+def resend_desk_certificates(case_id: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    require_write_ops(request)
+    case = _load_case(db, case_id, request)
+    result = fi_desk_service.resend_certificates(db, case)
+    db.commit()
+    return result
+
+
+@router.get("/cases/{case_id}/certificates/{kind}")
+def download_desk_certificate(case_id: str, kind: str, request: Request, db: Session = Depends(get_db)) -> Response:
+    from tawarruq.services.certificate_mail_service import desk_certificate_attachment
+    from tawarruq.services.offer_letter_service import desk_offer_letter_attachment
+
+    if not (has_permission(request, "write_ops") or has_permission(request, "approve_txn") or has_permission(request, "view_shariah")):
+        raise HTTPException(status_code=403, detail="Desk access denied")
+    case = _load_case(db, case_id, request)
+    key = str(kind or "").strip().lower()
+    attachment = None
+    if key in {"offer", "letter-of-offer", "letter_of_offer", "agency", "agency-agreement", "agency_agreement"}:
+        attachment = desk_offer_letter_attachment(case, key)
+    if not attachment:
+        attachment = desk_certificate_attachment(case, kind)
+    if not attachment:
+        raise HTTPException(status_code=404, detail=f"No certificate for kind {kind}")
+    filename, content, media_type = attachment
+    return Response(
+        content=content,
+        media_type=media_type or "application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/cases/{case_id}/otp/send", response_model=DeskOtpSendRead)

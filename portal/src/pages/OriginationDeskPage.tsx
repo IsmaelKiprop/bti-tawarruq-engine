@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type DeskApprover, type DeskCase } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -7,6 +7,13 @@ import { deskPayload, deskStatusLabel } from "../config/fiDesk";
 
 const fieldClass = "rounded-sm border border-border bg-surface-elevated px-2.5 py-1.5 text-sm text-foreground";
 const labelClass = "flex min-w-0 flex-col gap-1 text-xs uppercase tracking-wide text-muted";
+
+const COMMODITIES = ["Airtime", "Palm Oil", "Other"] as const;
+const OFFER_MODES = [
+  { value: "automated", label: "Automated (email customer)" },
+  { value: "physical", label: "Physical (skip email accept)" },
+  { value: "both", label: "Both" },
+] as const;
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -29,6 +36,14 @@ function ReadRow({ label, value }: { label: string; value?: string | null }) {
 function asRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object") return {};
   return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, item == null ? "" : String(item)]));
+}
+
+type WorkflowRow = { at?: string; title?: string; detail?: string; certificates?: string[] };
+
+function workflowFrom(record: DeskCase | null): WorkflowRow[] {
+  const raw = record?.payload?.workflow;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((row) => row && typeof row === "object") as WorkflowRow[];
 }
 
 function journeyFrom(record: DeskCase | null): { ref: string; url: string; accepted: boolean } | null {
@@ -65,6 +80,9 @@ export function OriginationDeskPage() {
     approved_facility_amount: "",
     assigned_approver_id: "",
     profit: "",
+    facility_product_type: "Airtime",
+    term_months: "12",
+    offer_letter_mode: "automated",
   });
 
   async function loadList() {
@@ -91,6 +109,9 @@ export function OriginationDeskPage() {
       customer_phone: orig.customer_phone || current.customer_phone,
       approved_facility_amount: orig.approved_facility_amount || current.approved_facility_amount,
       profit: orig.profit || current.profit,
+      facility_product_type: orig.facility_product_type || current.facility_product_type || "Airtime",
+      term_months: orig.term_months || current.term_months || "12",
+      offer_letter_mode: orig.offer_letter_mode || current.offer_letter_mode || "automated",
       assigned_approver_id: next.assigned_approver_id || current.assigned_approver_id,
     }));
     setComments(next.approval_comments || "");
@@ -105,7 +126,10 @@ export function OriginationDeskPage() {
   }, [user?.institution_id, caseFromUrl]);
 
   const journey = journeyFrom(record);
-  const waitingForCustomer = Boolean(record && record.status !== "complete" && record.status !== "returned" && record.status !== "pending_approval");
+  const workflow = useMemo(() => workflowFrom(record), [record]);
+  const waitingForCustomer = Boolean(
+    record && record.status !== "complete" && record.status !== "returned" && record.status !== "pending_approval" && !journey?.accepted,
+  );
 
   useEffect(() => {
     if (!selectedId || !waitingForCustomer) return;
@@ -135,13 +159,16 @@ export function OriginationDeskPage() {
   }
 
   const originationLocked = record != null && record.status !== "returned";
+  const showWizard = Boolean(record && record.status !== "pending_approval" && workflow.length);
 
   function statusCopy() {
     if (!record) return "";
     if (record.status === "pending_approval") return "Waiting for FI Approver.";
-    if (record.status === "returned") return "Returned. Edit and send again.";
-    if (record.status === "complete") return "Customer accepted. Trade steps finished behind the scenes.";
+    if (record.status === "returned") return "Returned. Read the comments, edit, and send again.";
+    if (record.status === "complete") return "Facility complete. Certificates can be resent below.";
     if (journey?.accepted) return "Customer accepted. Completing the trade automatically.";
+    const mode = form.offer_letter_mode;
+    if (mode === "physical") return "Physical offer letter — customer email accept was skipped.";
     return "Customer emailed. Trade steps run automatically after they accept.";
   }
 
@@ -150,9 +177,6 @@ export function OriginationDeskPage() {
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="m-0 text-lg font-semibold">Origination</h2>
-          <p className="muted m-0 mt-1 text-sm">
-            {isApprover ? "Approve assigned facility requests." : "Name, email, phone, amount, profit, then FI Approver. The rest runs after the customer accepts."}
-          </p>
         </div>
         {canWrite ? (
           <button
@@ -161,6 +185,7 @@ export function OriginationDeskPage() {
             onClick={() => {
               setRecord(null);
               setSelectedId("");
+              setComments("");
             }}
           >
             New case
@@ -218,9 +243,56 @@ export function OriginationDeskPage() {
               onChange={(e) => setForm({ ...form, approved_facility_amount: e.target.value })}
             />
           </Field>
-          <ReadRow label="Commodity type" value="Airtime" />
+          <Field label="Commodity">
+            <select
+              className={fieldClass}
+              value={form.facility_product_type}
+              disabled={originationLocked}
+              onChange={(e) => setForm({ ...form, facility_product_type: e.target.value })}
+            >
+              {COMMODITIES.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Profit">
             <input className={fieldClass} value={form.profit} disabled={originationLocked} onChange={(e) => setForm({ ...form, profit: e.target.value })} />
+          </Field>
+          <Field label="Repayment period (months)">
+            <input
+              className={fieldClass}
+              type="number"
+              min="1"
+              step="1"
+              value={form.term_months}
+              disabled={originationLocked}
+              onChange={(e) => setForm({ ...form, term_months: e.target.value })}
+            />
+          </Field>
+          {record && deskPayload(record, "origination").contract_price ? (
+            <>
+              <ReadRow label="Contract price" value={`KES ${deskPayload(record, "origination").contract_price}`} />
+              <ReadRow
+                label="Monthly installment"
+                value={`KES ${deskPayload(record, "origination").monthly_installment || "—"}`}
+              />
+            </>
+          ) : null}
+          <Field label="Offer letter">
+            <select
+              className={fieldClass}
+              value={form.offer_letter_mode}
+              disabled={originationLocked}
+              onChange={(e) => setForm({ ...form, offer_letter_mode: e.target.value })}
+            >
+              {OFFER_MODES.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="FI Approver">
             <select className={fieldClass} value={form.assigned_approver_id} disabled={originationLocked} onChange={(e) => setForm({ ...form, assigned_approver_id: e.target.value })}>
@@ -249,6 +321,12 @@ export function OriginationDeskPage() {
               </div>
               <ReadRow label="Customer accept" value={journey.accepted ? "Accepted" : "Waiting"} />
             </>
+          ) : null}
+          {record?.status === "returned" && (record.approval_comments || comments) ? (
+            <div className="sm:col-span-2 rounded-sm border border-border bg-surface-elevated px-3 py-2">
+              <dt className="text-[0.7rem] uppercase tracking-wide text-muted">Return comments</dt>
+              <dd className="m-0 whitespace-pre-wrap text-sm">{record.approval_comments || comments}</dd>
+            </div>
           ) : null}
           {record ? <p className="muted sm:col-span-2 m-0 text-sm">{statusCopy()}</p> : null}
           {record?.status === "pending_approval" && isApprover ? (
@@ -285,7 +363,9 @@ export function OriginationDeskPage() {
                       customer_email: form.customer_email,
                       customer_phone: form.customer_phone,
                       approved_facility_amount: form.approved_facility_amount,
-                      facility_product_type: "Airtime",
+                      facility_product_type: form.facility_product_type,
+                      term_months: form.term_months,
+                      offer_letter_mode: form.offer_letter_mode,
                       assigned_approver_id: form.assigned_approver_id,
                       profit: form.profit,
                     }),
@@ -296,8 +376,88 @@ export function OriginationDeskPage() {
               </button>
             </div>
           ) : null}
+          {canWrite && record && record.status !== "pending_approval" && record.status !== "returned" ? (
+            <div className="sm:col-span-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() =>
+                  void run("Letter of Offer downloaded", async () => {
+                    await api.downloadDeskCertificate(record.id, "offer");
+                  })
+                }
+              >
+                Download Letter of Offer
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() =>
+                  void run("Agency Agreement downloaded", async () => {
+                    await api.downloadDeskCertificate(record.id, "agency");
+                  })
+                }
+              >
+                Download Agency Agreement
+              </button>
+              {record.status === "complete" || record.status === "in_progress" || record.status === "approved" ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    void run("Certificates resent", async () => {
+                      await api.resendDeskCertificates(record.id);
+                      return api.getDeskCase(record.id);
+                    })
+                  }
+                >
+                  Resend certificates
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
+
+      {showWizard ? (
+        <section className="rounded-sm border border-border bg-surface p-3">
+          <h3 className="m-0 mb-3 text-base font-semibold">Workflow</h3>
+          <ol className="m-0 flex list-none flex-col gap-0 p-0">
+            {workflow.map((step, index) => (
+              <li key={`${step.at}-${index}`} className="relative border-l border-border pl-4 pb-4 last:pb-0">
+                <span className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full border border-border bg-surface-elevated" />
+                <p className="m-0 text-[0.7rem] uppercase tracking-wide text-muted">
+                  {step.at ? step.at.slice(0, 19).replace("T", " ") : "—"}
+                </p>
+                <p className="m-0 mt-1 text-sm font-medium">{step.title || `Step ${index + 1}`}</p>
+                {step.detail ? <p className="muted m-0 mt-1 text-sm">{step.detail}</p> : null}
+                {step.certificates?.length && record ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {step.certificates.map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(`Downloaded ${kind}`, async () => {
+                            await api.downloadDeskCertificate(record.id, kind);
+                          })
+                        }
+                      >
+                        Download {kind}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
     </PageShell>
   );
 }

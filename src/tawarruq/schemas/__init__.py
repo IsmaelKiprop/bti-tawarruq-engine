@@ -31,6 +31,8 @@ class InstitutionRead(BaseModel):
     approval_limit_amount: Decimal | None = None
     billing_fee_bps: int = 25
     bti_charge_pct: Decimal = Field(Decimal("0.004"), description="BTI % Charge for this FI, 0 to 100")
+    tawarruq_provider: str | None = None
+    primary_regulator: str | None = None
     created_at: datetime
 
 

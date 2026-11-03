@@ -195,11 +195,10 @@ def resend_is_configured() -> bool:
 
 
 def mail_provider(db: Session | None = None) -> str:
+    # Production mail is Resend only (ops@buruujfintech.com). SMTP is ignored when Resend is set,
+    # and unused for portal invites / customer / approver mail.
     if resend_is_configured():
         return "resend"
-    host, _port, _user, _password, _from_addr = effective_smtp(db)
-    if host:
-        return "smtp"
     return "none"
 
 

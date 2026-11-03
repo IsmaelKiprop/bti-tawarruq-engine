@@ -296,7 +296,7 @@ const TESTER_VISIBLE_PATHS = [
   "/origination",
   "/shariah",
   "/malaysia",
-  "/sedania",
+  // Sedania AS SIDQ track hidden temporarily while UAT credentials are pending.
 ] as const;
 
 export function isTesterVisiblePath(to: string): boolean {

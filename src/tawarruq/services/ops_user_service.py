@@ -68,11 +68,11 @@ def deliver_ops_invite_email(
     temporary_password: str,
     kind: str = "invite",
 ) -> dict[str, Any]:
-    """Email a temporary password via SMTP (and always file a local copy).
+    """Email a temporary password via Resend (and always file a local copy).
 
-    When SMTP is configured and the send succeeds, the temporary password is
-    withheld from API responses (``expose_password=False``). When SMTP is off
-    or fails, the password is returned so the admin can share it out of band.
+    When Resend succeeds, the temporary password is withheld from API responses
+    (``expose_password=False``). When Resend is off or fails, the password is
+    returned so the admin can share it out of band.
     """
     settings = get_settings()
     portal = (settings.portal_public_url or "http://127.0.0.1:5173").rstrip("/")

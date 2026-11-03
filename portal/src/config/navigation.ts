@@ -189,21 +189,6 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    id: "sedania",
-    label: "Sedania track: AS SIDQ",
-    items: [
-      {
-        to: "/sedania",
-        label: "Sedania Financing",
-        Icon: IconMalaysia,
-        hint: "Wakeel or Rasul, muqassah, CASA",
-        anyPermissions: ["write_ops", "write_bti_ops"],
-        product: "sedania",
-        provider: "sedania",
-      },
-    ],
-  },
-  {
     id: "malaysia",
     label: "Malaysia track: Bursa BSAS",
     items: [

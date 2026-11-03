@@ -376,6 +376,8 @@ export interface Institution {
   approval_limit_amount?: string | null;
   billing_fee_bps?: number;
   bti_charge_pct?: number | string;
+  tawarruq_provider?: string | null;
+  primary_regulator?: string | null;
   created_at: string;
 }
 
@@ -1318,6 +1320,32 @@ export const api = {
   getDeskCase: (caseId: string) => request<DeskCase>(`/desk/cases/${caseId}`),
   createDeskCase: (body: Record<string, string>) =>
     request<DeskCase>("/desk/cases", { method: "POST", body: JSON.stringify(body) }),
+  resendDeskCertificates: (caseId: string) =>
+    request<{ emailed: boolean; to: string; attachments: number }>(`/desk/cases/${caseId}/certificates/resend`, {
+      method: "POST",
+    }),
+  downloadDeskCertificate: async (caseId: string, kind: string) => {
+    const response = await fetch(
+      `${API_BASE}/desk/cases/${encodeURIComponent(caseId)}/certificates/${encodeURIComponent(kind)}`,
+      { headers: authHeaders() },
+    );
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error((body as { detail?: string }).detail || "Certificate not ready.");
+    }
+    const blob = await response.blob();
+    const header = response.headers.get("content-disposition") || "";
+    const match = header.match(/filename="([^"]+)"/);
+    const filename = match?.[1] || `${kind}-certificate.pdf`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
   decideDeskCase: (caseId: string, decision: "approve" | "return", comments = "") =>
     request<DeskCase>(`/desk/cases/${caseId}/decide`, {
       method: "POST",

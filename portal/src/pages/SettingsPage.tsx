@@ -58,6 +58,7 @@ export function SettingsPage() {
   const [chargeDevCode, setChargeDevCode] = useState("");
   const [platformBusy, setPlatformBusy] = useState(false);
   const [platformMsg, setPlatformMsg] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
+  const [settingsTab, setSettingsTab] = useState<"providers" | "assignment" | "profile">("providers");
 
   function applyPlatform(settings: {
     providers?: ProviderBook[];
@@ -340,171 +341,206 @@ export function SettingsPage() {
           <section className="panel settings-panel settings-span">
             <div className="panel-header">
               <div>
-                <h2>Tawarruq providers</h2>
-                <p className="muted">Super Admin book. One provider per FI. Password and OTP required to save.</p>
+                <h2>Platform</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["providers", "Tawarruq providers"],
+                    ["assignment", "FI assignment"],
+                    ["profile", "Profile"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={settingsTab === id ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"}
+                    onClick={() => setSettingsTab(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
             {platformMsg ? <Alert tone={platformMsg.tone}>{platformMsg.text}</Alert> : null}
-            <form className="settings-form settings-form-wide" onSubmit={onSavePlatform}>
-              {providers.map((item) => (
-                <div key={item.code} className="rounded-sm border border-border p-3 grid gap-3 sm:grid-cols-2">
-                  <strong className="sm:col-span-2">{item.code === "bursa" ? "Bursa" : "Sedania"}</strong>
-                  <label>
-                    Company name
-                    <input
-                      value={item.company_name}
-                      onChange={(e) =>
-                        setProviders((rows) => rows.map((row) => (row.code === item.code ? { ...row, company_name: e.target.value } : row)))
-                      }
-                      required
-                    />
-                  </label>
-                  <label>
-                    Country of operation
-                    <input
-                      value={item.country}
-                      onChange={(e) =>
-                        setProviders((rows) => rows.map((row) => (row.code === item.code ? { ...row, country: e.target.value } : row)))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Website
-                    <input
-                      type="url"
-                      value={item.website}
-                      onChange={(e) =>
-                        setProviders((rows) => rows.map((row) => (row.code === item.code ? { ...row, website: e.target.value } : row)))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Rate
-                    <div className="settings-pct">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step="0.0001"
-                        inputMode="decimal"
-                        value={String(item.rate_pct)}
-                        onChange={(e) =>
-                          setProviders((rows) => rows.map((row) => (row.code === item.code ? { ...row, rate_pct: e.target.value } : row)))
-                        }
-                        required
-                      />
-                      <span>%</span>
-                    </div>
-                  </label>
-                </div>
-              ))}
-              <div>
-                <strong>FI assignment</strong>
-                <p className="meta" style={{ margin: "0.15rem 0 0.45rem" }}>
-                  Each FI uses one Tawarruq deal at a time. BTI % Charge stays unique per FI.
-                </p>
-                {fiCharges.length === 0 ? (
-                  <p className="meta">No institutions yet.</p>
-                ) : (
-                  <div className="table-wrap">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Institution</th>
-                          <th>Tawarruq provider</th>
-                          <th>BTI % Charge</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {fiCharges.map((item) => (
-                          <tr key={item.id}>
-                            <td>
-                              <div className="font-medium">{item.name}</div>
-                              <div className="meta">{item.code}</div>
-                            </td>
-                            <td>
-                              <select
-                                value={item.tawarruq_provider || "sedania"}
-                                onChange={(e) =>
-                                  setFiCharges((rows) =>
-                                    rows.map((row) => (row.id === item.id ? { ...row, tawarruq_provider: e.target.value } : row)),
-                                  )
-                                }
-                              >
-                                {providers.map((provider) => (
-                                  <option key={provider.code} value={provider.code}>
-                                    {provider.company_name || provider.code}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <div className="settings-pct">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={100}
-                                  step="0.0001"
-                                  inputMode="decimal"
-                                  value={String(item.bti_charge_pct)}
-                                  onChange={(e) =>
-                                    setFiCharges((rows) =>
-                                      rows.map((row) => (row.id === item.id ? { ...row, bti_charge_pct: e.target.value } : row)),
-                                    )
-                                  }
-                                />
-                                <span>%</span>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            {settingsTab === "profile" ? (
+              <p className="meta m-0">Account, Profile &amp; HR, password, and MFA are in the panels below.</p>
+            ) : (
+              <form className="settings-form settings-form-wide" onSubmit={onSavePlatform}>
+                {settingsTab === "providers"
+                  ? providers.map((item) => (
+                      <div key={item.code} className="rounded-sm border border-border p-3 grid gap-3 sm:grid-cols-2">
+                        <strong className="sm:col-span-2">{item.code === "bursa" ? "Bursa" : "Sedania"}</strong>
+                        <label>
+                          Company name
+                          <input
+                            value={item.company_name}
+                            onChange={(e) =>
+                              setProviders((rows) =>
+                                rows.map((row) => (row.code === item.code ? { ...row, company_name: e.target.value } : row)),
+                              )
+                            }
+                            required
+                          />
+                        </label>
+                        <label>
+                          Country of operation
+                          <input
+                            value={item.country}
+                            onChange={(e) =>
+                              setProviders((rows) =>
+                                rows.map((row) => (row.code === item.code ? { ...row, country: e.target.value } : row)),
+                              )
+                            }
+                          />
+                        </label>
+                        <label>
+                          Website
+                          <input
+                            type="url"
+                            value={item.website}
+                            onChange={(e) =>
+                              setProviders((rows) =>
+                                rows.map((row) => (row.code === item.code ? { ...row, website: e.target.value } : row)),
+                              )
+                            }
+                          />
+                        </label>
+                        <label>
+                          Rate
+                          <div className="settings-pct">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step="0.0001"
+                              inputMode="decimal"
+                              value={String(item.rate_pct)}
+                              onChange={(e) =>
+                                setProviders((rows) =>
+                                  rows.map((row) => (row.code === item.code ? { ...row, rate_pct: e.target.value } : row)),
+                                )
+                              }
+                              required
+                            />
+                            <span>%</span>
+                          </div>
+                        </label>
+                      </div>
+                    ))
+                  : null}
+                {settingsTab === "assignment" ? (
+                  <div>
+                    {fiCharges.length === 0 ? (
+                      <p className="meta">No institutions yet.</p>
+                    ) : (
+                      <div className="table-wrap">
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              <th>Institution</th>
+                              <th>Tawarruq provider</th>
+                              <th>BTI % Charge</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fiCharges.map((item) => (
+                              <tr key={item.id}>
+                                <td>
+                                  <div className="font-medium">{item.name}</div>
+                                  <div className="meta">{item.code}</div>
+                                </td>
+                                <td>
+                                  <select
+                                    value={item.tawarruq_provider || "sedania"}
+                                    onChange={(e) =>
+                                      setFiCharges((rows) =>
+                                        rows.map((row) =>
+                                          row.id === item.id ? { ...row, tawarruq_provider: e.target.value } : row,
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    {providers.map((provider) => (
+                                      <option key={provider.code} value={provider.code}>
+                                        {provider.company_name || provider.code}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td>
+                                  <div className="settings-pct">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      step="0.0001"
+                                      inputMode="decimal"
+                                      value={String(item.bti_charge_pct)}
+                                      onChange={(e) =>
+                                        setFiCharges((rows) =>
+                                          rows.map((row) =>
+                                            row.id === item.id ? { ...row, bti_charge_pct: e.target.value } : row,
+                                          ),
+                                        )
+                                      }
+                                    />
+                                    <span>%</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <p className="meta">
-                Customer email is sent with Resend from ops@buruujfintech.com
-                {mailProvider === "resend" ? "." : " when the server key is set."}
-              </p>
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={chargePassword}
-                  onChange={(e) => setChargePassword(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                />
-              </label>
-              <div className="settings-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => void onSendChargeOtp()} disabled={platformBusy}>
-                  {platformBusy ? "Sending…" : "Send OTP"}
+                ) : null}
+                <p className="meta">
+                  {mailProvider === "resend"
+                    ? "Outbound mail uses Resend from ops@buruujfintech.com (invites, approver alerts, customer offers)."
+                    : "RESEND_API_KEY is not set on the API host — invites and customer mail will not leave the server until it is."}
+                </p>
+                <label>
+                  Password
+                  <input
+                    type="password"
+                    value={chargePassword}
+                    onChange={(e) => setChargePassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                  />
+                </label>
+                <div className="settings-actions">
+                  <button type="button" className="btn btn-secondary" onClick={() => void onSendChargeOtp()} disabled={platformBusy}>
+                    {platformBusy ? "Sending…" : "Send OTP"}
+                  </button>
+                </div>
+                <label>
+                  OTP
+                  <input
+                    value={chargeOtp}
+                    onChange={(e) => setChargeOtp(e.target.value)}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    required
+                  />
+                </label>
+                {chargeDevCode ? <p className="meta">Tester code: {chargeDevCode}</p> : null}
+                <button type="submit" className="btn btn-primary" disabled={platformBusy}>
+                  {platformBusy ? "Saving…" : settingsTab === "assignment" ? "Save FI assignment" : "Save provider book"}
                 </button>
-              </div>
-              <label>
-                OTP
-                <input
-                  value={chargeOtp}
-                  onChange={(e) => setChargeOtp(e.target.value)}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  required
-                />
-              </label>
-              {chargeDevCode ? <p className="meta">Tester code: {chargeDevCode}</p> : null}
-              <button type="submit" className="btn btn-primary" disabled={platformBusy}>
-                {platformBusy ? "Saving…" : "Save provider book"}
-              </button>
-            </form>
+              </form>
+            )}
           </section>
         ) : null}
 
+        {(!isSuperAdmin || settingsTab === "profile") ? (
+        <>
         <section className="panel settings-panel">
           <div className="panel-header">
             <div>
               <h2>Account</h2>
-              <p className="muted">Portal session identity</p>
             </div>
             <span className="badge info">{roleLabel(user.role)}</span>
           </div>
@@ -536,7 +572,6 @@ export function SettingsPage() {
           <div className="panel-header">
             <div>
               <h2>Profile & HR</h2>
-              <p className="muted">Name and staff record for this login</p>
             </div>
           </div>
           {profileMsg ? <Alert tone={profileMsg.tone}>{profileMsg.text}</Alert> : null}
@@ -575,7 +610,6 @@ export function SettingsPage() {
           <div className="panel-header">
             <div>
               <h2>Appearance</h2>
-              <p className="muted">This browser only</p>
             </div>
           </div>
           <div className="settings-row">
@@ -593,7 +627,6 @@ export function SettingsPage() {
           <div className="panel-header">
             <div>
               <h2>Password</h2>
-              <p className="muted">Update portal login password</p>
             </div>
           </div>
           {passwordMsg ? <Alert tone={passwordMsg.tone}>{passwordMsg.text}</Alert> : null}
@@ -640,10 +673,6 @@ export function SettingsPage() {
           <div className="panel-header">
             <div>
               <h2>Two-factor authentication</h2>
-              <p className="muted">
-                Enable here — verification happens at login
-                {privilegedMfa ? " (required for Super Admin, BTI Ops, BTI Finance)" : ""}.
-              </p>
             </div>
             <span className={`badge ${user.mfa_enabled ? "success" : "warning"}`}>
               {user.mfa_enabled ? `On · ${methodLabel}` : "Off"}
@@ -722,7 +751,6 @@ export function SettingsPage() {
             <div className="panel-header">
               <div>
                 <h2>Role workspace</h2>
-                <p className="muted">Shortcuts for {profile.label}</p>
               </div>
             </div>
             <div className="settings-links">
@@ -734,6 +762,8 @@ export function SettingsPage() {
               ))}
             </div>
           </section>
+        ) : null}
+        </>
         ) : null}
       </div>
     </PageShell>

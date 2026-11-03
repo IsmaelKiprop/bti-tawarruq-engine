@@ -57,6 +57,10 @@ export function InstitutionsPage() {
   }, []);
 
   const requestedIds = useMemo(() => new Set(apiRequests.map((row) => row.institution_id)), [apiRequests]);
+  const apiRequestByInstitution = useMemo(
+    () => new Map(apiRequests.map((row) => [row.institution_id, row])),
+    [apiRequests],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -112,18 +116,15 @@ export function InstitutionsPage() {
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="m-0 text-lg font-semibold">Institutions</h2>
-          <p className="muted m-0 mt-1 text-sm">
-            Customer financial institutions. Onboarding is a separate wizard. Engine settings stay on Manage.
-          </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <label className="flex min-w-[10rem] flex-col gap-1 text-xs uppercase tracking-wide text-muted">
+          <label className="flex min-w-[12rem] flex-col gap-1 text-xs uppercase tracking-wide text-muted">
             Search
             <input
               className="rounded-sm border border-border bg-surface-elevated px-2.5 py-1.5 text-sm normal-case tracking-normal text-foreground"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Name, code…"
+              placeholder="Name, regulator, age…"
             />
           </label>
           <label className="flex min-w-[10rem] flex-col gap-1 text-xs uppercase tracking-wide text-muted">
@@ -239,7 +240,11 @@ export function InstitutionsPage() {
                               disabled={busyId === item.id}
                               onClick={() => void onIssueKey(item)}
                             >
-                              {busyId === item.id ? "Issuing…" : item.status === "issued" ? "Re-issue API client" : "Issue API client"}
+                              {busyId === item.id
+                                ? "Issuing…"
+                                : apiRequestByInstitution.get(item.id)?.status === "issued"
+                                  ? "Re-issue API client"
+                                  : "Issue API client"}
                             </button>
                           ) : null}
                           {canManage && status === "pending_approval" ? (

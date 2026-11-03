@@ -81,14 +81,26 @@ def notify_offer_ready(db: Session, application: FinancingApplication) -> OfferN
     subject = f"Accept your Murabaha offer {application.customer_ref}"
     body = (
         f"Hello {customer.full_name},\n\n"
-        f"{institution_name} has locked your Murabaha offer.\n\n"
-        f"Cost: {currency} {offer.cost_price}\n"
-        f"Profit: {currency} {offer.profit_amount}\n"
-        f"You repay: {currency} {offer.total_payable}\n\n"
-        "Open this link to accept. Only you can accept. The bank cannot do it for you.\n\n"
+        f"{institution_name} has locked your Murabaha / Tawarruq Letter of Offer.\n\n"
+        f"Cost price: {currency} {offer.cost_price}\n"
+        f"Profit margin: {currency} {offer.profit_amount}\n"
+        f"Contract price (total payable): {currency} {offer.total_payable}\n"
+        f"Repayment period: {application.term_months} months\n\n"
+        "The Letter of Offer and Agency Appointment are attached (same narrative as the "
+        "Commodity Murabaha/Monetization pack).\n"
+        "Open this link to accept. Only you can accept. The institution cannot do it for you.\n\n"
         f"{journey_url}\n\n"
+        "This offer is valid for 30 days from the offer date.\n\n"
         "Buruuj Tawarruq Engine\n"
     )
+
+    attachments: list[tuple[str, bytes, str]] = []
+    try:
+        from tawarruq.services.offer_letter_service import offer_letter_attachments, offer_pack_from_application
+
+        attachments = offer_letter_attachments(offer_pack_from_application(application))
+    except Exception:
+        logger.exception("Could not build Letter of Offer attachments")
 
     mail_path: str | None = None
     try:
@@ -96,10 +108,12 @@ def notify_offer_ready(db: Session, application: FinancingApplication) -> OfferN
         path = settings.customer_mail_path / f"{application.customer_ref}.txt"
         path.write_text(f"To: {email}\nSubject: {subject}\n\n{body}", encoding="utf-8")
         mail_path = str(path)
+        for filename, content, _ctype in attachments:
+            (settings.customer_mail_path / filename).write_bytes(content)
     except Exception:
         logger.exception("Could not write customer offer mail file")
 
-    smtp_sent = _send_smtp(email, subject, body)
+    smtp_sent = _send_smtp(email, subject, body, attachments or None)
     status = "sent" if smtp_sent else "filed"
     try:
         log_audit(
@@ -296,6 +310,13 @@ def notify_step_ready(
     )
 
 
+def _normalize_resend_from(from_addr: str) -> str:
+    raw = (from_addr or "").strip() or "ops@buruujfintech.com"
+    if "<" not in raw and "@" in raw:
+        return f"Buruuj Fintech <{raw}>"
+    return raw
+
+
 def _send_resend(
     to_email: str,
     subject: str,
@@ -318,8 +339,12 @@ def _send_resend(
     }
     if attachments:
         payload["attachments"] = [
-            {"filename": filename, "content": base64.b64encode(content).decode("ascii")}
+            {
+                "filename": filename,
+                "content": base64.b64encode(content).decode("ascii"),
+            }
             for filename, content, _ctype in attachments
+            if content
         ]
     request = urllib.request.Request(
         "https://api.resend.com/emails",
@@ -328,16 +353,60 @@ def _send_resend(
     )
     request.add_header("Authorization", f"Bearer {api_key}")
     request.add_header("Content-Type", "application/json")
+    # Cloudflare / Resend edge rejects bare urllib without a UA (error 1010).
+    request.add_header("User-Agent", "BTI-Tawarruq-Engine/1.0")
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            return 200 <= int(response.status) < 300
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+            ok = 200 <= int(response.status) < 300
+            if ok:
+                logger.info("Resend accepted mail to %s subject=%r body=%s", to_email, subject, raw[:200])
+            else:
+                logger.error("Resend non-success to %s status=%s body=%s", to_email, response.status, raw[:500])
+            return ok
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        logger.exception("Resend rejected email to %s: %s", to_email, detail)
+        logger.error("Resend rejected email to %s (%s): %s", to_email, exc.code, detail)
         return False
     except Exception:
-        logger.exception("Could not send email via Resend")
+        logger.exception("Could not send email via Resend to %s", to_email)
         return False
+
+
+def send_outbound_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+) -> bool:
+    """Send via Resend only (ops@buruujfintech.com). SMTP is not used in production."""
+    settings = get_settings()
+    api_key = (settings.resend_api_key or "").strip()
+    if not api_key:
+        logger.error(
+            "RESEND_API_KEY is not set — cannot email %s (%s). "
+            "Set RESEND_API_KEY and RESEND_FROM on the API host, then restart.",
+            to_email,
+            subject,
+        )
+        return False
+
+    from_addr = _normalize_resend_from(settings.resend_from)
+    if _send_resend(to_email, subject, body, attachments, api_key=api_key, from_addr=from_addr):
+        return True
+
+    # Large or rejected PDFs must not block invites / accept links.
+    if attachments:
+        logger.warning("Resend failed with attachments for %s — retrying text-only", to_email)
+        note = (
+            "\n\n(Attachments could not be delivered in this email. "
+            "Open your portal / customer journey to download documents.)\n"
+        )
+        if _send_resend(to_email, subject, body + note, None, api_key=api_key, from_addr=from_addr):
+            return True
+
+    logger.error("Resend failed for %s subject=%r (SMTP fallback disabled)", to_email, subject)
+    return False
 
 
 def _send_smtp(
@@ -346,45 +415,5 @@ def _send_smtp(
     body: str,
     attachments: list[tuple[str, bytes, str]] | None = None,
 ) -> bool:
-    from tawarruq.services.platform_settings_service import effective_smtp
-
-    settings = get_settings()
-    api_key = (settings.resend_api_key or "").strip()
-    if api_key:
-        from_addr = (settings.resend_from or "").strip() or "ops@buruujfintech.com"
-        if "<" not in from_addr and "@" in from_addr:
-            from_addr = f"Buruuj Fintech <{from_addr}>"
-        if _send_resend(to_email, subject, body, attachments, api_key=api_key, from_addr=from_addr):
-            return True
-        logger.warning("Resend send failed for %s; trying SMTP if configured", to_email)
-
-    host, port, user, password, from_addr = effective_smtp()
-    if not host:
-        return False
-    try:
-        import smtplib
-        from email.mime.application import MIMEApplication
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
-
-        if attachments:
-            msg = MIMEMultipart()
-            msg.attach(MIMEText(body, "plain"))
-            for filename, content, _ctype in attachments:
-                part = MIMEApplication(content, Name=filename)
-                part["Content-Disposition"] = f'attachment; filename="{filename}"'
-                msg.attach(part)
-        else:
-            msg = MIMEText(body, "plain")
-        msg["Subject"] = subject
-        msg["From"] = from_addr
-        msg["To"] = to_email
-        with smtplib.SMTP(host, port) as server:
-            if user:
-                server.starttls()
-                server.login(user, password)
-            server.send_message(msg)
-        return True
-    except Exception:
-        logger.exception("Could not send customer email via SMTP")
-        return False
+    """Compatibility alias — all outbound mail goes through Resend."""
+    return send_outbound_email(to_email, subject, body, attachments)

@@ -128,6 +128,66 @@ def _stamp(payload: dict[str, Any], key: str) -> None:
         stamps[key] = _now().isoformat()
 
 
+def _append_workflow(
+    payload: dict[str, Any],
+    title: str,
+    detail: str,
+    *,
+    cert_kinds: list[str] | None = None,
+) -> None:
+    rows = payload.setdefault("workflow", [])
+    if not isinstance(rows, list):
+        rows = []
+        payload["workflow"] = rows
+    rows.append(
+        {
+            "at": _now().isoformat(),
+            "title": title,
+            "detail": detail,
+            "certificates": list(cert_kinds or []),
+        }
+    )
+
+
+def _notify_approver(db: Session, case: FiDeskCase, approver: OpsUser, institution: Institution) -> None:
+    from tawarruq.config import get_settings
+    from tawarruq.services.customer_notify_service import _send_smtp, normalize_email
+
+    to_email = normalize_email(approver.email)
+    if not to_email:
+        return
+    payload = _parse_payload(case.payload_json)
+    orig = payload.get("origination") or {}
+    portal = (get_settings().portal_public_url or "https://ops.buruujfintech.com").rstrip("/")
+    subject = f"Approval needed · {orig.get('customer_name') or case.id[:8]}"
+    body = (
+        f"Assalamu alaikum {approver.full_name or 'Approver'},\n\n"
+        f"{institution.name} has a facility waiting for your decision.\n\n"
+        f"Customer: {orig.get('customer_name')}\n"
+        f"Email: {orig.get('customer_email')}\n"
+        f"Phone: {orig.get('customer_phone')}\n"
+        f"Amount: {orig.get('approved_facility_amount')}\n"
+        f"Profit: {orig.get('profit')}\n"
+        f"Commodity: {orig.get('facility_product_type')}\n"
+        f"Offer letter: {orig.get('offer_letter_mode')}\n\n"
+        f"Open: {portal}/origination?case={case.id}\n\n"
+        "Buruuj Fintech — BTI Tawarruq Engine\n"
+    )
+    try:
+        mail_dir = get_settings().customer_mail_path / "desk_approvals"
+        mail_dir.mkdir(parents=True, exist_ok=True)
+        (mail_dir / f"{case.id}-approval.txt").write_text(
+            f"To: {to_email}\nSubject: {subject}\n\n{body}",
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    try:
+        _send_smtp(to_email, subject, body)
+    except Exception:
+        pass
+
+
 def _audit(db: Session, case: FiDeskCase, step: int, actor: str, details: str, extra: dict[str, Any] | None = None) -> None:
     payload = {"step": step, "status": case.status, "at": _now().isoformat(), **(extra or {})}
     log_shariah_step(
@@ -209,8 +269,14 @@ def create_case(
     if missing:
         raise HTTPException(status_code=400, detail=f"Complete origination fields: {', '.join(missing)}")
     product = str(payload.facility_product_type or "Airtime").strip() or "Airtime"
-    if product.lower() != "airtime":
-        raise HTTPException(status_code=400, detail="Commodity type must be Airtime")
+    allowed = {"airtime", "palm oil", "other"}
+    if product.lower() not in allowed:
+        raise HTTPException(status_code=400, detail="Commodity type must be Airtime, Palm Oil, or Other")
+    # Canonical labels
+    product = {"airtime": "Airtime", "palm oil": "Palm Oil", "other": "Other"}[product.lower()]
+    offer_mode = str(payload.offer_letter_mode or "automated").strip().lower() or "automated"
+    if offer_mode not in {"physical", "automated", "both"}:
+        raise HTTPException(status_code=400, detail="Offer letter must be physical, automated, or both")
     try:
         amount = float(str(payload.approved_facility_amount).replace(",", "").strip())
     except ValueError:
@@ -223,28 +289,54 @@ def create_case(
         raise HTTPException(status_code=400, detail="Profit must be a number")
     if profit_amount < 0:
         raise HTTPException(status_code=400, detail="Profit cannot be negative")
+    try:
+        term_months = int(str(payload.term_months or "12").strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Repayment period must be a whole number of months")
+    if term_months < 1:
+        raise HTTPException(status_code=400, detail="Repayment period must be at least 1 month")
+    from tawarruq.services.offer_letter_service import compute_offer_figures
+
+    figures = compute_offer_figures(cost_price=amount, profit=profit_amount, term_months=term_months)
     fields = payload.model_dump()
     fields.pop("institution_id", None)
     fields.pop("assigned_approver_id", None)
     fields["customer_name"] = name
     fields["customer_email"] = email
     fields["customer_phone"] = phone
-    fields["facility_product_type"] = "Airtime"
+    fields["facility_product_type"] = product
+    fields["offer_letter_mode"] = offer_mode
+    fields["term_months"] = str(term_months)
+    fields["cost_price"] = str(figures["cost_price"])
+    fields["profit_margin"] = str(figures["profit_margin"])
+    fields["contract_price"] = str(figures["contract_price"])
+    fields["monthly_installment"] = str(figures["monthly_installment"])
     fields["document_type"] = str(payload.document_type or "").strip() or "Not provided"
     fields["customer_id"] = str(payload.customer_id or "").strip() or email
+    seller = {
+        "Airtime": "Safaricom",
+        "Palm Oil": "Bursa Malaysia Islamic Services",
+        "Other": "Commodity supplier",
+    }[product]
     body = {
         "origination": fields,
         "initiate": {
-            "commodity": "Airtime",
+            "commodity": product,
             "commodity_quantity": payload.approved_facility_amount,
-            "commodity_seller": "Safaricom",
+            "commodity_seller": seller,
             "commodity_buyer": institution.name,
             "commodity_agent": "Buruuj Fintech",
             "payment_reference": f"txn-{secrets.token_hex(3)}",
         },
         "timestamps": {},
+        "workflow": [],
     }
     _stamp(body, "origination_submitted")
+    _append_workflow(
+        body,
+        "Origination submitted",
+        f"{name} · {product} · amount {payload.approved_facility_amount} · profit {payload.profit}",
+    )
     case = FiDeskCase(
         institution_id=institution_id,
         current_step=2,
@@ -257,6 +349,7 @@ def create_case(
     db.flush()
     actor = requester.email if requester else "fi_ops"
     _audit(db, case, 1, actor, f"Origination submitted for {payload.customer_name}")
+    _notify_approver(db, case, approver, institution)
     return case
 
 
@@ -278,6 +371,11 @@ def decide_case(db: Session, case: FiDeskCase, *, decision: str, comments: str, 
         case.status = "approved"
         case.current_step = 3
         _stamp(payload, "approved")
+        _append_workflow(
+            payload,
+            "FI Approver approved",
+            comments.strip() or "Approved. Customer journey and trade steps follow the offer letter mode.",
+        )
         case.payload_json = _dump_payload(payload)
         _attach_customer_journey(db, case)
         payload = _parse_payload(case.payload_json)
@@ -286,6 +384,8 @@ def decide_case(db: Session, case: FiDeskCase, *, decision: str, comments: str, 
         case.status = "returned"
         case.current_step = 1
         _stamp(payload, "returned")
+        note = comments.strip() or "Returned for changes."
+        _append_workflow(payload, "FI Approver returned", note)
         details = "FI Approver returned origination"
     else:
         raise HTTPException(status_code=400, detail="Decision must be approve or return")
@@ -315,14 +415,26 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
     current.update({key: value for key, value in fields.items() if value is not None})
     if step == 3:
         orig = payload.get("origination") or {}
-        current.setdefault("commodity", "Airtime")
+        product = str(orig.get("facility_product_type") or current.get("commodity") or "Airtime")
+        seller = {
+            "Airtime": "Safaricom",
+            "Palm Oil": "Bursa Malaysia Islamic Services",
+            "Other": "Commodity supplier",
+        }.get(product, "Commodity supplier")
+        current.setdefault("commodity", product)
         current.setdefault("commodity_quantity", orig.get("approved_facility_amount"))
-        current.setdefault("commodity_seller", "Safaricom")
+        current.setdefault("commodity_seller", seller)
         current.setdefault("commodity_agent", "Buruuj Fintech")
         if not str(current.get("purchase_complete") or "").lower() in {"yes", "true", "1"}:
             raise HTTPException(status_code=400, detail="Mark purchase complete Yes before leaving Initiate Tawarruq")
         _stamp(payload, "purchase")
         current.setdefault("purchase_timestamp", payload["timestamps"].get("purchase"))
+        _append_workflow(
+            payload,
+            "Commodity purchase",
+            f"{product} purchased via {current.get('commodity_seller')}.",
+            cert_kinds=["purchase"],
+        )
     if step == 4:
         initiate = payload.get("initiate") or {}
         orig = payload.get("origination") or {}
@@ -366,9 +478,16 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
             current["deferred_sale_price"] = str(float(cost) + float(profit))
         except ValueError:
             current["deferred_sale_price"] = f"{cost}+{profit}"
+        _append_workflow(
+            payload,
+            "Murabaha sale",
+            f"Deferred sale recorded. Cost {cost}, profit {profit}.",
+            cert_kinds=["murabahah"],
+        )
     if step == 5:
         current["agent_appointment_status"] = "Done"
         current.setdefault("agent_name", "Soqo Capital")
+        _append_workflow(payload, "Resale agent appointed", f"Agent: {current.get('agent_name')}.")
     if step == 6:
         current["final_status"] = "Complete"
         account = str(current.get("customer_account_number") or "").strip()
@@ -377,8 +496,14 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
             raise HTTPException(status_code=400, detail="Enter customer CASA account and branch")
         current["customer_account_number"] = account
         current["customer_branch"] = branch
-        current.setdefault("commodity", "Airtime")
         orig = payload.get("origination") or {}
+        current.setdefault("commodity", orig.get("facility_product_type") or "Airtime")
+        _append_workflow(
+            payload,
+            "Resale proceeds",
+            f"CASA {account} · branch {branch}.",
+            cert_kinds=["liquidation"],
+        )
         current.setdefault("commodity_quantity", orig.get("approved_facility_amount"))
         current.setdefault("resale_cost", orig.get("approved_facility_amount"))
     if step == 7:
@@ -386,7 +511,18 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
         _stamp(payload, "clearing")
         current.setdefault("settlement_timestamp", payload["timestamps"].get("clearing"))
         current["final_status"] = "Complete"
+        _append_workflow(
+            payload,
+            "Clearing complete",
+            f"Settlement {current.get('settlement_ref')}.",
+        )
         _stamp(payload, "complete")
+        _append_workflow(
+            payload,
+            "Facility complete",
+            "Trade certificates are ready for the customer.",
+            cert_kinds=["purchase", "murabahah", "liquidation"],
+        )
         case.status = "complete"
         case.current_step = 8
     if step == 8:
@@ -650,14 +786,22 @@ def _attach_customer_journey(db: Session, case: FiDeskCase) -> None:
     elif email and not customer.email:
         customer.email = email
     institution = case.institution or db.get(Institution, case.institution_id)
+    commodity = str(orig.get("facility_product_type") or "Airtime")
+    offer_mode = str(orig.get("offer_letter_mode") or "automated").lower()
+    try:
+        term_months = int(str(orig.get("term_months") or "12").strip())
+    except ValueError:
+        term_months = 12
+    if term_months < 1:
+        term_months = 12
     application = create_application(
         db,
         customer_ref=generate_customer_ref(db, institution) if institution else None,
         customer_name=name,
         currency="KES",
         amount_requested=amount,
-        term_months=1,
-        purpose="Origination desk Airtime tawarruq",
+        term_months=term_months,
+        purpose=f"Origination desk {commodity} tawarruq",
         institution_id=case.institution_id,
         actor=AuditActor.HUMAN,
     )
@@ -672,13 +816,64 @@ def _attach_customer_journey(db: Session, case: FiDeskCase) -> None:
     db.add(offer)
     db.flush()
     db.refresh(application, attribute_names=["customer", "institution", "offer"])
-    notify_offer_ready(db, application)
+    # Physical offer letter: no customer email; treat as accepted so the desk can run.
+    if offer_mode == "physical":
+        offer.accepted_at = _now()
+        application.status = ApplicationStatus.OFFER_ACCEPTED
+        _append_workflow(
+            payload,
+            "Physical offer letter",
+            "Customer acceptance email skipped. Download the Letter of Offer for wet-ink signing.",
+            cert_kinds=["offer", "agency"],
+        )
+    else:
+        notify_offer_ready(db, application)
+        _append_workflow(
+            payload,
+            "Customer offer emailed",
+            "Letter of Offer and Agency Appointment emailed. Trade steps wait for acceptance."
+            if offer_mode == "automated"
+            else "Letter of Offer emailed; a physical copy may also be used.",
+            cert_kinds=["offer", "agency"],
+        )
     payload["journey"] = {
         "application_id": application.id,
         "customer_ref": application.customer_ref,
         "customer_id": customer.id,
+        "offer_accepted": offer_mode == "physical",
+        "accepted_at": offer.accepted_at.isoformat() if offer.accepted_at else None,
+        "offer_letter_mode": offer_mode,
     }
     case.payload_json = _dump_payload(payload)
+
+
+def resend_certificates(db: Session, case: FiDeskCase) -> dict[str, Any]:
+    """Re-email the three trade certificates for a completed (or late-stage) desk case."""
+    from tawarruq.services.certificate_mail_service import desk_step_attachments
+    from tawarruq.services.customer_notify_service import notify_step_ready
+
+    payload = _parse_payload(case.payload_json)
+    orig = payload.get("origination") or {}
+    journey = payload.get("journey") or {}
+    email = str(orig.get("customer_email") or "").strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="This case has no customer email")
+    attachments = desk_step_attachments(case, 8)
+    if not attachments:
+        attachments = desk_step_attachments(case, 7) or desk_step_attachments(case, 3)
+    notify_step_ready(
+        db,
+        email=email,
+        customer_name=orig.get("customer_name"),
+        customer_ref=str(journey.get("customer_ref") or orig.get("customer_id") or case.id[:8]),
+        title="Your Tawarruq certificates",
+        body_line="The three trade certificates for this facility are attached again.",
+        institution_name=case.institution.name if case.institution else None,
+        attachments=attachments,
+    )
+    _append_workflow(payload, "Certificates resent", f"Emailed again to {email}.")
+    case.payload_json = _dump_payload(payload)
+    return {"emailed": True, "to": email, "attachments": len(attachments)}
 
 
 def _notify_desk_step(db: Session, case: FiDeskCase, step: int) -> None:

@@ -10,6 +10,10 @@ class DeskApproverRead(BaseModel):
     email: str
 
 
+COMMODITY_TYPES = ("Airtime", "Palm Oil", "Other")
+OFFER_LETTER_MODES = ("physical", "automated", "both")
+
+
 class DeskCaseCreate(BaseModel):
     customer_name: str
     customer_email: str
@@ -18,6 +22,11 @@ class DeskCaseCreate(BaseModel):
     assigned_approver_id: str
     profit: str | None = None
     facility_product_type: str = "Airtime"
+    term_months: str | int = Field("12", description="Repayment period in months (Letter of Offer)")
+    offer_letter_mode: str = Field(
+        "automated",
+        description="physical | automated | both. Physical skips customer email acceptance.",
+    )
     customer_id: str | None = None
     document_type: str | None = None
     institution_id: str | None = None

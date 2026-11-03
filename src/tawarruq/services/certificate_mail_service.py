@@ -39,61 +39,79 @@ def render_certificate_pdf(
     sections: list[tuple[str, list[tuple[str, object]]]],
     note: str | None = None,
 ) -> bytes:
-    from fpdf import FPDF
+    def _fallback_pdf() -> bytes:
+        body = f"{title}\n{subtitle}\nRef: {doc_ref}\n{note or ''}".encode("latin-1", errors="replace")
+        safe = body.replace(b"(", b"[").replace(b")", b"]")[:180]
+        stream = b"BT /F1 12 Tf 72 720 Td (" + safe + b") Tj ET\n"
+        return (
+            b"%PDF-1.4\n1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n"
+            b"2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj\n"
+            b"3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>endobj\n"
+            b"4 0 obj<< /Length "
+            + str(len(stream)).encode()
+            + b" >>stream\n"
+            + stream
+            + b"endstream\nendobj\nxref\n0 5\n0000000000 65535 f \ntrailer<< /Size 5 /Root 1 0 R >>\nstartxref\n0\n%%EOF\n"
+        )
 
-    pdf = FPDF(unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=18)
-    pdf.set_margins(16, 16, 16)
-    pdf.add_page()
-    width = 178
-    pdf.set_fill_color(11, 31, 58)
-    pdf.rect(0, 0, 210, 32, "F")
-    pdf.set_xy(16, 8)
-    pdf.set_text_color(201, 162, 39)
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(width, 6, "BURUUJ FINTECH")
-    pdf.set_xy(16, 16)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(width, 6, "Tawarruq certificate")
-    pdf.set_xy(16, 40)
-    pdf.set_text_color(11, 31, 58)
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.multi_cell(width, 8, _pdf_text(title))
-    pdf.set_text_color(92, 107, 124)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.multi_cell(width, 5, _pdf_text(subtitle))
-    pdf.ln(2)
-    pdf.set_fill_color(244, 246, 249)
-    pdf.set_text_color(11, 31, 58)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(width, 8, f"  Ref  {_pdf_text(doc_ref)}", fill=True)
-    pdf.ln(12)
-    for heading, rows in sections:
-        pdf.set_x(16)
-        pdf.set_text_color(11, 31, 58)
+    try:
+        from fpdf import FPDF
+
+        pdf = FPDF(unit="mm", format="A4")
+        pdf.set_auto_page_break(auto=True, margin=18)
+        pdf.set_margins(16, 16, 16)
+        pdf.add_page()
+        width = 178
+        pdf.set_fill_color(11, 31, 58)
+        pdf.rect(0, 0, 210, 32, "F")
+        pdf.set_xy(16, 8)
+        pdf.set_text_color(201, 162, 39)
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(width, 8, _pdf_text(heading))
-        pdf.ln(8)
-        for label, value in rows:
-            pdf.set_x(16)
-            pdf.set_font("Helvetica", "", 9)
-            pdf.set_text_color(92, 107, 124)
-            pdf.cell(55, 6, _pdf_text(label))
-            pdf.set_text_color(18, 32, 51)
-            pdf.multi_cell(width - 55, 6, _pdf_text(value))
-        pdf.ln(2)
-    if note:
-        pdf.ln(4)
-        pdf.set_x(16)
+        pdf.cell(width, 6, "BURUUJ FINTECH")
+        pdf.set_xy(16, 16)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(width, 6, "Tawarruq certificate")
+        pdf.set_xy(16, 40)
+        pdf.set_text_color(11, 31, 58)
+        pdf.set_font("Helvetica", "B", 18)
+        pdf.multi_cell(width, 8, _pdf_text(title))
         pdf.set_text_color(92, 107, 124)
-        pdf.set_font("Helvetica", "I", 8)
-        pdf.multi_cell(width, 5, _pdf_text(note))
-    pdf.set_y(-16)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_text_color(92, 107, 124)
-    pdf.cell(0, 6, "Confidential - for customer and institution use", align="C")
-    return bytes(pdf.output())
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(width, 5, _pdf_text(subtitle))
+        pdf.ln(2)
+        pdf.set_fill_color(244, 246, 249)
+        pdf.set_text_color(11, 31, 58)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(width, 8, f"  Ref  {_pdf_text(doc_ref)}", fill=True)
+        pdf.ln(12)
+        for heading, rows in sections:
+            pdf.set_x(16)
+            pdf.set_text_color(11, 31, 58)
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.cell(width, 8, _pdf_text(heading))
+            pdf.ln(8)
+            for label, value in rows:
+                pdf.set_x(16)
+                pdf.set_font("Helvetica", "", 9)
+                pdf.set_text_color(92, 107, 124)
+                pdf.cell(55, 6, _pdf_text(label))
+                pdf.set_text_color(18, 32, 51)
+                pdf.multi_cell(width - 55, 6, _pdf_text(value))
+            pdf.ln(2)
+        if note:
+            pdf.ln(4)
+            pdf.set_x(16)
+            pdf.set_text_color(92, 107, 124)
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.multi_cell(width, 5, _pdf_text(note))
+        pdf.set_y(-16)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(92, 107, 124)
+        pdf.cell(0, 6, "Confidential - for customer and institution use", align="C")
+        return bytes(pdf.output())
+    except Exception:
+        return _fallback_pdf()
 
 
 def pdf_bytes_attachment(filename: str, content: bytes) -> Attachment:
@@ -181,6 +199,27 @@ def _desk_payload(case) -> dict:
         return {}
 
 
+# Workflow / UI kinds → desk step that owns the PDF.
+DESK_CERT_KIND_STEPS = {
+    "purchase": 3,
+    "murabahah": 4,
+    "murabaha": 4,
+    "agency": 5,
+    "liquidation": 6,
+    "resale": 6,
+    "clearing": 7,
+    "complete": 8,
+}
+
+
+def desk_certificate_attachment(case, kind: str) -> Attachment | None:
+    step = DESK_CERT_KIND_STEPS.get(str(kind or "").strip().lower())
+    if not step:
+        return None
+    items = desk_step_attachments(case, step)
+    return items[0] if items else None
+
+
 def desk_step_attachments(case, step: int) -> list[Attachment]:
     items: list[Attachment] = []
     payload = _desk_payload(case)
@@ -191,7 +230,11 @@ def desk_step_attachments(case, step: int) -> list[Attachment]:
     clearing = payload.get("clearing") or {}
     ref = (payload.get("journey") or {}).get("customer_ref") or getattr(case, "id", "case")[:8]
     institution = case.institution.name if getattr(case, "institution", None) else "Institution"
-    steps = list(range(3, step + 1)) if step == 8 else [step]
+    # Three trade certificates for a completed facility; single-step otherwise.
+    if step == 8:
+        steps = [3, 4, 6]
+    else:
+        steps = [step]
     for item in steps:
         spec = DESK_CERTS.get(item)
         if not spec:
