@@ -110,7 +110,6 @@ export function OriginationDeskPage() {
     assigned_approver_id: "",
     profit: "",
     facility_product_type: "Airtime",
-    term_months: "12",
     offer_letter_mode: "automated",
   });
 
@@ -139,7 +138,6 @@ export function OriginationDeskPage() {
       approved_facility_amount: orig.approved_facility_amount || current.approved_facility_amount,
       profit: orig.profit || current.profit,
       facility_product_type: orig.facility_product_type || current.facility_product_type || "Airtime",
-      term_months: orig.term_months || current.term_months || "12",
       offer_letter_mode: orig.offer_letter_mode || current.offer_letter_mode || "automated",
       assigned_approver_id: next.assigned_approver_id || current.assigned_approver_id,
     }));
@@ -289,25 +287,8 @@ export function OriginationDeskPage() {
           <Field label="Profit">
             <input className={fieldClass} value={form.profit} disabled={originationLocked} onChange={(e) => setForm({ ...form, profit: e.target.value })} />
           </Field>
-          <Field label="Repayment period (months)">
-            <input
-              className={fieldClass}
-              type="number"
-              min="1"
-              step="1"
-              value={form.term_months}
-              disabled={originationLocked}
-              onChange={(e) => setForm({ ...form, term_months: e.target.value })}
-            />
-          </Field>
           {record && deskPayload(record, "origination").contract_price ? (
-            <>
-              <ReadRow label="Contract price" value={`KES ${deskPayload(record, "origination").contract_price}`} />
-              <ReadRow
-                label="Monthly installment"
-                value={`KES ${deskPayload(record, "origination").monthly_installment || "—"}`}
-              />
-            </>
+            <ReadRow label="Contract price" value={`KES ${deskPayload(record, "origination").contract_price}`} />
           ) : null}
           <Field label="Offer letter">
             <select
@@ -390,7 +371,6 @@ export function OriginationDeskPage() {
                       customer_phone: form.customer_phone,
                       approved_facility_amount: form.approved_facility_amount,
                       facility_product_type: form.facility_product_type,
-                      term_months: form.term_months,
                       offer_letter_mode: form.offer_letter_mode,
                       assigned_approver_id: form.assigned_approver_id,
                       profit: form.profit,
