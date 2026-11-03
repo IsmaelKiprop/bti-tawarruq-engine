@@ -11,9 +11,6 @@ Attachment = tuple[str, bytes, str]
 DESK_CERTS = {
     3: ("Commodity purchase certificate", "purchase"),
     4: ("Murabaha sale certificate", "murabaha"),
-    5: ("Agency appointment certificate", "agency"),
-    6: ("Resale proceeds certificate", "resale"),
-    7: ("Clearing certificate", "clearing"),
     8: ("Facility completion certificate", "complete"),
 }
 
@@ -204,10 +201,6 @@ DESK_CERT_KIND_STEPS = {
     "purchase": 3,
     "murabahah": 4,
     "murabaha": 4,
-    "agency": 5,
-    "liquidation": 6,
-    "resale": 6,
-    "clearing": 7,
     "complete": 8,
 }
 
@@ -226,13 +219,16 @@ def desk_step_attachments(case, step: int) -> list[Attachment]:
     orig = payload.get("origination") or {}
     initiate = payload.get("initiate") or {}
     murabaha = payload.get("murabaha") or {}
-    proceeds = payload.get("proceeds") or {}
-    clearing = payload.get("clearing") or {}
     ref = (payload.get("journey") or {}).get("customer_ref") or getattr(case, "id", "case")[:8]
     institution = case.institution.name if getattr(case, "institution", None) else "Institution"
-    # Three trade certificates for a completed facility; single-step otherwise.
+    commodity = murabaha.get("commodity") or initiate.get("commodity") or orig.get("facility_product_type") or "Airtime"
+    units = murabaha.get("units") or initiate.get("commodity_quantity") or orig.get("approved_facility_amount") or "1"
+    total = murabaha.get("total_price") or murabaha.get("deferred_sale_price") or orig.get("contract_price")
+    seller = murabaha.get("seller_name") or institution
+    buyer = murabaha.get("buyer_name") or orig.get("customer_name")
+    # Three certificates after Murabaha completes: purchase, sale, facility.
     if step == 8:
-        steps = [3, 4, 6]
+        steps = [3, 4, 8]
     else:
         steps = [step]
     for item in steps:
@@ -240,36 +236,49 @@ def desk_step_attachments(case, step: int) -> list[Attachment]:
         if not spec:
             continue
         title, slug = spec
+        if item == 4:
+            facility_rows = [
+                ("Seller (bank)", seller),
+                ("Buyer (customer)", buyer),
+                ("Commodity", commodity),
+                ("Units / number of units", units),
+                ("Total price of the commodity", total),
+            ]
+        elif item == 8:
+            facility_rows = [
+                ("Commodity", commodity),
+                ("Units", units),
+                ("Total price", total),
+                ("Seller", seller),
+                ("Buyer", buyer),
+                ("Status", "Complete"),
+            ]
+        else:
+            facility_rows = [
+                ("Commodity", commodity),
+                ("Units", units),
+                ("Seller", initiate.get("commodity_seller") or "Supplier"),
+                ("Buyer", initiate.get("commodity_buyer") or institution),
+                ("Purchase", initiate.get("purchase_complete")),
+            ]
         content = render_certificate_pdf(
             title=title,
             subtitle="Tawarruq desk certificate for this customer facility.",
             doc_ref=f"{slug.upper()}-{ref}",
             sections=[
                 (
-                    "Customer",
+                    "Parties",
                     [
-                        ("Name", orig.get("customer_name")),
+                        ("Institution", institution),
+                        ("Customer", orig.get("customer_name")),
                         ("Email", orig.get("customer_email")),
                         ("Phone", orig.get("customer_phone")),
-                        ("Institution", institution),
                         ("Reference", ref),
                     ],
                 ),
-                (
-                    "Facility",
-                    [
-                        ("Amount", orig.get("approved_facility_amount")),
-                        ("Profit", orig.get("profit") or murabaha.get("profit")),
-                        ("Commodity", initiate.get("commodity") or orig.get("facility_product_type") or "Airtime"),
-                        ("Purchase", initiate.get("purchase_complete")),
-                        ("Murabaha total", murabaha.get("deferred_sale_price")),
-                        ("Facility account", murabaha.get("facility_account")),
-                        ("CASA", proceeds.get("customer_account_number")),
-                        ("Clearing", clearing.get("settlement_ref")),
-                    ],
-                ),
+                ("Sale / commodity", facility_rows),
             ],
-            note="This PDF is issued with the customer email. The same record is on the customer journey.",
+            note="Issued with the customer email. Offer letter paper stays at the branch when signed physically.",
         )
         items.append(pdf_bytes_attachment(f"{str(ref)[:8]}-{slug}-certificate.pdf", content))
     return items

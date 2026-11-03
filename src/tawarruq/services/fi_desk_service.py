@@ -81,6 +81,36 @@ def seal_completed_case(case: FiDeskCase) -> FiDeskCase:
     return case
 
 
+def _offer_acceptance_method(payload: dict[str, Any]) -> str:
+    mode = str((payload.get("journey") or {}).get("offer_letter_mode") or (payload.get("origination") or {}).get("offer_letter_mode") or "automated").lower()
+    if mode == "physical":
+        return "physical"
+    if mode == "both":
+        # Prefer email if the journey offer was accepted on the application; physical otherwise.
+        return "email" if (payload.get("journey") or {}).get("offer_accepted") else "physical"
+    return "email"
+
+
+def _record_offer_letter_accepted(payload: dict[str, Any], *, method: str | None = None) -> None:
+    """Branch keeps the paper letter — portal only records acceptance + how it was accepted."""
+    rows = payload.get("workflow") if isinstance(payload.get("workflow"), list) else []
+    if any(isinstance(row, dict) and row.get("title") == "Offer Letter accepted" for row in rows):
+        return
+    how = method or _offer_acceptance_method(payload)
+    detail = (
+        "Accepted via physical signed offer letter at the branch."
+        if how == "physical"
+        else "Accepted via customer email / journey link."
+    )
+    _stamp(payload, "offer_letter_accepted")
+    _append_workflow(payload, "Offer Letter accepted", detail)
+    journey = payload.setdefault("journey", {})
+    if isinstance(journey, dict):
+        journey["offer_accepted"] = True
+        journey["acceptance_method"] = how
+        journey.setdefault("accepted_at", payload.get("timestamps", {}).get("offer_letter_accepted"))
+
+
 def refresh_journey_status(db: Session, case: FiDeskCase) -> FiDeskCase:
     payload = _parse_payload(case.payload_json)
     journey = payload.get("journey")
@@ -99,6 +129,11 @@ def refresh_journey_status(db: Session, case: FiDeskCase) -> FiDeskCase:
         if accepted_at:
             journey["accepted_at"] = accepted_at
         payload["journey"] = journey
+        if accepted:
+            _record_offer_letter_accepted(payload, method="email")
+        case.payload_json = _dump_payload(payload)
+    elif accepted:
+        _record_offer_letter_accepted(payload, method=str(journey.get("acceptance_method") or "email"))
         case.payload_json = _dump_payload(payload)
     return auto_progress_case(db, case)
 
@@ -438,93 +473,82 @@ def complete_step(db: Session, case: FiDeskCase, step: int, fields: dict[str, An
     if step == 4:
         initiate = payload.get("initiate") or {}
         orig = payload.get("origination") or {}
-        cost = str(current.get("cost_price") or initiate.get("commodity_quantity") or "")
-        profit = str(current.get("profit") or "")
-        if not profit.strip():
-            raise HTTPException(status_code=400, detail="Enter the Murabaha profit")
         if not _journey_offer_accepted(db, payload):
-            raise HTTPException(status_code=400, detail="Customer must accept the Murabaha offer on their journey first")
-        current["sale_status"] = "Complete"
-        _stamp(payload, "sale")
-        current.setdefault("sale_timestamp", payload["timestamps"].get("sale"))
-        facility_account = str(current.get("facility_account") or "").strip()
-        installments_raw = str(current.get("repayment_installments") or "").strip()
-        first_due = str(current.get("first_installment_due_date") or "").strip()
-        last_due = str(current.get("last_installment_due_date") or "").strip()
-        if not facility_account or not installments_raw or not first_due or not last_due:
-            raise HTTPException(
-                status_code=400,
-                detail="Enter facility account, repayment installments, and first and last installment due dates",
-            )
+            raise HTTPException(status_code=400, detail="Offer Letter must be accepted first (physical branch sign or customer email)")
+        _record_offer_letter_accepted(payload)
+        institution_name = case.institution.name if case.institution else "Institution"
+        commodity = str(initiate.get("commodity") or orig.get("facility_product_type") or "Airtime")
+        units = str(
+            current.get("units")
+            or current.get("commodity_units")
+            or initiate.get("commodity_quantity")
+            or orig.get("approved_facility_amount")
+            or "1"
+        )
+        loan = str(orig.get("approved_facility_amount") or initiate.get("commodity_quantity") or "0")
+        profit = str(current.get("profit") or orig.get("profit") or "0")
         try:
-            installments = int(installments_raw)
+            total_price = f"{float(str(loan).replace(',', '')) + float(str(profit).replace(',', '')):.2f}"
         except ValueError:
-            raise HTTPException(status_code=400, detail="Repayment installments must be a whole number")
-        if installments < 1:
-            raise HTTPException(status_code=400, detail="Repayment installments must be at least 1")
-        if last_due < first_due:
-            raise HTTPException(status_code=400, detail="Last installment due date cannot be before the first")
-        current["buyer_name"] = orig.get("customer_name")
+            total_price = str(orig.get("contract_price") or loan)
+        # Bank sells the commodity to the customer (no cost-breakdown in the narrative).
+        seller = institution_name
+        buyer = str(orig.get("customer_name") or "Customer")
+        current["sale_status"] = "Complete"
+        current["seller_name"] = seller
+        current["buyer_name"] = buyer
         current["buyer_email"] = orig.get("customer_email")
         current["buyer_phone"] = orig.get("customer_phone")
-        current["seller_name"] = (payload.get("initiate") or {}).get("commodity_buyer") or current.get("seller_name")
+        current["commodity"] = commodity
+        current["units"] = units
+        current["total_price"] = total_price
+        current["deferred_sale_price"] = total_price
+        current["cost_price"] = loan
+        current["profit"] = profit
+        facility_account = str(current.get("facility_account") or "").strip() or f"FAC-{case.id.replace('-', '')[:8]}"
+        installments_raw = str(current.get("repayment_installments") or orig.get("term_months") or "12").strip()
+        try:
+            installments = max(1, int(installments_raw))
+        except ValueError:
+            installments = 12
+        today = datetime.now(UTC).date()
+        first_due = str(current.get("first_installment_due_date") or "").strip() or (today + timedelta(days=30)).isoformat()
+        last_due = str(current.get("last_installment_due_date") or "").strip() or (today + timedelta(days=30 * installments)).isoformat()
         current["facility_account"] = facility_account
         current["repayment_installments"] = str(installments)
         current["first_installment_due_date"] = first_due
         current["last_installment_due_date"] = last_due
-        current["cost_price"] = cost
-        current["profit"] = profit
-        try:
-            current["deferred_sale_price"] = str(float(cost) + float(profit))
-        except ValueError:
-            current["deferred_sale_price"] = f"{cost}+{profit}"
+        _stamp(payload, "sale")
+        current.setdefault("sale_timestamp", payload["timestamps"].get("sale"))
         _append_workflow(
             payload,
             "Murabaha sale",
-            f"Deferred sale recorded. Cost {cost}, profit {profit}.",
+            (
+                f"Bank sold {commodity} ({units} units) to the customer. "
+                f"Total price of the commodity: KES {total_price}. "
+                f"Seller: {seller}. Buyer: {buyer}."
+            ),
             cert_kinds=["murabahah"],
         )
-    if step == 5:
-        current["agent_appointment_status"] = "Done"
-        current.setdefault("agent_name", "Soqo Capital")
-        _append_workflow(payload, "Resale agent appointed", f"Agent: {current.get('agent_name')}.")
-    if step == 6:
-        current["final_status"] = "Complete"
-        account = str(current.get("customer_account_number") or "").strip()
-        branch = str(current.get("customer_branch") or "").strip()
-        if not account or not branch:
-            raise HTTPException(status_code=400, detail="Enter customer CASA account and branch")
-        current["customer_account_number"] = account
-        current["customer_branch"] = branch
-        orig = payload.get("origination") or {}
-        current.setdefault("commodity", orig.get("facility_product_type") or "Airtime")
-        _append_workflow(
-            payload,
-            "Resale proceeds",
-            f"CASA {account} · branch {branch}.",
-            cert_kinds=["liquidation"],
-        )
-        current.setdefault("commodity_quantity", orig.get("approved_facility_amount"))
-        current.setdefault("resale_cost", orig.get("approved_facility_amount"))
-    if step == 7:
-        current.setdefault("settlement_ref", f"clr-{case.id[:8]}")
-        _stamp(payload, "clearing")
-        current.setdefault("settlement_timestamp", payload["timestamps"].get("clearing"))
-        current["final_status"] = "Complete"
-        _append_workflow(
-            payload,
-            "Clearing complete",
-            f"Settlement {current.get('settlement_ref')}.",
-        )
+        # Drop resale appointment, resale proceeds, and clearing — facility completes here.
+        complete_bucket = payload.get("complete") if isinstance(payload.get("complete"), dict) else {}
+        complete_bucket["final_status"] = "Complete"
+        payload["complete"] = complete_bucket
         _stamp(payload, "complete")
         _append_workflow(
             payload,
             "Facility complete",
             "Trade certificates are ready for the customer.",
-            cert_kinds=["purchase", "murabahah", "liquidation"],
+            cert_kinds=["purchase", "murabahah", "complete"],
         )
         case.status = "complete"
         case.current_step = 8
+    if step in {5, 6, 7}:
+        # Legacy steps removed from the live desk flow.
+        raise HTTPException(
+            status_code=400,
+            detail="Resale appointment, resale proceeds, and clearing are no longer part of this desk",
+        )
     if step == 8:
         current["final_status"] = "Complete"
         _stamp(payload, "complete")
@@ -720,13 +744,11 @@ def auto_progress_case(db: Session, case: FiDeskCase) -> FiDeskCase:
     payload = _parse_payload(case.payload_json)
     if not _journey_offer_accepted(db, payload):
         return case
-    guard = 0
-    while case.status != "complete" and case.current_step <= 8 and guard < 8:
-        step = case.current_step
-        complete_step(db, case, step, _hidden_step_fields(case, step, _parse_payload(case.payload_json)), actor="system")
-        guard += 1
-        if case.current_step == step and case.status != "complete":
-            break
+    _record_offer_letter_accepted(payload)
+    case.payload_json = _dump_payload(payload)
+    # After offer accept: Murabaha sale only (steps 5–7 dropped).
+    if case.status != "complete" and case.current_step == 4:
+        complete_step(db, case, 4, _hidden_step_fields(case, 4, _parse_payload(case.payload_json)), actor="system")
     return case
 
 
@@ -816,40 +838,43 @@ def _attach_customer_journey(db: Session, case: FiDeskCase) -> None:
     db.add(offer)
     db.flush()
     db.refresh(application, attribute_names=["customer", "institution", "offer"])
-    # Physical offer letter: no customer email; treat as accepted so the desk can run.
+    # Physical offer letter stays at the branch — record acceptance only (no portal document access).
     if offer_mode == "physical":
         offer.accepted_at = _now()
         application.status = ApplicationStatus.OFFER_ACCEPTED
-        _append_workflow(
-            payload,
-            "Physical offer letter",
-            "Customer acceptance email skipped. Download the Letter of Offer for wet-ink signing.",
-            cert_kinds=["offer", "agency"],
-        )
+        payload["journey"] = {
+            "application_id": application.id,
+            "customer_ref": application.customer_ref,
+            "customer_id": customer.id,
+            "offer_accepted": True,
+            "accepted_at": offer.accepted_at.isoformat(),
+            "offer_letter_mode": offer_mode,
+            "acceptance_method": "physical",
+        }
+        _record_offer_letter_accepted(payload, method="physical")
     else:
         notify_offer_ready(db, application)
         _append_workflow(
             payload,
             "Customer offer emailed",
-            "Letter of Offer and Agency Appointment emailed. Trade steps wait for acceptance."
+            "Customer journey link sent. Waiting for Offer Letter acceptance via email."
             if offer_mode == "automated"
-            else "Letter of Offer emailed; a physical copy may also be used.",
-            cert_kinds=["offer", "agency"],
+            else "Customer journey link sent; a physical branch signature may also be used.",
         )
-    payload["journey"] = {
-        "application_id": application.id,
-        "customer_ref": application.customer_ref,
-        "customer_id": customer.id,
-        "offer_accepted": offer_mode == "physical",
-        "accepted_at": offer.accepted_at.isoformat() if offer.accepted_at else None,
-        "offer_letter_mode": offer_mode,
-    }
+        payload["journey"] = {
+            "application_id": application.id,
+            "customer_ref": application.customer_ref,
+            "customer_id": customer.id,
+            "offer_accepted": False,
+            "accepted_at": None,
+            "offer_letter_mode": offer_mode,
+        }
     case.payload_json = _dump_payload(payload)
 
 
-def resend_certificates(db: Session, case: FiDeskCase) -> dict[str, Any]:
-    """Re-email the three trade certificates for a completed (or late-stage) desk case."""
-    from tawarruq.services.certificate_mail_service import desk_step_attachments
+def resend_certificates(db: Session, case: FiDeskCase, kind: str | None = None) -> dict[str, Any]:
+    """Re-email one step PDF (kind) or all trade certificates."""
+    from tawarruq.services.certificate_mail_service import desk_certificate_attachment, desk_step_attachments
     from tawarruq.services.customer_notify_service import notify_step_ready
 
     payload = _parse_payload(case.payload_json)
@@ -858,22 +883,35 @@ def resend_certificates(db: Session, case: FiDeskCase) -> dict[str, Any]:
     email = str(orig.get("customer_email") or "").strip()
     if not email:
         raise HTTPException(status_code=400, detail="This case has no customer email")
-    attachments = desk_step_attachments(case, 8)
-    if not attachments:
-        attachments = desk_step_attachments(case, 7) or desk_step_attachments(case, 3)
+    key = str(kind or "").strip().lower() or None
+    if key:
+        one = desk_certificate_attachment(case, key)
+        if not one:
+            raise HTTPException(status_code=404, detail=f"No certificate for kind {key}")
+        attachments = [one]
+        title = f"Your {key} certificate"
+        body_line = f"The {key} certificate for this facility is attached again."
+        label = key
+    else:
+        attachments = desk_step_attachments(case, 8)
+        if not attachments:
+            attachments = desk_step_attachments(case, 4) or desk_step_attachments(case, 3)
+        title = "Your Tawarruq certificates"
+        body_line = "All trade certificates for this facility are attached again."
+        label = "all"
     notify_step_ready(
         db,
         email=email,
         customer_name=orig.get("customer_name"),
         customer_ref=str(journey.get("customer_ref") or orig.get("customer_id") or case.id[:8]),
-        title="Your Tawarruq certificates",
-        body_line="The three trade certificates for this facility are attached again.",
+        title=title,
+        body_line=body_line,
         institution_name=case.institution.name if case.institution else None,
         attachments=attachments,
     )
-    _append_workflow(payload, "Certificates resent", f"Emailed again to {email}.")
+    _append_workflow(payload, "Certificates resent", f"Emailed ({label}) again to {email}.")
     case.payload_json = _dump_payload(payload)
-    return {"emailed": True, "to": email, "attachments": len(attachments)}
+    return {"emailed": True, "to": email, "attachments": len(attachments), "kind": label}
 
 
 def _notify_desk_step(db: Session, case: FiDeskCase, step: int) -> None:
@@ -885,15 +923,13 @@ def _notify_desk_step(db: Session, case: FiDeskCase, step: int) -> None:
     journey = payload.get("journey") or {}
     titles = {
         3: ("Tawarruq purchase", "The commodity purchase is complete."),
-        4: ("Murabaha sale", "The Murabaha sale has been recorded."),
-        5: ("Commodity resale", "The resale agent has been appointed."),
-        6: ("Resale proceeds", "CASA proceeds have been recorded."),
-        7: ("Clearing complete", "Clearing is complete."),
-        8: ("Facility complete", "Your facility is complete."),
+        4: ("Murabaha sale", "The bank has sold the commodity to you. Certificates are attached."),
     }
     if step not in titles:
         return
     title, line = titles[step]
+    # After Murabaha the facility is complete — send all certs with the sale mail.
+    attach_step = 8 if step == 4 else step
     notify_step_ready(
         db,
         email=orig.get("customer_email"),
@@ -902,5 +938,5 @@ def _notify_desk_step(db: Session, case: FiDeskCase, step: int) -> None:
         title=title,
         body_line=line,
         institution_name=case.institution.name if case.institution else None,
-        attachments=desk_step_attachments(case, step),
+        attachments=desk_step_attachments(case, attach_step),
     )

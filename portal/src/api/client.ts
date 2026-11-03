@@ -1320,10 +1320,11 @@ export const api = {
   getDeskCase: (caseId: string) => request<DeskCase>(`/desk/cases/${caseId}`),
   createDeskCase: (body: Record<string, string>) =>
     request<DeskCase>("/desk/cases", { method: "POST", body: JSON.stringify(body) }),
-  resendDeskCertificates: (caseId: string) =>
-    request<{ emailed: boolean; to: string; attachments: number }>(`/desk/cases/${caseId}/certificates/resend`, {
-      method: "POST",
-    }),
+  resendDeskCertificates: (caseId: string, kind?: string) =>
+    request<{ emailed: boolean; to: string; attachments: number; kind?: string }>(
+      `/desk/cases/${caseId}/certificates/resend${kind ? `?kind=${encodeURIComponent(kind)}` : ""}`,
+      { method: "POST" },
+    ),
   downloadDeskCertificate: async (caseId: string, kind: string) => {
     const response = await fetch(
       `${API_BASE}/desk/cases/${encodeURIComponent(caseId)}/certificates/${encodeURIComponent(kind)}`,

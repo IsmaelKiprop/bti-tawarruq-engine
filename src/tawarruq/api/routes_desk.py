@@ -149,10 +149,15 @@ def complete_desk_step(
 
 
 @router.post("/cases/{case_id}/certificates/resend")
-def resend_desk_certificates(case_id: str, request: Request, db: Session = Depends(get_db)) -> dict:
+def resend_desk_certificates(
+    case_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    kind: str | None = Query(default=None, description="Optional single certificate kind, e.g. purchase|murabahah|complete"),
+) -> dict:
     require_write_ops(request)
     case = _load_case(db, case_id, request)
-    result = fi_desk_service.resend_certificates(db, case)
+    result = fi_desk_service.resend_certificates(db, case, kind=kind)
     db.commit()
     return result
 

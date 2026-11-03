@@ -46,16 +46,28 @@ function workflowFrom(record: DeskCase | null): WorkflowRow[] {
   return raw.filter((row) => row && typeof row === "object") as WorkflowRow[];
 }
 
-function journeyFrom(record: DeskCase | null): { ref: string; url: string; accepted: boolean } | null {
+function journeyFrom(
+  record: DeskCase | null,
+): { ref: string; url: string; accepted: boolean; method: string } | null {
   const raw = record?.payload?.journey;
   if (!raw || typeof raw !== "object") return null;
   const ref = String((raw as { customer_ref?: string }).customer_ref || "").trim();
   if (!ref) return null;
+  const method = String((raw as { acceptance_method?: string }).acceptance_method || "").trim();
   return {
     ref,
     url: `${window.location.origin}/customer/${encodeURIComponent(ref)}`,
     accepted: Boolean((raw as { offer_accepted?: boolean }).offer_accepted),
+    method,
   };
+}
+
+function acceptLabel(journey: { accepted: boolean; method: string } | null, offerMode: string) {
+  if (!journey?.accepted) return "Waiting";
+  if (journey.method === "physical" || (!journey.method && offerMode === "physical")) {
+    return "Accepted — physical signed at branch";
+  }
+  return "Accepted — via email";
 }
 
 export function OriginationDeskPage() {
@@ -165,11 +177,11 @@ export function OriginationDeskPage() {
     if (!record) return "";
     if (record.status === "pending_approval") return "Waiting for FI Approver.";
     if (record.status === "returned") return "Returned. Read the comments, edit, and send again.";
-    if (record.status === "complete") return "Facility complete. Certificates can be resent below.";
-    if (journey?.accepted) return "Customer accepted. Completing the trade automatically.";
+    if (record.status === "complete") return "Facility complete. Download or resend certificates from the workflow.";
+    if (journey?.accepted) return "Offer Letter accepted. Completing purchase and Murabaha sale.";
     const mode = form.offer_letter_mode;
-    if (mode === "physical") return "Physical offer letter — customer email accept was skipped.";
-    return "Customer emailed. Trade steps run automatically after they accept.";
+    if (mode === "physical") return "Physical offer letter at the branch — acceptance is recorded without portal document access.";
+    return "Customer emailed. Trade continues after Offer Letter acceptance.";
   }
 
   return (
@@ -311,15 +323,17 @@ export function OriginationDeskPage() {
           ) : null}
           {journey ? (
             <>
-              <div className="rounded-sm border border-border bg-surface-elevated px-3 py-2">
-                <dt className="text-[0.7rem] uppercase tracking-wide text-muted">Customer journey</dt>
-                <dd className="m-0 text-sm">
-                  <a className="text-primary" href={journey.url} target="_blank" rel="noreferrer">
-                    {journey.url}
-                  </a>
-                </dd>
-              </div>
-              <ReadRow label="Customer accept" value={journey.accepted ? "Accepted" : "Waiting"} />
+              {form.offer_letter_mode !== "physical" ? (
+                <div className="rounded-sm border border-border bg-surface-elevated px-3 py-2">
+                  <dt className="text-[0.7rem] uppercase tracking-wide text-muted">Customer journey</dt>
+                  <dd className="m-0 text-sm">
+                    <a className="text-primary" href={journey.url} target="_blank" rel="noreferrer">
+                      {journey.url}
+                    </a>
+                  </dd>
+                </div>
+              ) : null}
+              <ReadRow label="Offer Letter" value={acceptLabel(journey, form.offer_letter_mode)} />
             </>
           ) : null}
           {record?.status === "returned" && (record.approval_comments || comments) ? (
@@ -376,47 +390,21 @@ export function OriginationDeskPage() {
               </button>
             </div>
           ) : null}
-          {canWrite && record && record.status !== "pending_approval" && record.status !== "returned" ? (
+          {canWrite && record && record.status === "complete" ? (
             <div className="sm:col-span-2 flex flex-wrap gap-2">
               <button
                 type="button"
                 className="btn btn-secondary"
                 disabled={busy}
                 onClick={() =>
-                  void run("Letter of Offer downloaded", async () => {
-                    await api.downloadDeskCertificate(record.id, "offer");
+                  void run("All certificates resent", async () => {
+                    await api.resendDeskCertificates(record.id);
+                    return api.getDeskCase(record.id);
                   })
                 }
               >
-                Download Letter of Offer
+                Resend all certificates
               </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={busy}
-                onClick={() =>
-                  void run("Agency Agreement downloaded", async () => {
-                    await api.downloadDeskCertificate(record.id, "agency");
-                  })
-                }
-              >
-                Download Agency Agreement
-              </button>
-              {record.status === "complete" || record.status === "in_progress" || record.status === "approved" ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    void run("Certificates resent", async () => {
-                      await api.resendDeskCertificates(record.id);
-                      return api.getDeskCase(record.id);
-                    })
-                  }
-                >
-                  Resend certificates
-                </button>
-              ) : null}
             </div>
           ) : null}
         </div>
@@ -437,19 +425,35 @@ export function OriginationDeskPage() {
                 {step.certificates?.length && record ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {step.certificates.map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(`Downloaded ${kind}`, async () => {
-                            await api.downloadDeskCertificate(record.id, kind);
-                          })
-                        }
-                      >
-                        Download {kind}
-                      </button>
+                      <span key={kind} className="inline-flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(`Downloaded ${kind}`, async () => {
+                              await api.downloadDeskCertificate(record.id, kind);
+                            })
+                          }
+                        >
+                          Download {kind}
+                        </button>
+                        {canWrite ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(`Resent ${kind}`, async () => {
+                                await api.resendDeskCertificates(record.id, kind);
+                                return api.getDeskCase(record.id);
+                              })
+                            }
+                          >
+                            Resend {kind}
+                          </button>
+                        ) : null}
+                      </span>
                     ))}
                   </div>
                 ) : null}
