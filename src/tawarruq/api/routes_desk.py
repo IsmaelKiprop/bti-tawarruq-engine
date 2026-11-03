@@ -153,7 +153,10 @@ def resend_desk_certificates(
     case_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    kind: str | None = Query(default=None, description="Optional single certificate kind, e.g. purchase|murabahah|complete"),
+    kind: str | None = Query(
+        default=None,
+        description="Optional single certificate kind: sedania_to_fi | fi_to_customer | customer_to_sedania",
+    ),
 ) -> dict:
     require_write_ops(request)
     case = _load_case(db, case_id, request)

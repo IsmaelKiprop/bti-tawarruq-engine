@@ -1,4 +1,4 @@
-"""PDF certificate attachments for customer email."""
+"""PDF certificate attachments for customer email (Bursa-style three-leg desk certs)."""
 
 from __future__ import annotations
 
@@ -8,10 +8,33 @@ from sqlalchemy.orm import Session
 
 Attachment = tuple[str, bytes, str]
 
+AGENT_NAME = "Buruuj Fintech"
+SEDANIA_PARTY = "Sedania"
+
+# kind → human title used in PDF / filenames
+DESK_CERT_KINDS = {
+    "sedania_to_fi": "Commodity purchase certificate (Sedania to FI)",
+    "fi_to_customer": "Murabaha sale certificate (FI to Customer)",
+    "customer_to_sedania": "Commodity sale certificate (Customer to Sedania)",
+}
+
+# Workflow / UI kinds → which desk step owns the PDF.
+DESK_CERT_KIND_STEPS = {
+    "sedania_to_fi": 3,
+    "fi_to_customer": 4,
+    "customer_to_sedania": 5,
+    # Legacy aliases (older cases / emails)
+    "purchase": 3,
+    "murabahah": 4,
+    "murabaha": 4,
+    "complete": 5,
+}
+
+# step → cert kind for that leg
 DESK_CERTS = {
-    3: ("Commodity purchase certificate", "purchase"),
-    4: ("Murabaha sale certificate", "murabaha"),
-    8: ("Facility completion certificate", "complete"),
+    3: ("Commodity purchase certificate (Sedania to FI)", "sedania_to_fi"),
+    4: ("Murabaha sale certificate (FI to Customer)", "fi_to_customer"),
+    5: ("Commodity sale certificate (Customer to Sedania)", "customer_to_sedania"),
 }
 
 
@@ -68,7 +91,7 @@ def render_certificate_pdf(
         pdf.set_xy(16, 16)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "", 10)
-        pdf.cell(width, 6, "Tawarruq certificate")
+        pdf.cell(width, 6, "Tawarruq e-certificate")
         pdf.set_xy(16, 40)
         pdf.set_text_color(11, 31, 58)
         pdf.set_font("Helvetica", "B", 18)
@@ -80,7 +103,7 @@ def render_certificate_pdf(
         pdf.set_fill_color(244, 246, 249)
         pdf.set_text_color(11, 31, 58)
         pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(width, 8, f"  Ref  {_pdf_text(doc_ref)}", fill=True)
+        pdf.cell(width, 8, f"  Certificate number  {_pdf_text(doc_ref)}", fill=True)
         pdf.ln(12)
         for heading, rows in sections:
             pdf.set_x(16)
@@ -101,11 +124,7 @@ def render_certificate_pdf(
             pdf.set_x(16)
             pdf.set_text_color(92, 107, 124)
             pdf.set_font("Helvetica", "I", 8)
-            pdf.multi_cell(width, 5, _pdf_text(note))
-        pdf.set_y(-16)
-        pdf.set_font("Helvetica", "", 8)
-        pdf.set_text_color(92, 107, 124)
-        pdf.cell(0, 6, "Confidential - for customer and institution use", align="C")
+            pdf.multi_cell(width, 4, _pdf_text(note))
         return bytes(pdf.output())
     except Exception:
         return _fallback_pdf()
@@ -165,7 +184,14 @@ def bsas_certificate_attachments(certificate) -> list[Attachment]:
     return items
 
 
-def tawarruq_certificate_attachments(*, certificate_number: str, customer_name: str, institution_name: str, amount: str, currency: str) -> list[Attachment]:
+def tawarruq_certificate_attachments(
+    *,
+    certificate_number: str,
+    customer_name: str,
+    institution_name: str,
+    amount: str,
+    currency: str,
+) -> list[Attachment]:
     content = render_certificate_pdf(
         title="Tawarruq financing certificate",
         subtitle="Evidence that this facility completed commodity tawarruq and disbursement.",
@@ -196,75 +222,111 @@ def _desk_payload(case) -> dict:
         return {}
 
 
-# Workflow / UI kinds → desk step that owns the PDF.
-DESK_CERT_KIND_STEPS = {
-    "purchase": 3,
-    "murabahah": 4,
-    "murabaha": 4,
-    "complete": 8,
-}
+def _cert_number(slug: str, ref: str) -> str:
+    return f"{slug.upper().replace('_', '-')}-{str(ref)[:12]}"
 
 
 def desk_certificate_attachment(case, kind: str) -> Attachment | None:
-    step = DESK_CERT_KIND_STEPS.get(str(kind or "").strip().lower())
+    key = str(kind or "").strip().lower()
+    step = DESK_CERT_KIND_STEPS.get(key)
     if not step:
         return None
-    items = desk_step_attachments(case, step)
+    items = desk_step_attachments(case, step, pack_all=False)
     return items[0] if items else None
 
 
-def desk_step_attachments(case, step: int) -> list[Attachment]:
+def desk_step_attachments(case, step: int, *, pack_all: bool | None = None) -> list[Attachment]:
     items: list[Attachment] = []
     payload = _desk_payload(case)
     orig = payload.get("origination") or {}
     initiate = payload.get("initiate") or {}
     murabaha = payload.get("murabaha") or {}
+    customer_sale = payload.get("customer_sale") or {}
+    stamps = payload.get("timestamps") if isinstance(payload.get("timestamps"), dict) else {}
     ref = (payload.get("journey") or {}).get("customer_ref") or getattr(case, "id", "case")[:8]
     institution = case.institution.name if getattr(case, "institution", None) else "Institution"
-    commodity = murabaha.get("commodity") or initiate.get("commodity") or orig.get("facility_product_type") or "Airtime"
-    units = murabaha.get("units") or initiate.get("commodity_quantity") or orig.get("approved_facility_amount") or "1"
-    total = murabaha.get("total_price") or murabaha.get("deferred_sale_price") or orig.get("contract_price")
-    seller = murabaha.get("seller_name") or institution
-    buyer = murabaha.get("buyer_name") or orig.get("customer_name")
-    # Three certificates after Murabaha completes: purchase, sale, facility.
-    if step == 8:
-        steps = [3, 4, 8]
-    else:
-        steps = [step]
-    for item in steps:
+    commodity = (
+        murabaha.get("commodity")
+        or initiate.get("commodity")
+        or customer_sale.get("commodity")
+        or orig.get("facility_product_type")
+        or "Airtime"
+    )
+    units = (
+        murabaha.get("units")
+        or initiate.get("units")
+        or initiate.get("commodity_quantity")
+        or customer_sale.get("units")
+        or orig.get("approved_facility_amount")
+        or "1"
+    )
+    unit_cost = initiate.get("unit_cost") or murabaha.get("cost_price") or orig.get("approved_facility_amount") or "-"
+    total_cost = initiate.get("total_cost") or murabaha.get("cost_price") or orig.get("approved_facility_amount") or "-"
+    total_price = murabaha.get("total_price") or murabaha.get("deferred_sale_price") or orig.get("contract_price") or "-"
+    currency = "KES"
+
+    # Pack of three when facility is complete (step 8) or final customer-sale notify
+    want_all = pack_all if pack_all is not None else step in {5, 8}
+    step_list = [3, 4, 5] if want_all else [step]
+
+    for item in step_list:
         spec = DESK_CERTS.get(item)
         if not spec:
             continue
         title, slug = spec
-        if item == 4:
-            facility_rows = [
-                ("Seller (bank)", seller),
-                ("Buyer (customer)", buyer),
-                ("Commodity", commodity),
-                ("Units / number of units", units),
-                ("Total price of the commodity", total),
-            ]
-        elif item == 8:
-            facility_rows = [
-                ("Commodity", commodity),
-                ("Units", units),
-                ("Total price", total),
+
+        if item == 3:
+            seller = initiate.get("seller_name") or initiate.get("commodity_seller") or SEDANIA_PARTY
+            buyer = initiate.get("buyer_name") or initiate.get("commodity_buyer") or institution
+            trade_rows = [
                 ("Seller", seller),
                 ("Buyer", buyer),
-                ("Status", "Complete"),
+                ("Product / commodity", commodity),
+                ("Unit", "lot"),
+                ("Volume / units", units),
+                ("Unit cost", f"{currency} {unit_cost}"),
+                ("Total / Value", f"{currency} {total_cost}"),
+                ("Currency", currency),
+                ("Timestamp", stamps.get("purchase") or initiate.get("purchase_timestamp") or "-"),
+                ("Agent", initiate.get("agent_name") or initiate.get("commodity_agent") or AGENT_NAME),
+            ]
+        elif item == 4:
+            seller = murabaha.get("seller_name") or institution
+            buyer = murabaha.get("buyer_name") or orig.get("customer_name") or "Customer"
+            # Murabaha narrative: total price only (no profit/cost breakdown)
+            trade_rows = [
+                ("Seller", seller),
+                ("Buyer", buyer),
+                ("Owner", buyer),
+                ("Product / commodity", commodity),
+                ("Unit", "lot"),
+                ("Volume / units", units),
+                ("Total / Value", f"{currency} {total_price}"),
+                ("Currency", currency),
+                ("Timestamp", stamps.get("sale") or murabaha.get("sale_timestamp") or "-"),
+                ("Agent", murabaha.get("agent_name") or AGENT_NAME),
             ]
         else:
-            facility_rows = [
-                ("Commodity", commodity),
-                ("Units", units),
-                ("Seller", initiate.get("commodity_seller") or "Supplier"),
-                ("Buyer", initiate.get("commodity_buyer") or institution),
-                ("Purchase", initiate.get("purchase_complete")),
+            seller = customer_sale.get("seller_name") or orig.get("customer_name") or "Customer"
+            buyer = customer_sale.get("buyer_name") or SEDANIA_PARTY
+            sale_total = customer_sale.get("total_price") or customer_sale.get("total_cost") or total_cost
+            trade_rows = [
+                ("Seller", seller),
+                ("Buyer", buyer),
+                ("Product / commodity", commodity),
+                ("Unit", "lot"),
+                ("Volume / units", units),
+                ("Unit cost", f"{currency} {customer_sale.get('unit_cost') or unit_cost}"),
+                ("Total / Value", f"{currency} {sale_total}"),
+                ("Currency", currency),
+                ("Timestamp", stamps.get("customer_sale") or customer_sale.get("sale_timestamp") or "-"),
+                ("Agent", customer_sale.get("agent_name") or AGENT_NAME),
             ]
+
         content = render_certificate_pdf(
             title=title,
-            subtitle="Tawarruq desk certificate for this customer facility.",
-            doc_ref=f"{slug.upper()}-{ref}",
+            subtitle="Electronic trade certificate issued for this Tawarruq facility.",
+            doc_ref=_cert_number(slug, ref),
             sections=[
                 (
                     "Parties",
@@ -276,9 +338,9 @@ def desk_step_attachments(case, step: int) -> list[Attachment]:
                         ("Reference", ref),
                     ],
                 ),
-                ("Sale / commodity", facility_rows),
+                ("Trade", trade_rows),
             ],
-            note="Issued with the customer email. Offer letter paper stays at the branch when signed physically.",
+            note=f"Agent: {AGENT_NAME}. Issued for the customer facility record.",
         )
         items.append(pdf_bytes_attachment(f"{str(ref)[:8]}-{slug}-certificate.pdf", content))
     return items

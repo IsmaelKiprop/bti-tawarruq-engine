@@ -174,14 +174,48 @@ def test_desk_steps_journey_and_shariah_scope(tmp_path, monkeypatch):
     assert accepted.status_code == 200, accepted.text
     finished = client.get(f"/api/v1/desk/cases/{case_id}", headers=ops)
     assert finished.status_code == 200, finished.text
-    assert finished.json()["payload"]["journey"]["offer_accepted"] is True
-    assert finished.json()["status"] == "complete"
-    assert finished.json()["payload"]["timestamps"]
-    certs = list((tmp_path / "mail").glob("*certificate.pdf"))
-    assert certs, list((tmp_path / "mail").iterdir())
-    purchase_mail = next((tmp_path / "mail").glob("*tawarruq-purchase*"), None)
-    assert purchase_mail is not None
-    assert "The certificate is attached" in purchase_mail.read_text(encoding="utf-8")
+    body = finished.json()
+    assert body["payload"]["journey"]["offer_accepted"] is True
+    assert body["status"] == "complete"
+    workflow = body["payload"].get("workflow") or []
+    titles = [row.get("title") for row in workflow if isinstance(row, dict)]
+    assert "Offer Letter accepted" not in titles
+    assert "Customer offer emailed" not in titles
+    assert titles.count("Commodity purchase Sedania to FI") == 1
+    assert titles.count("Murabaha sale FI to Customer") == 1
+    assert titles.count("Commodity sale Customer to Sedania") == 1
+    assert "Workflow complete" in titles
+    # Sequence: origination → approve → purchase → murabaha → customer sale → complete
+    purchase_i = titles.index("Commodity purchase Sedania to FI")
+    murabaha_i = titles.index("Murabaha sale FI to Customer")
+    sale_i = titles.index("Commodity sale Customer to Sedania")
+    done_i = titles.index("Workflow complete")
+    assert purchase_i < murabaha_i < sale_i < done_i
+    cert_kinds: list[str] = []
+    for row in workflow:
+        if isinstance(row, dict) and row.get("certificates"):
+            cert_kinds.extend(row["certificates"])
+    assert "sedania_to_fi" in cert_kinds
+    assert "fi_to_customer" in cert_kinds
+    assert "customer_to_sedania" in cert_kinds
+    assert body["payload"]["initiate"]["commodity_seller"] == "Sedania"
+    assert body["payload"]["initiate"]["commodity_agent"] == "Buruuj Fintech"
+    assert body["payload"]["murabaha"]["agent_name"] == "Buruuj Fintech"
+    assert body["payload"]["customer_sale"]["buyer_name"] == "Sedania"
+    pdfs = list((tmp_path / "mail").glob("*certificate.pdf"))
+    assert pdfs, list((tmp_path / "mail").iterdir())
+    assert any("sedania_to_fi" in p.name for p in pdfs)
+    assert any("fi_to_customer" in p.name for p in pdfs)
+    assert any("customer_to_sedania" in p.name for p in pdfs)
+
+    for kind in ("sedania_to_fi", "fi_to_customer", "customer_to_sedania"):
+        dl = client.get(f"/api/v1/desk/cases/{case_id}/certificates/{kind}", headers=ops)
+        assert dl.status_code == 200, dl.text
+        assert dl.headers.get("content-type", "").startswith("application/pdf")
+    resent = client.post(f"/api/v1/desk/cases/{case_id}/certificates/resend", headers=ops)
+    assert resent.status_code == 200, resent.text
+    assert resent.json()["attachments"] == 3
+    assert resent.json()["kind"] == "all"
 
     audit = client.get("/api/v1/desk/audit", headers=ops)
     assert audit.status_code == 200, audit.text

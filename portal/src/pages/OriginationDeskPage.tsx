@@ -40,10 +40,31 @@ function asRecord(value: unknown): Record<string, string> {
 
 type WorkflowRow = { at?: string; title?: string; detail?: string; certificates?: string[] };
 
+const HIDDEN_WORKFLOW = /offer letter|agency|resale agent|resale proceeds|clearing/i;
+
+const CERT_LABELS: Record<string, string> = {
+  sedania_to_fi: "Sedania→FI",
+  fi_to_customer: "FI→Customer",
+  customer_to_sedania: "Customer→Sedania",
+  purchase: "Sedania→FI",
+  murabahah: "FI→Customer",
+  murabaha: "FI→Customer",
+  complete: "Customer→Sedania",
+};
+
+const ALL_CERT_KINDS = ["sedania_to_fi", "fi_to_customer", "customer_to_sedania"] as const;
+
+function certLabel(kind: string) {
+  return CERT_LABELS[kind] || kind;
+}
+
 function workflowFrom(record: DeskCase | null): WorkflowRow[] {
   const raw = record?.payload?.workflow;
   if (!Array.isArray(raw)) return [];
-  return raw.filter((row) => row && typeof row === "object") as WorkflowRow[];
+  return (raw.filter((row) => row && typeof row === "object") as WorkflowRow[]).filter((row) => {
+    const title = String(row.title || "");
+    return !HIDDEN_WORKFLOW.test(title);
+  });
 }
 
 function journeyFrom(
@@ -62,12 +83,8 @@ function journeyFrom(
   };
 }
 
-function acceptLabel(journey: { accepted: boolean; method: string } | null, offerMode: string) {
-  if (!journey?.accepted) return "Waiting";
-  if (journey.method === "physical" || (!journey.method && offerMode === "physical")) {
-    return "Accepted — physical signed at branch";
-  }
-  return "Accepted — via email";
+function workflowHasCerts(rows: WorkflowRow[]) {
+  return rows.some((row) => (row.certificates?.length || 0) > 0);
 }
 
 export function OriginationDeskPage() {
@@ -177,11 +194,11 @@ export function OriginationDeskPage() {
     if (!record) return "";
     if (record.status === "pending_approval") return "Waiting for FI Approver.";
     if (record.status === "returned") return "Returned. Read the comments, edit, and send again.";
-    if (record.status === "complete") return "Facility complete. Download or resend certificates from the workflow.";
-    if (journey?.accepted) return "Offer Letter accepted. Completing purchase and Murabaha sale.";
+    if (record.status === "complete") return "Workflow complete. Download or resend certificates below.";
+    if (journey?.accepted) return "Customer accepted. Completing Murabaha and commodity sale legs.";
     const mode = form.offer_letter_mode;
-    if (mode === "physical") return "Physical offer letter at the branch — acceptance is recorded without portal document access.";
-    return "Customer emailed. Trade continues after Offer Letter acceptance.";
+    if (mode === "physical") return "Physical mode — trade continues without email accept.";
+    return "Customer emailed. Trade continues after they accept in the journey.";
   }
 
   return (
@@ -321,20 +338,15 @@ export function OriginationDeskPage() {
               <ReadRow label="Request id" value={record.id} />
             </>
           ) : null}
-          {journey ? (
-            <>
-              {form.offer_letter_mode !== "physical" ? (
-                <div className="rounded-sm border border-border bg-surface-elevated px-3 py-2">
-                  <dt className="text-[0.7rem] uppercase tracking-wide text-muted">Customer journey</dt>
-                  <dd className="m-0 text-sm">
-                    <a className="text-primary" href={journey.url} target="_blank" rel="noreferrer">
-                      {journey.url}
-                    </a>
-                  </dd>
-                </div>
-              ) : null}
-              <ReadRow label="Offer Letter" value={acceptLabel(journey, form.offer_letter_mode)} />
-            </>
+          {journey && form.offer_letter_mode !== "physical" ? (
+            <div className="rounded-sm border border-border bg-surface-elevated px-3 py-2">
+              <dt className="text-[0.7rem] uppercase tracking-wide text-muted">Customer journey</dt>
+              <dd className="m-0 text-sm">
+                <a className="text-primary" href={journey.url} target="_blank" rel="noreferrer">
+                  {journey.url}
+                </a>
+              </dd>
+            </div>
           ) : null}
           {record?.status === "returned" && (record.approval_comments || comments) ? (
             <div className="sm:col-span-2 rounded-sm border border-border bg-surface-elevated px-3 py-2">
@@ -390,29 +402,47 @@ export function OriginationDeskPage() {
               </button>
             </div>
           ) : null}
-          {canWrite && record && record.status === "complete" ? (
-            <div className="sm:col-span-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={busy}
-                onClick={() =>
-                  void run("All certificates resent", async () => {
-                    await api.resendDeskCertificates(record.id);
-                    return api.getDeskCase(record.id);
-                  })
-                }
-              >
-                Resend all certificates
-              </button>
-            </div>
-          ) : null}
         </div>
       </section>
 
       {showWizard ? (
         <section className="rounded-sm border border-border bg-surface p-3">
-          <h3 className="m-0 mb-3 text-base font-semibold">Workflow</h3>
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="m-0 text-base font-semibold">Workflow</h3>
+            {record && workflowHasCerts(workflow) ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={busy}
+                  onClick={() =>
+                    void run("Downloaded all certificates", async () => {
+                      for (const kind of ALL_CERT_KINDS) {
+                        await api.downloadDeskCertificate(record.id, kind);
+                      }
+                    })
+                  }
+                >
+                  Download all certificates
+                </button>
+                {canWrite ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={busy}
+                    onClick={() =>
+                      void run("All certificates resent", async () => {
+                        await api.resendDeskCertificates(record.id);
+                        return api.getDeskCase(record.id);
+                      })
+                    }
+                  >
+                    Resend all certificates
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           <ol className="m-0 flex list-none flex-col gap-0 p-0">
             {workflow.map((step, index) => (
               <li key={`${step.at}-${index}`} className="relative border-l border-border pl-4 pb-4 last:pb-0">
@@ -431,12 +461,12 @@ export function OriginationDeskPage() {
                           className="btn btn-secondary btn-sm"
                           disabled={busy}
                           onClick={() =>
-                            void run(`Downloaded ${kind}`, async () => {
+                            void run(`Downloaded ${certLabel(kind)}`, async () => {
                               await api.downloadDeskCertificate(record.id, kind);
                             })
                           }
                         >
-                          Download {kind}
+                          Download {certLabel(kind)}
                         </button>
                         {canWrite ? (
                           <button
@@ -444,13 +474,13 @@ export function OriginationDeskPage() {
                             className="btn btn-secondary btn-sm"
                             disabled={busy}
                             onClick={() =>
-                              void run(`Resent ${kind}`, async () => {
+                              void run(`Resent ${certLabel(kind)}`, async () => {
                                 await api.resendDeskCertificates(record.id, kind);
                                 return api.getDeskCase(record.id);
                               })
                             }
                           >
-                            Resend {kind}
+                            Resend {certLabel(kind)}
                           </button>
                         ) : null}
                       </span>
