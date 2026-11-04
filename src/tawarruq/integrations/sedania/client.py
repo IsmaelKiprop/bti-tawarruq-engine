@@ -265,7 +265,7 @@ class SedaniaAsSidqClient:
                 params=params,
             )
         try:
-        data = response.json()
+            data = response.json()
         except Exception as exc:
             raise IntegrationError(
                 f"Sedania {path} returned {response.status_code}: {response.text[:500]}"
